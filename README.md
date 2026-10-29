@@ -14,7 +14,9 @@ Magpie 的第三方 WorkBuddy 国内版补充插件，提供成长任务、猫�
 - 成长中心的连登补签卡、7/14/28 天连登兑换、成长抽奖、新手礼包与活动补偿检查；这里的连登补签与每日签到领取积分是不同活动。
 - 夜猫子任务按北京时间的有效窗口执行，每号每天最多上报一次。
 - 登录续期检查、定时执行、失败重试、休眠后补跑当天已到的时段、重启去重。
-- 本机网页面板：选择账号、一键执行、查看最近 100 次记录、调整时段或暂停定时。
+- 账号看板，三种视图可切换：「列表」是汇总和每个账号一行（积分条按作废先后着色、今日圆环、7 天走势，点开看详情），最下方列出需要你处理的事（10 天内作废的积分、需手动完成的任务、读取失败或登录将过期的账号）；「圆环」一次看一个账号的今日圆环（活跃、旅行、任务）、积分作废时间线和用量；「小组件」按一件事一块汇总所有账号。内容包括各账号可用积分、积分包与作废时间、近 7 天官方用量（按天与模型）、猫猫旅行状态卡；成长任务进度（可领奖、定时会完成、需手动）、能量、Buddy 图鉴与抽奖次数、连登天数、补签卡和下一档奖励。只读，每 10 分钟随后台服务刷新。
+- Magpie 侧栏页面：在 Magpie 里直接看账号看板和最近执行，并可刷新、派出旅行、全部执行、暂停或开启定时。
+- 本机网页面板：选择账号、一键执行、查看最近 100 次记录、调整时段或暂停定时，同样带账号看板。
 
 成长任务包含模拟客户端事件上报，不代表实际在桌面端完成操作。是否计入进度、发放奖励或限制账号由上游决定，不保证所有任务都能完成。公众号关注、实际捐赠和部分桌面操作需要本人完成；已达成的任务可以尝试领奖。
 
@@ -51,6 +53,9 @@ magpie plugin add github:sabercomo/magpie-workbuddy-plus
 | `status` | 查看国内账号、执行记录和定时设置 |
 | `run` | 启动指定操作；`all` 包含活跃、成长任务、旅行和连登福利 |
 | `schedules` | 查看或开关定时；具体时段在网页面板调整 |
+| `board` | 查看账号看板：积分、积分包作废时间、近 7 天用量、旅行与连登 |
+
+插件还带一个 Magpie 页面「WorkBuddy Plus」。Magpie 的插件页面运行在不能联网的沙箱中，所以页面读取后台服务写出的 `page/data.js`（只有余额、用量与旅行状态，不含登录凭证），每 15 秒重新载入。页面上的按钮通过保存插件选项提交请求，Magpie 会因此重载一次插件，再由插件转交后台服务；同一请求只执行一次，超过 10 分钟的请求会被拒绝。页面需要后台服务在运行；数据超过 25 分钟未更新时会提示。
 
 仓库使用 `magpie-plugin` GitHub 主题供 Magpie 非官方发现区检索；这不代表 Magpie 维护者审核或推荐。
 
@@ -75,6 +80,7 @@ magpie plugin add github:sabercomo/magpie-workbuddy-plus
 bun cli.mjs status
 bun cli.mjs run all
 bun cli.mjs run travel
+bun cli.mjs board
 bun cli.mjs pause
 bun cli.mjs resume
 ```
@@ -98,9 +104,12 @@ bun server.mjs
 | `~/.config/workbuddy-plus/config.json` | 定时、账号开关与 HTTP 代理设置 |
 | `~/.config/workbuddy-plus/state.json` | 执行记录及去重状态 |
 | `~/.config/workbuddy-plus/service.log` | 后台服务日志 |
+| 安装目录下 `page/data.js` | 给 Magpie 页面的看板快照，由后台服务改写 |
 | `~/Library/LaunchAgents/io.github.sabercomo.magpie-workbuddy-plus.plist` | macOS 后台启动配置 |
 
 默认复用 `~/.config/magpie/plugin-auth.json` 的国内登录。Magpie 使用自定义配置目录时，遵循 `XDG_CONFIG_HOME`，也可以用 `WORKBUDDY_PLUS_MAGPIE_DIR` 指向其配置目录；`WORKBUDDY_PLUS_DIR` 可指定本插件数据目录，`WORKBUDDY_PLUS_PORT` 可修改服务端口。
+
+账号看板只读取 `get-user-resource`（积分包；企业账号改读 `get-enterprise-user-usage` 的每月额度）、`get-user-request-usage`（官方用量，只统计积分、次数和模型，不保存请求内容）和成长中心的任务、能量、Buddy 图鉴、抽奖次数、旅行与连登状态，不领取或消耗任何东西。企业账号只显示用量。
 
 当前通过本机账号文件适配 Magpie，登录续期使用相同的文件锁与账号锁。Magpie 存储格式变化时可能需要更新本插件。发布源码不需要包含个人账号文件、配置或运行记录。
 
@@ -134,7 +143,7 @@ magpie plugin rm "$HOME/Applications/Magpie-WorkBuddy-Plus"
 npm test
 ```
 
-测试覆盖国内账号筛选、国际账号排除、凭证不出现在状态响应、全部执行不调用每日签到、成长任务进度、旅行领奖、登录续期竞争、定时去重、面板操作和本机 HTTP 边界。
+测试覆盖国内账号筛选、国际账号排除、凭证不出现在状态响应、全部执行不调用每日签到、成长任务进度、旅行领奖、积分包合并与作废时间、成长任务分类、用量分页、看板快照不含凭证、页面请求去重、登录续期竞争、定时去重、面板操作和本机 HTTP 边界。
 
 ## 许可与来源
 

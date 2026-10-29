@@ -3,12 +3,16 @@ import { randomUUID } from "node:crypto";
 import { accounts, calendar, initialize, publicAccount, readJSON, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
+import { collect, writePage } from "./board.mjs";
 
 export class Runner {
-  constructor(dir, clientOptions = {}) {
+  constructor(dir, clientOptions = {}, { pageFile } = {}) {
     initialize(dir);
     this.dir = dir;
     this.clientOptions = clientOptions;
+    this.pageFile = pageFile;
+    this.board = { at: 0, accounts: [] };
+    this.boardStale = true;
     this.state = readJSON(join(dir, "state.json"));
     this.controllers = new Map();
     for (const job of this.state.jobs) if (["running", "queued"].includes(job.status)) {
@@ -23,6 +27,46 @@ export class Runner {
   list() { return accounts(this.config(), this.dir); }
   status() {
     return { config: this.config(), accounts: this.list().map(publicAccount), jobs: this.state.jobs, daily: this.state.daily, slots: this.state.slots };
+  }
+  boardView() {
+    const config = this.config();
+    return {
+      generated: new Date().toISOString(), at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
+      accounts: this.board.accounts, request: this.state.pageRequest || null,
+      jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
+    };
+  }
+  publish() { if (this.pageFile) writePage(this.pageFile, this.boardView()); }
+  refreshBoard(maxAge = 0) {
+    if (this.boarding) return this.boarding;
+    if (!this.boardStale && Date.now() - this.board.at < maxAge) return Promise.resolve(this.board);
+    this.boardStale = false;
+    const config = this.config();
+    this.boarding = (async () => {
+      const rows = [];
+      for (const account of this.list()) rows.push(await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions }), config));
+      this.board = { at: Date.now(), accounts: rows };
+      return this.board;
+    })().finally(() => { this.boarding = null; this.publish(); });
+    this.publish();
+    return this.boarding;
+  }
+  // Magpie hands the page's last request back on every plugin restart, so
+  // each request id runs once and an old one is only acknowledged.
+  pageRequest(request) {
+    if (!request?.id || String(request.id) === this.state.pageRequest?.id) return this.state.pageRequest;
+    const note = { id: String(request.id), action: request.action, at: new Date().toISOString(), ok: false };
+    try {
+      if (!(Date.now() - Number(request.at) < 10 * 60_000)) throw new Error("页面请求已过期，请重新点击");
+      if (request.action === "refresh") { this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
+      else if (["pause", "resume"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), enabled: request.action === "resume" });
+      else note.job = this.submit([request.action], undefined, "page").id;
+      note.ok = true;
+    } catch (e) { note.error = e.message; }
+    this.state.pageRequest = note;
+    this.save();
+    this.publish();
+    return note;
   }
   busy(ids) {
     return this.state.jobs.some(job => ["queued", "running"].includes(job.status) && job.accounts.some(a => ids.includes(a)));
@@ -51,6 +95,7 @@ export class Runner {
     job.status = "running";
     job.started = new Date().toISOString();
     this.save();
+    this.publish();
     for (const snapshot of list) {
       const config = this.config();
       const account = this.list().find(a => a.id === snapshot.id);
@@ -76,7 +121,9 @@ export class Runner {
     job.status = controller.signal.aborted ? "cancelled" : job.results.every(r => r.ok) ? "succeeded" : "failed";
     job.finished = new Date().toISOString();
     this.controllers.delete(job.id);
+    this.boardStale = true;
     this.save();
+    this.publish();
   }
   cancel(id) {
     const controller = this.controllers.get(id);

@@ -33,8 +33,11 @@ async function rpc(path, body) {
   return value;
 }
 
-export const WorkBuddyPlusPlugin = async () => ({
-  tool: {
+// Magpie restarts its plugins with the new options whenever the page's
+// buttons save a request into them; the service runs each request id once.
+export const WorkBuddyPlusPlugin = async (input, options) => {
+  if (options?.request) rpc("/api/page", options.request).catch(e => console.error("[workbuddy-plus]", e.message));
+  return { tool: {
     status: {
       description: "WorkBuddy Plus 的国内账号、执行记录、定时设置。成长任务、猫猫旅行、连登福利；面板 http://127.0.0.1:3439。不会返回登录密钥。",
       args: { type: "object", properties: {}, additionalProperties: false },
@@ -45,6 +48,11 @@ export const WorkBuddyPlusPlugin = async () => ({
       args: { type: "object", properties: { action: { type: "string", enum: ["all", "activity", "tasks", "travel", "bonus", "night", "keepalive", "inspect"] }, accounts: { type: "array", items: { type: "string" }, description: "status 返回的账号 id；不填代表全部已启用账号" } }, required: ["action"], additionalProperties: false },
       execute: args => rpc("/api/run", args)
     },
+    board: {
+      description: "WorkBuddy Plus 国内账号的积分余额与积分包到期、近 7 天官方用量、猫猫旅行状态和连登天数。约每 10 分钟刷新；不会返回登录密钥。",
+      args: { type: "object", properties: {}, additionalProperties: false },
+      execute: () => rpc("/api/board")
+    },
     schedules: {
       description: "查看或开关 WorkBuddy Plus 的定时执行。具体时段在本地面板中调整，已开始的手动任务不受开关影响。",
       args: { type: "object", properties: { enabled: { type: "boolean" } }, additionalProperties: false },
@@ -53,5 +61,5 @@ export const WorkBuddyPlusPlugin = async () => ({
         return args.enabled === undefined ? config : rpc("/api/config", { ...config, enabled: args.enabled });
       }
     }
-  }
-});
+  } };
+};

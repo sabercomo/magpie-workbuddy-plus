@@ -48,9 +48,8 @@ export class WorkBuddyClient {
     return this.fetcher(url, { ...init, signal, ...(this.config.proxy ? { proxy: this.config.proxy } : {}) });
   }
 
-  async request(path, { body, billing = false, renew = true, envelope = false } = {}) {
+  async request(path, { body, billing = false, renew = true, envelope = false, base = billing ? "https://www.codebuddy.cn" : origin } = {}) {
     if (renew) await this.refresh();
-    const base = billing ? "https://www.codebuddy.cn" : origin;
     const response = await this.fetch(base + path, {
       method: body === undefined ? "GET" : "POST", headers: this.headers(),
       ...(body === undefined ? {} : { body: JSON.stringify(body) })

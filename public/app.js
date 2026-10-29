@@ -44,6 +44,11 @@ async function refresh() {
   }
   $("updated").textContent=`更新于 ${new Date().toLocaleTimeString()}`;
 }
+async function board(view) {
+  view=view||await api("/api/board");WBBoard.render($("board"),view);
+  $("board-state").textContent=view.refreshing?"正在读取…":view.at?`更新于 ${new Date(view.at).toLocaleTimeString()}`:"";
+}
+$("board-refresh").onclick=()=>api("/api/board",{}).then(board).catch(failure);
 $("toggle-schedule").onclick=()=>save({...current.config,enabled:!current.config.enabled}).catch(failure);
 for(const button of document.querySelectorAll("[data-action]"))button.onclick=async()=>{
   button.disabled=true;$("error").hidden=true;
@@ -55,5 +60,5 @@ $("config-form").onsubmit=async event=>{
   for(const key of ["timezone","proxy"])config[key]=form.elements[key].value.trim();
   try{await save(config);$("saved").textContent="已保存";}catch(e){failure(e);}
 };
-refresh().catch(failure);
-setInterval(()=>refresh().catch(failure),4000);
+refresh().catch(failure);board().catch(failure);
+setInterval(()=>refresh().catch(failure),4000);setInterval(()=>board().catch(failure),15000);

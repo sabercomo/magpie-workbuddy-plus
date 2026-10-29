@@ -18,7 +18,7 @@ export function validateConfig(value) {
 }
 
 export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) {
-  const root = new URL("./public/", import.meta.url);
+  const root = new URL("./public/", import.meta.url), shared = new URL("./page/", import.meta.url);
   const server = createServer(async (request, response) => {
     const send = (code, body) => {
       response.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
@@ -31,11 +31,13 @@ export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) 
       if (origin && ![`http://${host}`].includes(origin)) return send(403, { error: "拒绝跨站请求" });
       const url = new URL(request.url, `http://${host}`);
       if (request.method === "GET" && url.pathname === "/api/status") return send(200, runner.status());
-      if (request.method === "GET" && ["/", "/app.js", "/style.css"].includes(url.pathname)) {
+      if (request.method === "GET" && url.pathname === "/api/board") return send(200, runner.boardView());
+      if (request.method === "GET" && ["/", "/app.js", "/style.css", "/board.js", "/board.css"].includes(url.pathname)) {
         const file = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
-        const type = { "index.html": "text/html", "app.js": "text/javascript", "style.css": "text/css" }[file];
+        const type = { html: "text/html", js: "text/javascript", css: "text/css" }[file.split(".").pop()];
         response.writeHead(200, { "Content-Type": `${type}; charset=utf-8`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'" });
-        return response.end(readFileSync(new URL(file, root)));
+        // The board renderer is shared with Magpie's page, which may only load files from page/.
+        return response.end(readFileSync(new URL(file, file.startsWith("board.") ? shared : root)));
       }
       if (request.method !== "POST") return send(404, { error: "未知地址" });
       if (request.headers["x-workbuddy-plus"] !== "1" || !request.headers["content-type"]?.startsWith("application/json")) return send(403, { error: "缺少操作请求头" });
@@ -55,6 +57,12 @@ export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) 
         return send(200, config);
       }
       if (url.pathname === "/api/cancel") { runner.cancel(value.id); return send(200, { cancelled: true }); }
+      if (url.pathname === "/api/board") {
+        runner.boardStale = true;
+        runner.refreshBoard().catch(e => console.error(e));
+        return send(202, runner.boardView());
+      }
+      if (url.pathname === "/api/page") return send(200, runner.pageRequest(value));
       return send(404, { error: "未知地址" });
     } catch (e) { send(400, { error: e.message }); }
   });
@@ -63,11 +71,16 @@ export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) 
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.WORKBUDDY_PLUS_PORT || 3439);
-  const { server, runner } = createService();
+  const { server, runner } = createService({ runner: new Runner(dataDir, {}, { pageFile: fileURLToPath(new URL("./page/data.js", import.meta.url)) }) });
   server.listen(port, "127.0.0.1", () => console.log(`WorkBuddy Plus: http://127.0.0.1:${port}`));
   // Missing/malformed local files are startup errors, not empty account lists.
   runner.list();
-  const interval = setInterval(() => runner.tick(), 30_000);
-  runner.tick();
+  const beat = () => {
+    runner.tick();
+    // A wake from sleep shows a stale board until this catches up.
+    runner.refreshBoard(10 * 60_000).catch(e => console.error(e));
+  };
+  const interval = setInterval(beat, 30_000);
+  beat();
   process.on("SIGTERM", () => { clearInterval(interval); server.close(); });
 }

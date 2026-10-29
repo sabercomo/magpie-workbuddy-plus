@@ -1,0 +1,17 @@
+body{margin:0;padding:20px 22px 28px;max-width:1080px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:22px;font-weight:650;letter-spacing:-.02em;margin:0 0 2px}
+h2{font-size:13px;font-weight:600;margin:22px 2px 8px}
+.muted{color:var(--wb-muted);font-size:12px;margin:0}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.actions button{font-size:12.5px;padding:4px 12px;border-radius:7px;cursor:pointer}
+.actions button:active{transform:scale(.97);transition:transform 100ms ease-out}
+.actions .quiet{background:none;border-color:transparent;color:var(--wb-muted)}.actions .quiet:hover{color:inherit}
+.note{border:1px solid var(--wb-line);border-radius:10px;padding:8px 12px;font-size:12px;margin:0 0 12px}.note.bad{color:var(--wb-urgent)}
+#jobs{border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);overflow:hidden}
+#jobs>p{padding:10px 14px}
+.job{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:1px 10px;padding:8px 14px;font-size:12px;border-top:1px solid var(--wb-line)}.job:first-child{border-top:none}
+.job .last{grid-column:2/4;color:var(--wb-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.job .failed,.job .interrupted{color:var(--wb-urgent)}.job .running,.job .queued{color:var(--wb-go)}.job .succeeded{color:var(--wb-accent)}
+footer{font-size:11.5px;margin-top:18px}
+@media (prefers-reduced-motion:reduce){.actions button:active{transform:none}}
