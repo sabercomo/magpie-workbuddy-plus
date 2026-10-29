@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
-const names = { all:"全部执行",checkin:"加油站签到",activity:"连登活跃",tasks:"成长任务",travel:"猫猫旅行",bonus:"连登福利",night:"夜猫子",keepalive:"登录续期",inspect:"查询状态" };
-const scheduleNames = { daily:"签到 / 活跃 / 旅行 / 连登",tasks:"成长任务",night:"夜猫子任务",keepalive:"登录续期检查" };
+const names = { all:"全部执行",checkin:"签到（旧版记录）",activity:"连登活跃",tasks:"成长任务",travel:"猫猫旅行",bonus:"连登福利",night:"夜猫子",keepalive:"登录续期",inspect:"查询状态" };
+const scheduleNames = { daily:"活跃 / 旅行 / 连登福利",tasks:"成长任务",night:"夜猫子任务",keepalive:"登录续期检查" };
 const statuses = { running:"执行中",queued:"排队中",succeeded:"已完成",failed:"有失败项目",interrupted:"重启中断",cancelled:"已停止" };
 let current, filled = false;
 const selected = new Set(), opened = new Set();

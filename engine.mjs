@@ -4,7 +4,7 @@ import { calendar } from "./storage.mjs";
 import { specs, manualTasks, buildEvent } from "./events.mjs";
 import { UpstreamError } from "./client.mjs";
 
-export const actions = ["all", "checkin", "activity", "tasks", "travel", "bonus", "night", "keepalive", "inspect"];
+export const actions = ["all", "activity", "tasks", "travel", "bonus", "night", "keepalive", "inspect"];
 
 export async function perform(action, client, context) {
   const { account, config, state, log, checkpoint } = context;
@@ -90,19 +90,6 @@ export async function perform(action, client, context) {
     return { checked: list.length };
   };
 
-  const checkin = () => daily("checkin", async () => {
-    try {
-      const result = await client.request("/v2/billing/meter/daily-checkin", { body: {}, billing: true, envelope: true });
-      if (/处理中|请勿重复操作|系统繁忙|稍后再试|失败/.test(result.msg || "")) throw new Error(`签到尚未成功：${result.msg}`);
-      log("Buddy 加油站：签到请求已成功，积分以账单为准");
-      return result;
-    } catch (e) {
-      if (e instanceof UpstreamError && e.code === 10001 && /已签到/.test(e.message) && !/处理中|请勿重复操作|失败/.test(e.message)) {
-        log("Buddy 加油站：今天已签到"); return { already: true };
-      }
-      throw e;
-    }
-  });
   const activity = () => daily("activity", async () => {
     await client.request("/v2/report", { body: [buildEvent(account.auth.uid, { kind: "chat" })] });
     const got = await client.request("/activity/growth/streak");
@@ -174,7 +161,7 @@ export async function perform(action, client, context) {
     tasks: await tasks(), travel: await client.request("/activity/growth/buddy/travel/status"),
     streak: await client.request("/activity/growth/streak"), energy: await client.request("/v2/activity/growth/energy")
   };
-  const handlers = { checkin, activity, tasks: () => runTasks(false), travel, bonus, night: () => runTasks(true) };
+  const handlers = { activity, tasks: () => runTasks(false), travel, bonus, night: () => runTasks(true) };
   if (action !== "all") return handlers[action]();
   const results = {}, failures = [];
   for (const [name, run] of Object.entries(handlers)) {

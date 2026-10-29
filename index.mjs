@@ -36,13 +36,13 @@ async function rpc(path, body) {
 export const WorkBuddyPlusPlugin = async () => ({
   tool: {
     status: {
-      description: "WorkBuddy Plus 的国内账号、执行记录、定时设置。成长任务、猫猫旅行、Buddy 加油站；面板 http://127.0.0.1:3439。不会返回登录密钥。",
+      description: "WorkBuddy Plus 的国内账号、执行记录、定时设置。成长任务、猫猫旅行、连登福利；面板 http://127.0.0.1:3439。不会返回登录密钥。",
       args: { type: "object", properties: {}, additionalProperties: false },
       execute: () => rpc("/api/status")
     },
     run: {
-      description: "启动 WorkBuddy Plus 国内账号操作，返回执行编号，随后用 status 查看结果。all 包含签到、连登活跃、成长任务、猫猫旅行和连登福利。",
-      args: { type: "object", properties: { action: { type: "string", enum: ["all", "checkin", "activity", "tasks", "travel", "bonus", "night", "keepalive", "inspect"] }, accounts: { type: "array", items: { type: "string" }, description: "status 返回的账号 id；不填代表全部已启用账号" } }, required: ["action"], additionalProperties: false },
+      description: "启动 WorkBuddy Plus 国内账号操作，返回执行编号，随后用 status 查看结果。all 包含连登活跃、成长任务、猫猫旅行和连登福利；每日签到由 Magpie 的 WorkBuddy 插件负责。",
+      args: { type: "object", properties: { action: { type: "string", enum: ["all", "activity", "tasks", "travel", "bonus", "night", "keepalive", "inspect"] }, accounts: { type: "array", items: { type: "string" }, description: "status 返回的账号 id；不填代表全部已启用账号" } }, required: ["action"], additionalProperties: false },
       execute: args => rpc("/api/run", args)
     },
     schedules: {

@@ -88,7 +88,7 @@ export class Runner {
     if (!config.enabled) return;
     const { day, time } = calendar(now, config.timezone);
     const groups = {
-      daily: { realm: "cn", actions: ["checkin", "activity", "travel", "bonus"] },
+      daily: { realm: "cn", actions: ["activity", "travel", "bonus"] },
       tasks: { realm: "cn", actions: ["tasks"] },
       night: { realm: "cn", actions: ["night"] },
       keepalive: { actions: ["keepalive"] }

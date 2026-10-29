@@ -107,5 +107,8 @@ test("HTTP service serves the panel, rejects cross-site mutations, and validates
   assert.equal(denied.status, 403);
   const malformed = await fetch(base + "/api/config", { method: "POST", headers: { "Content-Type": "application/json", "X-WorkBuddy-Plus": "1" }, body: JSON.stringify({ ...p.config(), schedules: { ...p.config().schedules, daily: ["25:00"] } }) });
   assert.equal(malformed.status, 400);
+  const checkin = await fetch(base + "/api/run", { method: "POST", headers: { "Content-Type": "application/json", "X-WorkBuddy-Plus": "1" }, body: JSON.stringify({ action: "checkin" }) });
+  assert.equal(checkin.status, 400);
+  assert.match((await checkin.json()).error, /无效的操作/);
   const status = await (await fetch(base + "/api/status")).text(); assert.ok(!status.includes("private-access"));
 });

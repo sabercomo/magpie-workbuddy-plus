@@ -26,21 +26,20 @@ function fixture(t, serve) {
   return { run: action => perform(action, client, context), client, context, state, seen, logs };
 }
 
-test("code=0 with a processing/failure message never settles daily check-in", async t => {
-  const p = fixture(t, () => Response.json({ code: 0, msg: "请求处理中，请勿重复操作", data: {} }));
-  await assert.rejects(p.run("checkin"), /尚未成功/);
-  assert.deepEqual(p.state.daily, {});
-  await assert.rejects(p.run("checkin"), /尚未成功/);
-  assert.equal(p.seen.length, 2);
-});
-
-test("already checked-in is accepted; another code=10001 is a failure", async t => {
-  const p = fixture(t, () => Response.json({ code: 10001, msg: "今天已签到" }, { status: 400 }));
-  await p.run("checkin"); await p.run("checkin");
-  assert.equal(p.seen.length, 1);
-  const other = fixture(t, () => Response.json({ code: 10001, msg: "积分领取失败" }));
-  await assert.rejects(other.run("checkin"));
-  assert.deepEqual(other.state.daily, {});
+test("all performs domestic tasks without calling daily check-in", async t => {
+  const p = fixture(t, path => {
+    if (path === "/v2/report") return ok({});
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: [] });
+    if (path === "/activity/growth/buddy/travel/status") return ok({ state: "traveling" });
+    if (path === "/activity/growth/heatmap") return ok({ cells: [] });
+    if (path === "/activity/growth/streak") return ok({ streak: { days: 1 } });
+    if (path === "/activity/growth/lottery/summary") return ok({ chances: 0 });
+    if (["/billing/meter/claim-gift", "/billing/meter/claim-compensation"].includes(path)) return ok({ credit: 0 });
+    throw new Error("unexpected endpoint " + path);
+  });
+  const result = await p.run("all");
+  assert.deepEqual(Object.keys(result), ["activity", "tasks", "travel", "bonus"]);
+  assert.ok(p.seen.every(r => !r.path.includes("daily-checkin")));
 });
 
 test("an accepted report with zero upstream progress is never claimed", async t => {
