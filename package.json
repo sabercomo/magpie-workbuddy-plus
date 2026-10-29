@@ -1,0 +1,15 @@
+{
+  "name": "magpie-workbuddy-plus",
+  "version": "0.1.0",
+  "description": "Unofficial Magpie companion for WorkBuddy China only: check-in, growth tasks, Buddy travel and schedules",
+  "type": "module",
+  "main": "./index.mjs",
+  "files": ["*.mjs", "public", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"],
+  "scripts": {"test": "node --test test/*.test.mjs", "start": "node server.mjs"},
+  "engines": {"node": ">=22"},
+  "repository": {"type": "git", "url": "https://github.com/sabercomo/magpie-workbuddy-plus.git"},
+  "homepage": "https://github.com/sabercomo/magpie-workbuddy-plus#readme",
+  "bugs": {"url": "https://github.com/sabercomo/magpie-workbuddy-plus/issues"},
+  "keywords": ["magpie", "opencode", "opencode-plugin", "workbuddy", "tools"],
+  "license": "MIT"
+}

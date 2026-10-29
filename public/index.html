@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WorkBuddy Plus</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<main>
+  <header><div><p class="eyebrow">MAGPIE · COMPANION</p><h1>WorkBuddy Plus</h1><p class="muted">国内账号的旅行、任务与加油站，都放在这里。</p></div><div class="scheduler"><span id="schedule-state"></span><button id="toggle-schedule">加载中</button></div></header>
+  <p id="error" role="alert" hidden></p>
+  <section aria-labelledby="accounts-title"><div class="section-head"><h2 id="accounts-title">账号</h2><span class="muted">勾选账号后执行；空选使用全部已启用账号</span></div><div id="accounts" class="accounts"></div></section>
+  <section aria-label="手动操作"><div class="section-head"><h2>手动执行</h2><span class="muted">长任务会在后台运行，执行记录随时可查</span></div><div class="actions">
+    <button class="primary" data-action="all">一键全部执行</button><button data-action="activity">连登活跃</button><button data-action="checkin">Buddy 加油站</button><button data-action="tasks">一键成长任务</button><button data-action="travel">猫猫旅行</button><button data-action="bonus">连登福利</button><button data-action="night">夜猫子任务</button><button data-action="keepalive">检查登录续期</button><button data-action="inspect">查询上游状态</button>
+  </div></section>
+  <section><details id="settings"><summary>定时与设置 <span class="muted">时区、执行时段、代理设置</span></summary>
+    <form id="config-form"><div id="schedule-fields" class="fields"></div><div class="fields">
+      <label>时区<input name="timezone" required></label><label>HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label>
+    </div><p class="muted">同类多个时段用逗号分隔，清空可关闭该类定时。签到和连登每天成功后不重复执行，任务与旅行会核对上游状态。</p><button type="submit">保存设置</button><span id="saved" role="status"></span></form>
+  </details></section>
+  <section><div class="section-head"><h2>执行记录</h2><span id="updated" class="muted"></span></div><div id="jobs"></div></section>
+  <footer>仅本机访问 · 独立定时服务 · Magpie 关闭后仍可执行 · 日志时间按本机显示</footer>
+</main>
+</body></html>
