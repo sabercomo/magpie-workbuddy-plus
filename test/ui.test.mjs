@@ -25,7 +25,9 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
     { id: "cn:a", name: "国内测试", realm: "cn", source: "magpie", enabled: true },
     { id: "cn:b", name: "国内测试二", realm: "cn", source: "magpie", enabled: true }
   ], jobs: [] };
-  const board = { at: Date.now(), accounts: [{ id: "cn:a", name: "国内测试", expires: 0, errors: {}, balance: { balance: 120, size: 300, packages: [{ name: "活动赠送", balance: 120, size: 300, expires: Date.now() + 86400_000 }] },
+  const board = { at: Date.now(), enabled: true, today: { timezone: "Asia/Shanghai", next: { kind: "daily", at: "21:00", status: "upcoming" }, slots: [
+    { kind: "daily", at: "09:00", status: "succeeded", attempts: 1 }, { kind: "tasks", at: "09:10", status: "failed", attempts: 2 }, { kind: "daily", at: "21:00", status: "upcoming", attempts: 0 }
+  ] }, accounts: [{ id: "cn:a", name: "国内测试", expires: 0, errors: {}, balance: { balance: 120, size: 300, packages: [{ name: "活动赠送", balance: 120, size: 300, expires: Date.now() + 86400_000 }] },
     streak: { days: 8, makeupCards: 1, active: true, nextTier: { days: 14, remaining: 6, credit: 50, energy: 3 } },
     growth: { energy: 30, earned: 110, spent: 80, draws: 0, buddies: 2, rarity: { SR: 1, R: 1 }, current: ["团子"] },
     tasks: { total: 2, claimed: 1, credit: 100, open: [{ title: "关注公众号", state: "manual", note: "需要关注官方公众号", current: 0, target: 1, credit: 100, energy: 5, ends: 0 }] },
@@ -49,6 +51,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   button(nodes.get("board"), "小组件").onclick();
   assert.match(text(nodes.get("board")), /即将作废 明天 120 积分[\s\S]*今日 0\/1 完成[\s\S]*能量 30[\s\S]*成长任务 1\/2[\s\S]*关注公众号 需手动/);
   button(nodes.get("board"), "列表").onclick();
+  assert.match(text(nodes.get("board")), /今日定时 · 每天 3 次 下一次 21:00 活跃 · 旅行 · 福利[\s\S]*09:00 完成[\s\S]*09:10 失败 2\/3 成长任务[\s\S]*21:00 下一次[\s\S]*需要你留意/);
   assert.equal(nodes.get("accounts").children.length, 2);
   const checkbox = nodes.get("accounts").children[1].children[0]; checkbox.checked = true; checkbox.onchange();
   await buttons.find(b => b.dataset.action === "activity").onclick();

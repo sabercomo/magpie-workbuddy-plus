@@ -33,10 +33,16 @@ async function rpc(path, body) {
   return value;
 }
 
-// Magpie restarts its plugins with the new options whenever the page's
+const pageFile = join(dirname(fileURLToPath(import.meta.url)), "page", "data.js");
+
+// Magpie starts its plugin host at launch and again after each restart, so
+// loading the plugin is when the service is brought up (rpc starts it when
+// nothing answers) and told where this copy's page reads its snapshot.
+// Magpie also restarts its plugins with new options whenever the page's
 // buttons save a request into them; the service runs each request id once.
 export const WorkBuddyPlusPlugin = async (input, options) => {
-  if (options?.request) rpc("/api/page", options.request).catch(e => console.error("[workbuddy-plus]", e.message));
+  const ready = rpc("/api/page-target", { file: pageFile }).catch(e => console.error("[workbuddy-plus]", e.message));
+  if (options?.request) ready.then(() => rpc("/api/page", options.request)).catch(e => console.error("[workbuddy-plus]", e.message));
   return { tool: {
     status: {
       description: "WorkBuddy Plus 的国内账号、执行记录、定时设置。成长任务、猫猫旅行、连登福利；面板 http://127.0.0.1:3439。不会返回登录密钥。",

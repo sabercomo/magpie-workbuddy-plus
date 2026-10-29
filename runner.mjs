@@ -1,4 +1,5 @@
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { accounts, calendar, initialize, publicAccount, readJSON, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
@@ -32,11 +33,42 @@ export class Runner {
     const config = this.config();
     return {
       generated: new Date().toISOString(), at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
-      accounts: this.board.accounts, request: this.state.pageRequest || null,
+      accounts: this.board.accounts, request: this.state.pageRequest || null, today: this.today(config),
       jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
     };
   }
-  publish() { if (this.pageFile) writePage(this.pageFile, this.boardView()); }
+  // Magpie may load the plugin from a folder other than the one this service
+  // runs from (a GitHub install beside the LaunchAgent copy); its page reads
+  // only its own folder, so the snapshot goes there too.
+  addPageTarget(file) {
+    const dir = typeof file === "string" && isAbsolute(file) && basename(file) === "data.js" ? dirname(file) : "";
+    let name = "";
+    try { name = readJSON(join(dir, "..", "package.json")).name; } catch {}
+    if (!dir || basename(dir) !== "page" || name !== "magpie-workbuddy-plus" || !["index.html", "board.js"].every(f => existsSync(join(dir, f)))) throw new Error("不是 WorkBuddy Plus 的页面目录");
+    if (file !== this.pageFile) this.state.pageTargets = [file, ...(this.state.pageTargets || []).filter(f => f !== file)].slice(0, 4);
+    this.save();
+    this.publish();
+    return { targets: [this.pageFile, ...(this.state.pageTargets || [])].filter(Boolean) };
+  }
+  // Today's slots in time order, each with the job tick() gave it, if any.
+  today(config = this.config(), now = new Date()) {
+    const { day, time } = calendar(now, config.timezone);
+    const slots = Object.entries(config.schedules).flatMap(([kind, times]) => times.map(at => {
+      const record = this.state.slots[`${day}:${kind}:${at}`], job = record && this.state.jobs.find(j => j.id === record.job);
+      // The night task only counts 23:00–08:00; past that window a missed slot is gone.
+      const status = job ? job.status : at > time ? "upcoming" : kind === "night" && time >= "08:00" ? "missed" : "pending";
+      return { kind, at, status, attempts: record?.attempts || 0 };
+    })).sort((a, b) => a.at.localeCompare(b.at) || a.kind.localeCompare(b.kind));
+    return { timezone: config.timezone, slots, next: config.enabled ? slots.find(s => s.status === "upcoming") || null : null };
+  }
+  publish() {
+    const view = this.boardView(), targets = this.state.pageTargets || [];
+    if (this.pageFile) writePage(this.pageFile, view);
+    // A removed plugin's folder is left removed, not recreated.
+    const live = targets.filter(f => existsSync(join(dirname(f), "index.html")));
+    for (const f of live) if (f !== this.pageFile) writePage(f, view);
+    if (live.length !== targets.length) { this.state.pageTargets = live; this.save(); }
+  }
   refreshBoard(maxAge = 0) {
     if (this.boarding) return this.boarding;
     if (!this.boardStale && Date.now() - this.board.at < maxAge) return Promise.resolve(this.board);
@@ -112,13 +144,14 @@ export class Runner {
         try {
           result.data = await perform(action, client, context);
           result.ok = true;
-        } catch (e) { result.error = e.message; log(`${action} 失败：${e.message}`); }
+        } catch (e) { result.error = e.message; result.limited = !!e.limited; log(`${action} ${e.limited ? "被限流" : "失败"}：${e.message}`); }
         job.results.push(result);
         this.save();
       }
       if (controller.signal.aborted) break;
     }
-    job.status = controller.signal.aborted ? "cancelled" : job.results.every(r => r.ok) ? "succeeded" : "failed";
+    const failed = job.results.filter(r => !r.ok);
+    job.status = controller.signal.aborted ? "cancelled" : !failed.length ? "succeeded" : failed.every(r => r.limited) ? "deferred" : "failed";
     job.finished = new Date().toISOString();
     this.controllers.delete(job.id);
     this.boardStale = true;
@@ -152,7 +185,7 @@ export class Runner {
         const previous = this.state.slots[key];
         if (previous) {
           const old = this.state.jobs.find(j => j.id === previous.job);
-          if (old && !["failed", "interrupted"].includes(old.status)) continue;
+          if (old && !["failed", "deferred", "interrupted"].includes(old.status)) continue;
           if (previous.attempts >= 3 || (old && now - new Date(old.finished) < 15 * 60_000)) continue;
         }
         const job = this.submit(group.actions, ids, `schedule:${kind}:${slot}`);

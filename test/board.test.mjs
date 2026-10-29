@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaults, initialize, readJSON, writeJSON } from "../storage.mjs";
@@ -100,6 +100,20 @@ test("page snapshot carries no credentials and each page request runs once", asy
   writeFileSync(join(dir, "page", "board.js"), "// updated");
   assert.notEqual(pageBuild(join(dir, "page"), "data.js"), build);
   assert.equal(runner.boardView().accounts[0].travel.state, "none");
+
+  // Another copy of the plugin gets the snapshot in its own page folder, and
+  // nothing is written outside a WorkBuddy Plus page folder.
+  assert.throws(() => runner.addPageTarget(join(dir, "elsewhere", "data.js")), /页面目录/);
+  const copy = join(dir, "copy");
+  mkdirSync(join(copy, "page"), { recursive: true });
+  writeJSON(join(copy, "package.json"), { name: "magpie-workbuddy-plus" });
+  for (const f of ["index.html", "board.js"]) writeFileSync(join(copy, "page", f), "");
+  runner.addPageTarget(join(copy, "page", "data.js"));
+  assert.match(readFileSync(join(copy, "page", "data.js"), "utf8"), /globalThis\.WBPLUS = /);
+  rmSync(copy, { recursive: true });
+  runner.publish();
+  assert.ok(!existsSync(copy), "a removed plugin folder is not recreated");
+  assert.deepEqual(runner.state.pageTargets, []);
 
   const request = { id: "a1", action: "resume", at: Date.now() };
   assert.equal(runner.pageRequest(request).ok, true);

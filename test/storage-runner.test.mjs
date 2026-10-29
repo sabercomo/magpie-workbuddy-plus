@@ -112,3 +112,38 @@ test("HTTP service serves the panel, rejects cross-site mutations, and validates
   assert.match((await checkin.json()).error, /无效的操作/);
   const status = await (await fetch(base + "/api/status")).text(); assert.ok(!status.includes("private-access"));
 });
+
+test("a rate limit is retried, then defers the slot instead of failing it", async t => {
+  const p = fixture(t), config = p.config();
+  config.enabled = true; config.schedules.tasks = ["09:10"];
+  writeJSON(join(p.dir, "config.json"), config);
+  let calls = 0, limited = true;
+  const waits = [];
+  const fetcher = async () => { calls++; return limited ? new Response("{}", { status: 429, headers: { "Retry-After": "2" } }) : Response.json({ code: 0, data: { tasks: [] } }); };
+  const runner = new Runner(p.dir, { gap: 0, fetcher, wait: async ms => { waits.push(ms); } });
+  runner.tick(new Date("2026-10-29T01:10:00Z")); await settled(runner);
+  const first = runner.state.jobs[0];
+  assert.equal(first.status, "deferred");
+  assert.equal(calls, 3);
+  assert.deepEqual(waits, [2000, 2000]);
+  assert.match(first.logs.at(-1).message, /被限流/);
+  // Once the limit lifts, the slot's next retry runs and goes through.
+  limited = false;
+  first.finished = new Date("2026-10-29T01:10:30Z").toISOString();
+  runner.tick(new Date("2026-10-29T01:26:00Z")); await settled(runner);
+  assert.equal(runner.state.jobs.length, 2);
+  assert.ok(runner.state.jobs.some(j => j.status === "succeeded"));
+});
+
+test("the board lists today's slots with how each went and which is next", async t => {
+  const p = fixture(t), config = p.config();
+  config.enabled = true; config.schedules = { ...config.schedules, keepalive: ["09:00", "21:00"], night: ["01:00"] };
+  writeJSON(join(p.dir, "config.json"), config);
+  const runner = new Runner(p.dir, { gap: 0, fetcher: async () => Response.json({ code: 0, data: {} }) });
+  runner.tick(new Date("2026-10-29T01:00:00Z")); await settled(runner);
+  const today = runner.today(runner.config(), new Date("2026-10-29T02:00:00Z"));
+  assert.deepEqual(today.slots.map(s => [s.at, s.kind, s.status]), [["01:00", "night", "missed"], ["09:00", "keepalive", "succeeded"], ["21:00", "keepalive", "upcoming"]]);
+  assert.deepEqual([today.next.at, today.next.kind], ["21:00", "keepalive"]);
+  config.enabled = false; writeJSON(join(p.dir, "config.json"), config);
+  assert.equal(runner.today(runner.config(), new Date("2026-10-29T02:00:00Z")).next, null);
+});

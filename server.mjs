@@ -19,7 +19,7 @@ export function validateConfig(value) {
 
 export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) {
   const root = new URL("./public/", import.meta.url), shared = new URL("./page/", import.meta.url);
-  const server = createServer(async (request, response) => {
+  const handler = async (request, response) => {
     const send = (code, body) => {
       response.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
       response.end(JSON.stringify(body));
@@ -63,24 +63,43 @@ export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) 
         return send(202, runner.boardView());
       }
       if (url.pathname === "/api/page") return send(200, runner.pageRequest(value));
+      if (url.pathname === "/api/page-target") return send(200, runner.addPageTarget(value.file));
       return send(404, { error: "未知地址" });
     } catch (e) { send(400, { error: e.message }); }
-  });
-  return { server, runner };
+  };
+  return { server: createServer(handler), runner, handler };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.WORKBUDDY_PLUS_PORT || 3439);
-  const { server, runner } = createService({ runner: new Runner(dataDir, {}, { pageFile: fileURLToPath(new URL("./page/data.js", import.meta.url)) }) });
-  server.listen(port, "127.0.0.1", () => console.log(`WorkBuddy Plus: http://127.0.0.1:${port}`));
-  // Missing/malformed local files are startup errors, not empty account lists.
-  runner.list();
-  const beat = () => {
-    runner.tick();
-    // A wake from sleep shows a stale board until this catches up.
-    runner.refreshBoard(10 * 60_000).catch(e => console.error(e));
-  };
-  const interval = setInterval(beat, 30_000);
-  beat();
-  process.on("SIGTERM", () => { clearInterval(interval); server.close(); });
+  // The port is taken before the runner is made: making one marks running
+  // jobs interrupted, which must not happen to another service's jobs. Both
+  // the LaunchAgent and the Magpie plugin may start a service at login; the
+  // one that loses waits instead of exiting, so launchd doesn't respawn it in
+  // a loop, and takes over if the other stops.
+  const server = createServer();
+  let interval, waiting = false;
+  server.on("error", e => {
+    if (e.code !== "EADDRINUSE") throw e;
+    if (!waiting) console.log(`端口 ${port} 已有 WorkBuddy Plus 在运行，本进程待命，等它退出后接手`);
+    waiting = true;
+    setTimeout(() => server.listen(port, "127.0.0.1"), 5000);
+  });
+  server.once("listening", () => {
+    const { runner, handler } = createService({ runner: new Runner(dataDir, {}, { pageFile: fileURLToPath(new URL("./page/data.js", import.meta.url)) }) });
+    server.on("request", handler);
+    console.log(`WorkBuddy Plus: http://127.0.0.1:${port}`);
+    // Missing/malformed local files are startup errors, not empty account lists.
+    runner.list();
+    const beat = () => {
+      runner.tick();
+      // A wake from sleep shows a stale board until this catches up.
+      runner.refreshBoard(10 * 60_000).catch(e => console.error(e));
+    };
+    interval = setInterval(beat, 30_000);
+    beat();
+  });
+  server.listen(port, "127.0.0.1");
+  // A waiting process has nothing in flight; a serving one lets its calls finish.
+  process.on("SIGTERM", () => { if (!interval) process.exit(0); clearInterval(interval); server.close(); });
 }

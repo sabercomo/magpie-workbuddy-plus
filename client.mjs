@@ -12,9 +12,28 @@ export class UpstreamError extends Error {
   }
 }
 
+// Too many requests: the upstream turned the call away without acting on it,
+// so it is safe to send again later. Jobs that only hit this are deferred,
+// not failed.
+export class RateLimited extends UpstreamError {
+  constructor(path, payload) {
+    super(path, 429, payload);
+    this.message = `${path}: 上游限流（HTTP 429），稍后会自动重试`;
+    this.limited = true;
+  }
+}
+
+// Retry-After is seconds or an HTTP date; without one, back off 5 s then 20 s.
+export function backoff(response, attempt) {
+  const header = response.headers.get("retry-after");
+  const seconds = header == null ? NaN : /^\d+$/.test(header.trim()) ? Number(header) : (Date.parse(header) - Date.now()) / 1000;
+  return Math.min(60_000, Math.max(1000, Number.isFinite(seconds) ? seconds * 1000 : [5000, 20_000][attempt] ?? 20_000));
+}
+
 export class WorkBuddyClient {
-  constructor(account, config, { fetcher = fetch, gap = 1000, signal } = {}) {
+  constructor(account, config, { fetcher = fetch, gap = 1000, signal, wait = delay } = {}) {
     this.account = account;
+    this.wait = wait;
     this.config = config;
     this.fetcher = fetcher;
     this.gap = gap;
@@ -50,10 +69,16 @@ export class WorkBuddyClient {
 
   async request(path, { body, billing = false, renew = true, envelope = false, base = billing ? "https://www.codebuddy.cn" : origin } = {}) {
     if (renew) await this.refresh();
-    const response = await this.fetch(base + path, {
-      method: body === undefined ? "GET" : "POST", headers: this.headers(),
-      ...(body === undefined ? {} : { body: JSON.stringify(body) })
-    });
+    let response;
+    for (let attempt = 0; ; attempt++) {
+      response = await this.fetch(base + path, {
+        method: body === undefined ? "GET" : "POST", headers: this.headers(),
+        ...(body === undefined ? {} : { body: JSON.stringify(body) })
+      });
+      if (response.status !== 429) break;
+      if (attempt === 2) { let payload = {}; try { payload = JSON.parse(await response.text()); } catch {} throw new RateLimited(path, payload); }
+      await this.wait(backoff(response, attempt), undefined, { signal: this.signal });
+    }
     const text = await response.text();
     let payload;
     try { payload = JSON.parse(text); }

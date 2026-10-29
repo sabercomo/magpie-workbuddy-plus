@@ -3,7 +3,7 @@
 // the plugin's options (see index.mjs).
 const $ = id => document.getElementById(id);
 const names = { all: "全部执行", activity: "连登活跃", tasks: "成长任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", keepalive: "登录续期", inspect: "查询状态", refresh: "刷新", pause: "暂停定时", resume: "开启定时" };
-const statuses = { running: "执行中", queued: "排队中", succeeded: "已完成", failed: "有失败", interrupted: "中断", cancelled: "已停止" };
+const statuses = { running: "执行中", queued: "排队中", succeeded: "已完成", failed: "有失败", deferred: "稍后重试", interrupted: "中断", cancelled: "已停止" };
 let pending = null;
 const build = globalThis.WBPLUS?.build;
 

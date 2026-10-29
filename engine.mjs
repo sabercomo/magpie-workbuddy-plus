@@ -6,6 +6,13 @@ import { UpstreamError } from "./client.mjs";
 
 export const actions = ["all", "activity", "tasks", "travel", "bonus", "night", "keepalive", "inspect"];
 
+// A round whose every failure was a rate limit is deferred, not failed.
+function roundError(message, errors) {
+  const e = new Error(message);
+  e.limited = errors.length > 0 && errors.every(x => x.limited);
+  return e;
+}
+
 export async function perform(action, client, context) {
   const { account, config, state, log, checkpoint } = context;
   const today = () => calendar(new Date(), config.timezone).day;
@@ -73,7 +80,7 @@ export async function perform(action, client, context) {
   };
 
   const runTasks = async onlyNight => {
-    const failures = [];
+    const failures = [], errors = [];
     const list = await tasks();
     if (onlyNight && !list.some(t => t.task_code === "black_cat")) {
       log("当前任务中心没有夜猫子任务");
@@ -84,9 +91,9 @@ export async function perform(action, client, context) {
     for (const task of list) {
       if (onlyNight && task.task_code !== "black_cat") continue;
       try { await progress(task); }
-      catch (e) { failures.push(`${task.task_code}：${e.message}`); log(failures.at(-1)); }
+      catch (e) { failures.push(`${task.task_code}：${e.message}`); errors.push(e); log(failures.at(-1)); }
     }
-    if (failures.length) throw new Error(`部分任务失败：${failures.join("；")}`);
+    if (failures.length) throw roundError(`部分任务失败：${failures.join("；")}`, errors);
     return { checked: list.length };
   };
 
@@ -163,12 +170,12 @@ export async function perform(action, client, context) {
   };
   const handlers = { activity, tasks: () => runTasks(false), travel, bonus, night: () => runTasks(true) };
   if (action !== "all") return handlers[action]();
-  const results = {}, failures = [];
+  const results = {}, failures = [], errors = [];
   for (const [name, run] of Object.entries(handlers)) {
     if (name === "night") continue;
     try { results[name] = await run(); }
-    catch (e) { results[name] = { error: e.message }; failures.push(name); log(`${name} 失败：${e.message}`); }
+    catch (e) { results[name] = { error: e.message }; failures.push(name); errors.push(e); log(`${name} ${e.limited ? "被限流" : "失败"}：${e.message}`); }
   }
-  if (failures.length) throw new Error(`本轮有失败项目：${failures.join("、")}；详见执行记录`);
+  if (failures.length) throw roundError(`本轮有${errors.every(e => e.limited) ? "被限流的" : "失败"}项目：${failures.join("、")}；详见执行记录`, errors);
   return results;
 }

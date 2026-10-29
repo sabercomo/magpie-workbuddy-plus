@@ -20,23 +20,9 @@ Magpie 的第三方 WorkBuddy 国内版补充插件，提供成长任务、猫�
 
 成长任务包含模拟客户端事件上报，不代表实际在桌面端完成操作。是否计入进度、发放奖励或限制账号由上游决定，不保证所有任务都能完成。公众号关注、实际捐赠和部分桌面操作需要本人完成；已达成的任务可以尝试领奖。
 
-## 安装：macOS 后台运行
+## 安装
 
-需要已安装 Magpie、Git 和 Bun 1.3+，且 `magpie`、`bun` 命令可在终端使用。先在 Magpie 安装官方 WorkBuddy 插件、登录国内账号并开启每日自动签到，无需给本项目重新提供账号密码。
-
-```sh
-git clone https://github.com/sabercomo/magpie-workbuddy-plus.git
-cd magpie-workbuddy-plus
-bun install.mjs
-```
-
-安装器会把运行文件复制到 `~/Applications/Magpie-WorkBuddy-Plus`，注册 Magpie 工具插件，并创建登录后自动启动的 macOS LaunchAgent。安装后可删除下载的源码目录。
-
-打开 **http://127.0.0.1:3439**，确认账号列表，再点击「开启定时」。**首次安装默认暂停定时**；手动操作不受定时开关影响。
-
-后台服务独立于 Magpie 运行。电脑休眠时暂停，唤醒并恢复联网后补跑当天已经到点的任务；夜猫子任务只能在有效夜间窗口执行。关机期间不执行，重新登录后后台自动启动。
-
-## 在 Magpie 中安装与发现
+需要 Magpie。先在 Magpie 安装官方 WorkBuddy 插件、登录国内账号并开启每日自动签到，无需给本项目重新提供账号密码。
 
 在 Magpie「插件 → 发现 → 非官方」中搜索本项目，或直接安装仓库：
 
@@ -44,7 +30,23 @@ bun install.mjs
 magpie plugin add github:sabercomo/magpie-workbuddy-plus
 ```
 
-这种方式添加工具入口，**不会执行上面的 macOS 后台安装器**。第一次通过 Magpie 的插件工具调用 `status`、`run` 或 `schedules` 时，会按需启动本机服务，然后可打开面板。要登录后自动启动，请使用上一节的安装方式。
+装上就能用：Magpie 启动或重载插件时，插件会检查本机服务，没有在运行就从插件目录启动它，并让它把看板快照写进这份插件的页面目录。之后在 Magpie 侧栏打开「WorkBuddy Plus」，或打开 **http://127.0.0.1:3439**，确认账号列表，再点击「开启定时」。**首次安装默认暂停定时**；手动操作不受定时开关影响。
+
+服务由 Magpie 启动后独立运行，页面按钮让 Magpie 重载插件、插件更新，都不会打断正在执行的任务；退出 Magpie 后服务会继续运行到注销或关机。要登录时自动开始，可以开启 Magpie 的登录启动（`magpie autostart on`），或使用下面的后台安装。
+
+### 可选：macOS 登录后独立运行
+
+想在不打开 Magpie 时也照常执行，用 LaunchAgent 安装。需要 Git 和 Bun 1.3+，且 `magpie`、`bun` 命令可在终端使用。
+
+```sh
+git clone https://github.com/sabercomo/magpie-workbuddy-plus.git
+cd magpie-workbuddy-plus
+bun install.mjs
+```
+
+安装器会把运行文件复制到 `~/Applications/Magpie-WorkBuddy-Plus`，注册 Magpie 插件，并创建登录后自动启动的 macOS LaunchAgent；同一安装目录已有的其他 LaunchAgent 会被停用并改名为 `.replaced`。安装后可删除下载的源码目录。
+
+同一时间只有一个服务占用端口：LaunchAgent 和 Magpie 同时启动服务时，后启动的那个待命，等前一个退出后再接手，不会重复执行。电脑休眠时暂停，唤醒并恢复联网后补跑当天已经到点的任务；夜猫子任务只能在有效夜间窗口执行。关机期间不执行。
 
 在「插件 → 已安装」的插件卡片中可以查看工具名并复制 Magpie MCP 地址。工具包括：
 
@@ -70,7 +72,7 @@ magpie plugin add github:sabercomo/magpie-workbuddy-plus
 | 09:10、21:10 | 国内成长任务 |
 | 22:00 | 登录续期检查，提前两小时续期 |
 
-每 30 秒检查一次定时。失败至少间隔 15 分钟重试，每个时段最多尝试 3 次。连登活跃成功后当天不重复；旅行与任务奖励会核对上游状态。每日签到按 Magpie 自身的设置执行，不属于本插件的定时任务。
+每 30 秒检查一次定时。失败至少间隔 15 分钟重试，每个时段最多尝试 3 次。上游限流（HTTP 429）时先在本次执行里等待后重试；仍被限流的执行记为「稍后重试」而不是失败，同样按上面的间隔补跑。每类时段最多 24 个；看板底部的「今日定时」列出今天每个时段的结果和下一次执行。连登活跃成功后当天不重复；旅行与任务奖励会核对上游状态。每日签到按 Magpie 自身的设置执行，不属于本插件的定时任务。
 
 ## 终端操作
 
@@ -89,7 +91,7 @@ bun cli.mjs resume
 
 ## 其他平台手动运行
 
-macOS 以外的平台没有自动安装器。安装 Bun、Magpie 并登录国内账号后，可以在源码目录运行：
+其他平台同样可以用 `magpie plugin add` 安装，由 Magpie 启动服务；这部分只在 macOS 上验收过。macOS 以外没有登录自启的安装器，想不开 Magpie 也运行时，安装 Bun 并登录国内账号后，可以在源码目录运行：
 
 ```sh
 bun server.mjs

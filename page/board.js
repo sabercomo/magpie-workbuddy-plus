@@ -91,6 +91,29 @@
     return box;
   }
 
+  const kinds = { daily: "活跃 · 旅行 · 福利", tasks: "成长任务", night: "夜猫子", keepalive: "登录续期" };
+  const slotStates = { succeeded: ["完成", "ok"], failed: ["失败", "urgent"], deferred: ["稍后重试", "warn"], running: ["执行中", "go"], queued: ["排队中", "go"], interrupted: ["中断", "warn"], cancelled: ["已停止", ""], upcoming: ["待执行", ""], pending: ["等待补跑", "warn"], missed: ["已错过", ""] };
+
+  // Today's slots: what each does and how it went, the next one marked.
+  function schedule(view) {
+    const t = view?.today;
+    if (!t?.slots) return null;
+    const box = el("section", "wb-sched"), next = t.next;
+    box.setAttribute("aria-label", "今日定时");
+    box.append(line(el("span", "wb-label", `今日定时 · 每天 ${t.slots.length} 次`), el("span", "wb-sub", !view.enabled ? "定时已暂停" : next ? `下一次 ${next.at} ${kinds[next.kind] || next.kind}` : "今天的时段都已过")));
+    const row = el("div", "wb-slots");
+    for (const s of t.slots) {
+      let [label, cls] = slotStates[s.status] || [s.status, ""];
+      if (s.status === "pending" && !view.enabled) [label, cls] = ["已暂停", ""];
+      if (s.status === "failed" && s.attempts) label = `失败 ${s.attempts}/3`;
+      const isNext = next && next.at === s.at && next.kind === s.kind, chip = el("div", isNext ? "wb-slot next" : "wb-slot");
+      chip.append(line(el("strong", undefined, s.at), el("span", `wb-pill ${cls}`, isNext ? "下一次" : label)), el("span", "wb-sub", kinds[s.kind] || s.kind));
+      row.append(chip);
+    }
+    box.append(row, el("div", "wb-sub", "时段在本机面板 http://127.0.0.1:3439 调整，每类最多 24 个；电脑睡眠时不执行，唤醒后补跑当天已到点的时段。"));
+    return box;
+  }
+
   const again = () => { if (last) { switched = true; render(last[0], last[1]); } };
 
   function spark(u) {
@@ -222,12 +245,12 @@
     return wrap;
   }
 
-  function listView(rows, now) {
+  function listView(rows, now, extra) {
     const box = el("div", "wb-view-list"), list = el("div", "wb-list"), head = el("div", "wb-row wb-list-head");
     head.append(el("span"), el("span", undefined, "账号"), el("span", undefined, "积分 · 按作废先后"), el("span", undefined, "今日 · 7 天"), el("span"));
     list.append(head);
     for (const a of rows) list.append(account(a, now));
-    box.append(kpis(rows, now), list, el("p", "wb-legend", "圆环由外到内：今日活跃、猫猫旅行、成长任务。积分条：红 = 2 天内作废，橙 = 10 天内，浅色 = 长期有效。"), alerts(attention(rows, now)));
+    box.append(kpis(rows, now), list, el("p", "wb-legend", "圆环由外到内：今日活跃、猫猫旅行、成长任务。积分条：红 = 2 天内作废，橙 = 10 天内，浅色 = 长期有效。"), ...(extra ? [extra] : []), alerts(attention(rows, now)));
     return box;
   }
 
@@ -374,7 +397,8 @@
     if (!seeded) { seeded = true; const first = rows.find(a => !a.enterprise) || rows[0]; expanded.add(first.id); }
     const bar = el("div", "wb-viewbar");
     bar.append(segs(views, mode, v => { mode = v; saved.set(v); again(); }, "切换视图"));
-    const body = (mode === "rings" ? ringsView : mode === "widgets" ? widgetsView : listView)(rows, now);
+    const plan = schedule(view), body = (mode === "rings" ? ringsView : mode === "widgets" ? widgetsView : listView)(rows, now, plan);
+    if (plan && mode !== "list") body.append(plan);
     if (switched) { body.className += " wb-enter"; switched = false; }
     host.append(bar, body);
   }
