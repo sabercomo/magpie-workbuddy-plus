@@ -1,6 +1,6 @@
 {
   "name": "magpie-workbuddy-plus",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Unofficial Magpie companion for WorkBuddy China growth tasks, Buddy travel and schedules; daily check-in stays with Magpie",
   "type": "module",
   "main": "./index.mjs",
