@@ -44,13 +44,13 @@ export async function perform(action, client, context) {
   const completed = task => task.accept_status === "completed" || (task.progress?.target > 0 && task.progress.current >= task.progress.target);
   const progress = async task => {
     const code = task.task_code;
-    if (task.accept_status === "claimed") return;
-    if (completed(task)) return claim(task);
+    if (task.accept_status === "claimed") return "done";
+    if (completed(task)) return claim(task).then(() => "claimed");
     const spec = specs[code];
-    if (!spec) { log(`${task.title || code}：${manualTasks[code] || "尚未适配此任务"}${task.jump_url ? `（${task.jump_url}）` : ""}`); return; }
+    if (!spec) { log(`${task.title || code}：${manualTasks[code] || "尚未适配此任务"}${task.jump_url ? `（${task.jump_url}）` : ""}`); return "manual"; }
     if (spec.night) {
       const hour = calendar(new Date(), config.timezone).hour;
-      if (hour >= 8 && hour < 23) { log("夜猫子任务：等待 23:00–08:00 时段"); return; }
+      if (hour >= 8 && hour < 23) { log("夜猫子任务：等待 23:00–08:00 时段"); return "open"; }
     }
     if (task.accept_status === "not_accepted" && task.task_type !== "auto") {
       const accepted = await client.request("/v2/activity/growth/tasks/accept", { body: { task_codes: [code] } });
@@ -72,11 +72,12 @@ export async function perform(action, client, context) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const updated = (await tasks()).find(t => t.task_code === code);
       if (!updated) throw new Error(`${code} 在进度查询中消失`);
-      if (updated.accept_status === "claimed") return;
-      if (completed(updated)) return claim(updated);
+      if (updated.accept_status === "claimed") return "done";
+      if (completed(updated)) return claim(updated).then(() => "claimed");
       if (attempt < 2) await delay(context.pollDelay ?? 1500, undefined, { signal: context.signal });
       else log(`${task.title || code}：上游进度 ${updated.progress.current}/${updated.progress.target}，尚未达成，未领奖`);
     }
+    return "open";
   };
 
   const runTasks = async onlyNight => {
@@ -88,12 +89,20 @@ export async function perform(action, client, context) {
     }
     // first_buddy unlocks acceptance of the other tasks and supplies the pet.
     list.sort((a, b) => Number(b.task_code === "first_buddy") - Number(a.task_code === "first_buddy"));
+    const outcome = { claimed: 0, open: 0, manual: [] };
     for (const task of list) {
       if (onlyNight && task.task_code !== "black_cat") continue;
-      try { await progress(task); }
+      try {
+        const got = await progress(task);
+        if (got === "manual") outcome.manual.push(task.title || task.task_code);
+        else if (got in outcome) outcome[got]++;
+      }
       catch (e) { failures.push(`${task.task_code}：${e.message}`); errors.push(e); log(failures.at(-1)); }
     }
     if (failures.length) throw roundError(`部分任务失败：${failures.join("；")}`, errors);
+    // The job row shows the last line, so it says what this run left undone.
+    if (!onlyNight) log([`本次领奖 ${outcome.claimed} 项`, outcome.open && `${outcome.open} 项未达成`,
+      outcome.manual.length && `${outcome.manual.length} 项需要你手动完成：${outcome.manual.join("、")}`].filter(Boolean).join("；"));
     return { checked: list.length };
   };
 

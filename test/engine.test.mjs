@@ -97,6 +97,8 @@ test("completed desktop-only tasks can be claimed, unfinished ones show their re
   assert.ok(p.seen.some(r => r.path.endsWith("/Library_read/claim")));
   assert.ok(!p.seen.some(r => r.path === "/v2/report"));
   assert.ok(p.logs.some(s => s.includes("需要在桌面端进入")));
+  // The job row shows the last line: it must not read as if everything was done.
+  assert.equal(p.logs.at(-1), "本次领奖 1 项；1 项需要你手动完成：Buddy_App");
 });
 
 test("idle travel with buddy_id=0 departs using the server's destination ID", async t => {
