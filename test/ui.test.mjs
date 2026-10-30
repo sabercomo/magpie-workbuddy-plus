@@ -31,7 +31,9 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
     streak: { days: 8, makeupCards: 1, active: true, nextTier: { days: 14, remaining: 6, credit: 50, energy: 3 } },
     growth: { energy: 30, earned: 110, spent: 80, draws: 0, buddies: 2, rarity: { SR: 1, R: 1 }, current: ["团子"] },
     tasks: { total: 2, claimed: 1, credit: 100, open: [{ title: "关注公众号", state: "manual", note: "需要关注官方公众号", current: 0, target: 1, credit: 100, energy: 5, ends: 0 }] },
-    travel: { state: "traveling", location: "咖啡馆", departAt: Date.now() - 3600_000, arriveAt: Date.now() + 3600_000 }, usage: { credit: 3, count: 2, days: [{ date: "2026-10-29", credit: 3, count: 2 }], models: [] } }] };
+    travel: { state: "traveling", location: "咖啡馆", departAt: Date.now() - 3600_000, arriveAt: Date.now() + 3600_000 }, usage: { credit: 3, count: 2, days: [{ date: "2026-10-29", credit: 3, count: 2 }], models: [] },
+    checkin: { outcome: "claimed", credit: 100, streak: 11, at: Date.now() } },
+    { id: "cn:e", name: "企业号", enterprise: true, expires: 0, errors: {}, checkin: { outcome: "inactive" } }] };
   const context = vm.createContext({
     document: { getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: () => buttons },
     fetch: async (path, init) => { calls.push({ path, body: init.body ? JSON.parse(init.body) : undefined }); return { ok: true, json: async () => path === "/api/status" ? structuredClone(status) : path === "/api/board" ? structuredClone(board) : {} }; },
@@ -43,15 +45,17 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const text = node => typeof node === "string" ? node : [node.textContent || "", ...node.children.map(text)].join(" ");
   assert.match(text(nodes.get("board")), /^\s*正在等待 WorkBuddy 登录[\s\S]*https:\/\/www\.workbuddy\.cn\/login\?state=s/);
   // The list view: the account row and its expanded detail, then what needs a person.
-  assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天[\s\S]*120 \/ 300[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*需要你留意 2 件[\s\S]*120 积分（活动赠送）将作废[\s\S]*「关注公众号」需手动完成 \+100 积分/);
+  assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天 · 已签到 \+100[\s\S]*120 \/ 300[\s\S]*每日签到 已签到 \+100 \d\d:\d\d 由 Magpie 签到 · 连续签到 11 天[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*需要你留意 2 件[\s\S]*120 积分（活动赠送）将作废[\s\S]*「关注公众号」需手动完成 \+100 积分/);
   const button = (node, label) => typeof node === "string" ? undefined : node.textContent === label && node.onclick ? node : node.children.map(c => button(c, label)).find(Boolean);
   button(nodes.get("board"), "圆环").onclick();
   assert.match(text(nodes.get("board")), /全部[\s\S]*国内测试 120 积分 今日完成 2\/3/);
   button(nodes.get("board"), "国内测试").onclick();
-  assert.match(text(nodes.get("board")), /今日活跃 连登 8 天[\s\S]*在咖啡馆[\s\S]*待处理 关注公众号 · \+100 积分/);
+  assert.match(text(nodes.get("board")), /今日活跃 连登 8 天[\s\S]*在咖啡馆[\s\S]*每日签到 已签到 \+100[\s\S]*待处理 关注公众号 · \+100 积分/);
   button(nodes.get("board"), "小组件").onclick();
-  assert.match(text(nodes.get("board")), /即将作废 明天 120 积分[\s\S]*今日 0\/1 完成[\s\S]*能量 30[\s\S]*成长任务 1\/2[\s\S]*关注公众号 需手动/);
+  assert.match(text(nodes.get("board")), /即将作废 明天 120 积分[\s\S]*今日 0\/1 完成[\s\S]*签到 1\/1[\s\S]*能量 30[\s\S]*成长任务 1\/2[\s\S]*关注公众号 需手动/);
   button(nodes.get("board"), "列表").onclick();
+  // The enterprise login has no daily credits: no check-in shown, nothing to flag.
+  assert.doesNotMatch(text(nodes.get("board")), /企业号：|没签上/);
   assert.match(text(nodes.get("board")), /今日定时 · 每天 3 次 下一次 21:00 活跃 · 旅行 · 福利[\s\S]*09:00 完成[\s\S]*09:10 失败 2\/3 成长任务[\s\S]*21:00 下一次[\s\S]*需要你留意/);
   assert.equal(nodes.get("accounts").children.length, 2);
   const checkbox = nodes.get("accounts").children[1].children[0]; checkbox.checked = true; checkbox.onchange();

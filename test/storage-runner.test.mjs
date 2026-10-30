@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { defaults, accounts, initialize, readJSON, writeJSON } from "../storage.mjs";
+import { defaults, accounts, calendar, initialize, readJSON, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
 import { EventEmitter } from "node:events";
 import { Runner, magpieBin } from "../runner.mjs";
@@ -187,4 +187,18 @@ test("the magpie command is found outside a LaunchAgent's bare PATH", t => {
   writeJSON(join(dir, "magpie"), {});
   assert.equal(magpieBin({ PATH: `/usr/bin:${dir}` }), join(dir, "magpie"));
   assert.equal(magpieBin({ WORKBUDDY_PLUS_MAGPIE_BIN: join(dir, "magpie"), PATH: "" }), join(dir, "magpie"));
+});
+
+test("the board carries today's check-in from Magpie's own record, never the login key", t => {
+  const p = fixture(t), runner = new Runner(p.dir), day = calendar(new Date(), "Asia/Shanghai").day;
+  runner.board = { at: Date.now(), accounts: [{ id: "cn:u1", name: "a", key: "workbuddy#u1", errors: {} }, { id: "cn:u2", name: "b", key: "workbuddy#u2", errors: {} }] };
+  const view = () => runner.boardView().accounts.map(a => a.checkin);
+  assert.deepEqual(view().map(c => c.outcome), ["off", "off"]);
+  writeJSON(join(p.magpieDir, "settings.json"), { pluginCheckins: { workbuddy: true } });
+  writeJSON(join(p.magpieDir, "plugin-checkin.json"), {
+    "workbuddy|workbuddy#u1": { day, at: `${day}T00:00:18+08:00`, claimed: `${day}T00:00:18+08:00`, outcome: "claimed", credit: 100, streak: 11 },
+    "workbuddy|workbuddy#u2": { day: "2000-01-01", outcome: "claimed", credit: 100 }
+  });
+  assert.deepEqual(view(), [{ outcome: "claimed", credit: 100, streak: 11, at: Date.parse(`${day}T00:00:18+08:00`) }, { outcome: "waiting" }]);
+  assert.ok(!JSON.stringify(runner.boardView()).includes("workbuddy#u1"));
 });

@@ -38,6 +38,23 @@
     return { label: t.state || "未知", note: "", tone: "", done: 0 };
   }
 
+  // Magpie's daily check-in as a label and a tone. An enterprise login has no
+  // daily credits to claim, so it shows none.
+  function checked(a) {
+    const c = a.checkin;
+    if (!c || a.enterprise) return null;
+    const streak = c.streak ? `连续签到 ${c.streak} 天` : "";
+    return {
+      claimed: { label: `已签到${c.credit ? ` +${num(c.credit)}` : ""}`, tone: "ok", note: [c.at && `${clock(c.at)} 由 Magpie 签到`, streak].filter(Boolean).join(" · ") },
+      done: { label: "已签到", tone: "ok", note: streak || "今天已经签过" },
+      pending: { label: "签到中", tone: "go", note: "" },
+      waiting: { label: "未签到", tone: "", note: "Magpie 开着时会在当天自动签到" },
+      off: { label: "签到未开启", tone: "warn", note: "在 Magpie 设置 › 用量 › 插件 打开 WorkBuddy 签到" },
+      inactive: { label: "今天没签上", tone: "warn", note: "签到时账号今天还没活跃，Magpie 今天不会再试" },
+      ineligible: { label: "需在客户端签到", tone: "warn", note: "WorkBuddy 不接受从 Magpie 给这个账号签到" }
+    }[c.outcome] || { label: "签到失败", tone: "urgent", note: c.message || "在 Magpie 设置 › 用量 › 插件 查看原因" };
+  }
+
   // Today's three rings, outside in: active, trip, growth tasks. The task ring
   // counts only what the scheduler can finish; manual ones are listed above.
   const doable = t => t ? t.total - t.open.filter(o => o.state === "manual" || o.state === "locked").length : 0;
@@ -155,6 +172,10 @@
       for (const [part, message] of Object.entries(a.errors || {})) items.push({ tone: "urgent", text: `${a.name}：${parts[part] || part}读取失败`, aside: message, order: 0 });
       if (a.expires && a.expires - now < DAY) items.push({ tone: "urgent", text: `${a.name} 的登录${a.expires <= now ? "已过期" : `${left(a.expires, now)}过期`}`, aside: "点「添加账号」用同一账号重新登录", order: 0 });
     }
+    // A switched-off check-in is one setting, not one problem per account.
+    const unsigned = rows.map(a => [a, checked(a)]).filter(([, c]) => c && ["warn", "urgent"].includes(c.tone));
+    if (unsigned.some(([a]) => a.checkin.outcome === "off")) items.push({ tone: "soon", text: "Magpie 的 WorkBuddy 每日签到没有开启", aside: "设置 › 用量 › 插件", order: 1 });
+    for (const [a, c] of unsigned.filter(([a]) => a.checkin.outcome !== "off")) items.push({ tone: c.tone === "urgent" ? "urgent" : "soon", text: `${a.name}：${c.label}`, aside: c.note, order: 1 });
     for (const e of lapsing(rows).filter(g => g.expires - now <= 10 * DAY)) items.push({ tone: tone(e.expires, now), text: e.resets ? `${e.name}还剩 ${num(e.balance)} 积分，用不完会清零` : `${num(e.balance)} 积分（${e.name}${e.count > 1 ? ` ×${e.count}` : ""}）将作废`, aside: `${when(e.expires)}${e.resets ? " 重置" : ""} · ${left(e.expires, now)}`, order: e.expires });
     for (const e of manual.values()) items.push({ tone: "soon", text: `「${e.title}」需手动完成${e.count > 1 ? ` ×${e.count}` : ""}`, aside: e.credit ? `+${num(e.credit * e.count)} 积分` : "", title: e.note, order: Infinity });
     return items.sort((x, y) => x.order - y.order);
@@ -205,6 +226,8 @@
     if (a.enterprise) return grid;
 
     const g = a.growth, s = a.streak, t = a.tasks, top = g && ["UR", "SSR", "SR"].find(r => g.rarity[r]);
+    const ci = checked(a);
+    if (ci) right.append(line(el("span", "wb-label", "每日签到"), el("span", `wb-pill ${ci.tone}`, ci.label)), ...(ci.note ? [el("div", "wb-sub", ci.note)] : []));
     right.append(line(el("span", "wb-label", "成长"), el("span", "wb-sub", t ? `任务 ${t.claimed}/${t.total}` : "")));
     right.append(el("div", "wb-stats", [g && `能量 ${num(g.energy)}`, g && `Buddy ${g.buddies}${top ? `（含 ${top}）` : ""}`, g && `抽奖 ${g.draws}`, s && `补签卡 ${s.makeupCards}`].filter(Boolean).join(" · ")));
     if (s?.nextTier) right.append(el("div", "wb-sub", `再连登 ${s.nextTier.remaining} 天到 ${s.nextTier.days} 天档：${[s.nextTier.credit && `+${s.nextTier.credit} 积分`, s.nextTier.energy && `+${s.nextTier.energy} 能量`].filter(Boolean).join(" · ") || "奖励"}`));
@@ -235,7 +258,7 @@
     else panel.setAttribute("aria-hidden", "true");
 
     const who = el("span", "wb-who");
-    who.append(el("strong", undefined, a.name), el("span", "wb-sub", a.enterprise ? `企业${a.balance?.size ? ` · 每月 ${num(a.balance.size)} 积分` : ""}` : `个人${a.streak ? ` · 连登 ${a.streak.days} 天` : ""}`));
+    who.append(el("strong", undefined, a.name), el("span", "wb-sub", a.enterprise ? `企业${a.balance?.size ? ` · 每月 ${num(a.balance.size)} 积分` : ""}` : `个人${a.streak ? ` · 连登 ${a.streak.days} 天` : ""}${checked(a) ? ` · ${checked(a).label}` : ""}`));
     const money = el("span", "wb-money");
     if (a.balance?.size) { const n = line(el("strong", undefined, num(a.balance.balance)), el("span", "wb-sub", `/ ${num(a.balance.size)}`)); n.className = "wb-line wb-amount"; money.append(n, meter(a.balance, now)); }
     else money.append(el("span", "wb-sub", a.errors.balance ? "积分读取失败" : a.enterprise ? "没有企业额度" : "没有积分包"));
@@ -313,6 +336,9 @@
         const name = el("span", "wb-key"); name.append(el("i", `wb-dot wb-dot-${k}`), label);
         legend.append(line(name, el("span", "wb-sub", value)));
       }
+      const ci = checked(a);
+      // Not a ring: a hollow dot keeps the label in line with the three above.
+      if (ci) { const name = el("span", "wb-key"); name.append(el("i", "wb-dot wb-dot-none"), "每日签到"); const row = line(name, el("span", `wb-pill ${ci.tone}`, ci.label)); row.title = ci.note; legend.append(row); }
       const fit = el("div", "wb-ring-fit");
       fit.append(rings(r, true));
       card.append(fit, legend);
@@ -351,6 +377,8 @@
     const ringRow = el("div", "wb-w-rings");
     for (const a of personal) { const r = today(a, now), cell = el("div", "wb-w-ring"); cell.append(rings(r), el("span", "wb-sub", a.name)); ringRow.append(cell); }
     rings_.append(el("strong", "wb-w-mid", personal.length ? `${personal.filter(a => closed(today(a, now))).length}/${personal.length} 完成` : "—"), ringRow);
+    const signed = personal.filter(a => checked(a)?.tone === "ok").length;
+    if (personal.some(a => a.checkin)) rings_.append(el("span", "wb-w-foot", `签到 ${signed}/${personal.length}`));
     rings_.title = "外环活跃 · 中环旅行 · 内环任务";
     const trips = personal.map(a => ({ a, t: trip(a.travel, now) })).filter(x => x.t), out = trips.filter(x => x.t.progress !== undefined);
     const labels = [...new Set(trips.map(x => x.t.label))];

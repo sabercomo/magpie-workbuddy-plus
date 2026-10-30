@@ -148,6 +148,14 @@ async function growth(client) {
   };
 }
 
+// Today's check-in for one login as Magpie recorded it. Another day's record
+// says nothing about today: Magpie hasn't run yet, or its switch is off.
+export function checkin(found, key, day) {
+  const r = found.records[`workbuddy|${key}`];
+  if (r?.day !== day) return { outcome: found.on ? "waiting" : "off" };
+  return { outcome: String(r.outcome || "failed"), credit: Number(r.credit) || 0, streak: Number(r.streak) || 0, at: Date.parse(r.claimed || r.at) || 0, ...(r.msg ? { message: String(r.msg).slice(0, 160) } : {}) };
+}
+
 // Each part fails alone: a refused usage query still shows the balance.
 export async function collect(account, client, config) {
   const row = { id: account.id, name: account.name, enterprise: account.enterprise, expires: account.auth.expires, errors: {} };

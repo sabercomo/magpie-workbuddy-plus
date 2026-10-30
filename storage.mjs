@@ -85,6 +85,14 @@ export function accounts(config) {
   return [...found.values()].map(a => ({ ...a, enabled: !config.disabledAccounts.includes(a.id), enterprise: !!a.auth.enterpriseId }));
 }
 
+// The daily check-in is Magpie's: its switch, and what it recorded per login
+// under "workbuddy|<plugin-auth key>". Read only; nothing here claims it.
+export function checkins(config) {
+  const read = name => { try { return readJSON(join(config.magpieDir, name)); } catch { return {}; } };
+  const settings = read("settings.json");
+  return { on: (settings.pluginCheckins?.workbuddy ?? settings.workbuddyCheckin) === true, records: read("plugin-checkin.json") };
+}
+
 export function publicAccount(a) {
   return { id: a.id, name: a.name, realm: a.realm, source: a.source, enabled: a.enabled, enterprise: a.enterprise, expires: a.auth.expires };
 }

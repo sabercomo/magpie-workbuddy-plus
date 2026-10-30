@@ -3,10 +3,10 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { accounts, calendar, initialize, publicAccount, readJSON, writeJSON } from "./storage.mjs";
+import { accounts, calendar, checkins, initialize, publicAccount, readJSON, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
-import { collect, writePage } from "./board.mjs";
+import { checkin, collect, writePage } from "./board.mjs";
 
 // A LaunchAgent's PATH is only the system's, so the usual install places
 // (Magpie's own ~/.local/bin link, Homebrew, the app) are looked in too.
@@ -42,11 +42,13 @@ export class Runner {
   status() {
     return { config: this.config(), accounts: this.list().map(publicAccount), jobs: this.state.jobs, daily: this.state.daily, slots: this.state.slots };
   }
+  // The check-in is read on every publish: Magpie claims it at midnight,
+  // between board refreshes.
   boardView() {
-    const config = this.config();
+    const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
     return {
       generated: new Date().toISOString(), at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
-      accounts: this.board.accounts, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
+      accounts: this.board.accounts.map(({ key, ...a }) => ({ ...a, checkin: checkin(found, key, day) })), request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
       jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
     };
   }
@@ -121,7 +123,7 @@ export class Runner {
     const config = this.config();
     this.boarding = (async () => {
       const rows = [];
-      for (const account of this.list()) rows.push(await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions }), config));
+      for (const account of this.list()) rows.push({ ...await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions }), config), key: account.key });
       this.board = { at: Date.now(), accounts: rows };
       return this.board;
     })().finally(() => { this.boarding = null; this.publish(); });
