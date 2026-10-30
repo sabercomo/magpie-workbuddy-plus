@@ -5,7 +5,7 @@
 **Magpie 的 WorkBuddy 国内版补充插件**<br>
 成长任务、猫猫旅行、连登福利、后台定时，加上一块看得清所有账号的看板。
 
-[![Release](https://img.shields.io/github/v/release/sabercomo/magpie-workbuddy-plus?label=release&color=5b5bd6)](https://github.com/sabercomo/magpie-workbuddy-plus/releases/latest)
+[![Release](https://img.shields.io/github/v/release/sabercomo/magpie-workbuddy-plus?color=5b5bd6)](https://github.com/sabercomo/magpie-workbuddy-plus/releases/latest)
 [![Tests](https://github.com/sabercomo/magpie-workbuddy-plus/actions/workflows/test.yml/badge.svg)](https://github.com/sabercomo/magpie-workbuddy-plus/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
