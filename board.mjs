@@ -166,7 +166,7 @@ export async function collect(account, client, config) {
 // them, the page reloads itself.
 export function pageBuild(dir, skip) {
   const hash = createHash("sha1");
-  for (const name of readdirSync(dir).filter(n => n !== skip && !n.endsWith(".tmp")).sort()) hash.update(name).update(readFileSync(join(dir, name)));
+  for (const name of readdirSync(dir, { withFileTypes: true }).filter(f => f.isFile() && f.name !== skip && !f.name.endsWith(".tmp")).map(f => f.name).sort()) hash.update(name).update(readFileSync(join(dir, name)));
   return hash.digest("hex").slice(0, 12);
 }
 
