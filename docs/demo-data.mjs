@@ -1,11 +1,14 @@
 // Writes a board snapshot with made-up accounts, for the README screenshots:
-//   bun docs/demo-data.mjs ~/Applications/Magpie-WorkBuddy-Plus/page
+//   bun docs/demo-data.mjs ~/Applications/Magpie-WorkBuddy-Plus/page [15:00]
+// The optional time sets the board's clock to that time today; the page must
+// then be shown at the same time for travel and expiry to read right.
 // then open WorkBuddy Plus in Magpie. The service puts the real snapshot back
 // on its next refresh (within about 10 minutes, or after any run).
 import { writePage } from "../board.mjs";
 import { join } from "node:path";
 
-const now = Date.now(), H = 3600_000, D = 24 * H;
+const clock = process.argv[3]?.split(":").map(Number);
+const now = clock ? new Date().setHours(clock[0], clock[1], 0, 0) : Date.now(), H = 3600_000, D = 24 * H;
 const at = (d, h, m = 0) => { const t = new Date(now + d * D); t.setHours(h, m, 0, 0); return t.getTime(); };
 const days = (base, credit) => Array.from({ length: 7 }, (_, i) => {
   const d = new Date(now - (6 - i) * D);
@@ -35,7 +38,8 @@ const accounts = [
       task("关注官方公众号", "manual", 0, 1, 50, 0, "需要关注官方公众号满 24 小时"),
       task("邀请好友体验", "locked", 0, 1, 30)
     ] },
-    growth: { energy: 340, earned: 1280, spent: 940, draws: 2, buddies: 7, rarity: { R: 4, SR: 2, UR: 1 }, current: ["团子"] }
+    growth: { energy: 340, earned: 1280, spent: 940, draws: 2, buddies: 7, rarity: { R: 4, SR: 2, UR: 1 }, current: ["团子"] },
+    checkin: { outcome: "claimed", credit: 100, streak: 12, at: at(0, 0, 0) }
   },
   {
     id: "demo-2", name: "备用号", enterprise: false, expires: now + 14 * H, errors: {},
@@ -50,12 +54,14 @@ const accounts = [
       task("连续 3 天使用 Skill", "auto", 1, 3, 50, 10),
       task("在桌面端发起对话", "manual", 0, 1, 30, 0, "需要在桌面端发起对话")
     ] },
-    growth: { energy: 85, earned: 420, spent: 335, draws: 0, buddies: 3, rarity: { R: 2, SR: 1 }, current: ["芝麻"] }
+    growth: { energy: 85, earned: 420, spent: 335, draws: 0, buddies: 3, rarity: { R: 2, SR: 1 }, current: ["芝麻"] },
+    checkin: { outcome: "claimed", credit: 100, streak: 5, at: at(0, 0, 0) }
   },
   {
     id: "demo-3", name: "公司账号", enterprise: true, expires: now + 20 * D, errors: {},
     balance: { balance: 597.21, size: 2000, used: 1402.79, resets: at(2, 0), packages: [{ name: "企业月度额度", balance: 597.21, size: 2000, expires: at(2, 0), resets: true }] },
-    usage: usage([210, 260, 190, 240, 305, 120, 77])
+    usage: usage([210, 260, 190, 240, 305, 120, 77]),
+    checkin: { outcome: "inactive" }
   }
 ];
 
