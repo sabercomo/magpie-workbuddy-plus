@@ -1,14 +1,27 @@
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { basename, dirname, isAbsolute, join } from "node:path";
+import { homedir } from "node:os";
+import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { accounts, calendar, initialize, publicAccount, readJSON, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
 import { collect, writePage } from "./board.mjs";
 
+// A LaunchAgent's PATH is only the system's, so the usual install places
+// (Magpie's own ~/.local/bin link, Homebrew, the app) are looked in too.
+export function magpieBin(env = process.env) {
+  const places = [env.WORKBUDDY_PLUS_MAGPIE_BIN, ...(env.PATH || "").split(delimiter).filter(Boolean).map(d => join(d, "magpie")),
+    join(homedir(), ".local", "bin", "magpie"), "/opt/homebrew/bin/magpie", "/usr/local/bin/magpie", "/Applications/magpie.app/Contents/MacOS/magpie"];
+  return places.find(f => f && existsSync(f)) || "";
+}
+
 export class Runner {
-  constructor(dir, clientOptions = {}, { pageFile } = {}) {
+  constructor(dir, clientOptions = {}, { pageFile, spawner = spawn, magpie = magpieBin } = {}) {
     initialize(dir);
+    this.spawner = spawner;
+    this.magpie = magpie;
+    this.signin = null;
     this.dir = dir;
     this.clientOptions = clientOptions;
     this.pageFile = pageFile;
@@ -33,7 +46,7 @@ export class Runner {
     const config = this.config();
     return {
       generated: new Date().toISOString(), at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
-      accounts: this.board.accounts, request: this.state.pageRequest || null, today: this.today(config),
+      accounts: this.board.accounts, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
       jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
     };
   }
@@ -50,6 +63,38 @@ export class Runner {
     this.publish();
     return { targets: [this.pageFile, ...(this.state.pageTargets || [])].filter(Boolean) };
   }
+  // Signing in belongs to Magpie's WorkBuddy plugin; this only starts its
+  // browser sign-in, `magpie plugin login workbuddy 1`, which adds the account,
+  // or replaces it when that account is already signed in. No token passes
+  // through here. One sign-in at a time; the command itself gives up after 10
+  // minutes.
+  login() {
+    if (this.signin?.status === "waiting") return this.signin;
+    const bin = this.magpie();
+    if (!bin) throw new Error("找不到 magpie 命令，请在 Magpie 的供应商页登录 WorkBuddy");
+    const started = new Date().toISOString();
+    let out = "";
+    const child = this.spawner(bin, ["plugin", "login", "workbuddy", "1"], { stdio: ["ignore", "pipe", "pipe"] });
+    const keep = data => {
+      out = (out + data).replace(/\x1b\[[0-9;]*m/g, "").slice(-4000);
+      const url = out.match(/https:\/\/\S+/)?.[0];
+      if (url && this.signin?.status === "waiting" && !this.signin.url) { this.signin.url = url; this.publish(); }
+    };
+    child.stdout?.on("data", keep);
+    child.stderr?.on("data", keep);
+    const end = (ok, message) => {
+      if (this.signin?.started !== started || this.signin.status !== "waiting") return;
+      this.signin = { status: ok ? "done" : "failed", started, finished: new Date().toISOString(), ...(message ? { message } : {}) };
+      if (ok) { this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
+      this.publish();
+    };
+    child.on("error", e => end(false, e.message));
+    child.on("exit", code => end(code === 0, code === 0 ? "" : out.trim().split("\n").filter(Boolean).at(-1) || `magpie 退出码 ${code}`));
+    this.signin = { status: "waiting", started };
+    this.publish();
+    return this.signin;
+  }
+
   // Today's slots in time order, each with the job tick() gave it, if any.
   today(config = this.config(), now = new Date()) {
     const { day, time } = calendar(now, config.timezone);
@@ -91,6 +136,7 @@ export class Runner {
     try {
       if (!(Date.now() - Number(request.at) < 10 * 60_000)) throw new Error("页面请求已过期，请重新点击");
       if (request.action === "refresh") { this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
+      else if (request.action === "login") this.login();
       else if (["pause", "resume"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), enabled: request.action === "resume" });
       else note.job = this.submit([request.action], undefined, "page").id;
       note.ok = true;

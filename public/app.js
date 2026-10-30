@@ -49,6 +49,8 @@ async function board(view) {
   $("board-state").textContent=view.refreshing?"正在读取…":view.at?`更新于 ${new Date(view.at).toLocaleTimeString()}`:"";
 }
 $("board-refresh").onclick=()=>api("/api/board",{}).then(board).catch(failure);
+// Opens Magpie's own WorkBuddy sign-in in the browser; the board shows how it went.
+$("board-login").onclick=()=>api("/api/login",{}).then(()=>board()).catch(failure);
 $("toggle-schedule").onclick=()=>save({...current.config,enabled:!current.config.enabled}).catch(failure);
 for(const button of document.querySelectorAll("[data-action]"))button.onclick=async()=>{
   button.disabled=true;$("error").hidden=true;

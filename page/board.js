@@ -114,6 +114,19 @@
     return box;
   }
 
+  // The official sign-in the "add account" button started, while it waits and
+  // for ten minutes after it ends.
+  function signin(view, now) {
+    const s = view?.signin;
+    if (!s || (s.status !== "waiting" && now - Date.parse(s.finished) > 10 * 60_000)) return null;
+    const box = el("div", `wb-signin ${s.status}`);
+    if (s.status === "waiting") {
+      box.append(el("div", undefined, "正在等待 WorkBuddy 登录：请在打开的浏览器页面里完成登录，10 分钟内有效。"));
+      if (s.url) { const link = el("div", "wb-sub wb-url", `没有自动打开的话，把这个地址复制到浏览器：${s.url}`); box.append(link); }
+    } else box.append(el("div", undefined, s.status === "done" ? "登录完成，账号会在看板刷新后出现；同一账号重新登录会替换原来的登录。" : `登录没有完成：${s.message || "未知原因"}`));
+    return box;
+  }
+
   const again = () => { if (last) { switched = true; render(last[0], last[1]); } };
 
   function spark(u) {
@@ -140,7 +153,7 @@
         e.count++; manual.set(t.title, e);
       }
       for (const [part, message] of Object.entries(a.errors || {})) items.push({ tone: "urgent", text: `${a.name}：${parts[part] || part}读取失败`, aside: message, order: 0 });
-      if (a.expires && a.expires - now < DAY) items.push({ tone: "urgent", text: `${a.name} 的登录${a.expires <= now ? "已过期" : `${left(a.expires, now)}过期`}`, aside: "请在 Magpie 重新登录", order: 0 });
+      if (a.expires && a.expires - now < DAY) items.push({ tone: "urgent", text: `${a.name} 的登录${a.expires <= now ? "已过期" : `${left(a.expires, now)}过期`}`, aside: "点「添加账号」用同一账号重新登录", order: 0 });
     }
     for (const e of lapsing(rows).filter(g => g.expires - now <= 10 * DAY)) items.push({ tone: tone(e.expires, now), text: e.resets ? `${e.name}还剩 ${num(e.balance)} 积分，用不完会清零` : `${num(e.balance)} 积分（${e.name}${e.count > 1 ? ` ×${e.count}` : ""}）将作废`, aside: `${when(e.expires)}${e.resets ? " 重置" : ""} · ${left(e.expires, now)}`, order: e.expires });
     for (const e of manual.values()) items.push({ tone: "soon", text: `「${e.title}」需手动完成${e.count > 1 ? ` ×${e.count}` : ""}`, aside: e.credit ? `+${num(e.credit * e.count)} 积分` : "", title: e.note, order: Infinity });
@@ -400,7 +413,7 @@
     const plan = schedule(view), body = (mode === "rings" ? ringsView : mode === "widgets" ? widgetsView : listView)(rows, now, plan);
     if (plan && mode !== "list") body.append(plan);
     if (switched) { body.className += " wb-enter"; switched = false; }
-    host.append(bar, body);
+    host.append(...[signin(view, now), bar, body].filter(Boolean));
   }
 
   globalThis.WBBoard = { render, when };

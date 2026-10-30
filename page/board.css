@@ -122,6 +122,12 @@
 .wb-acc-0,.wb-stack .wb-col span.wb-acc-0{background:var(--wb-accent)}.wb-acc-1,.wb-stack .wb-col span.wb-acc-1{background:color-mix(in srgb,var(--wb-accent) 62%,var(--wb-card))}.wb-acc-2,.wb-stack .wb-col span.wb-acc-2{background:color-mix(in srgb,var(--wb-accent) 32%,var(--wb-card))}
 .wb-w-keys{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--wb-muted)}.wb-w-keys .wb-key{font-size:12px}
 
+/* The official sign-in the add-account button started. */
+.wb-signin{border:1px solid var(--wb-line);background:var(--wb-card);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;display:flex;flex-direction:column;gap:4px}
+.wb-signin.waiting{border-color:color-mix(in srgb,var(--wb-go) 40%,transparent);color:var(--wb-go)}
+.wb-signin.done{color:var(--wb-accent)}.wb-signin.failed{border-color:color-mix(in srgb,var(--wb-urgent) 40%,transparent);color:var(--wb-urgent)}
+.wb-url{user-select:all;overflow-wrap:anywhere}
+
 /* Today's schedule, under every view. */
 .wb-sched{margin-top:12px;background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
 .wb-slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}

@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { defaults, accounts, initialize, readJSON, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
-import { Runner } from "../runner.mjs";
+import { EventEmitter } from "node:events";
+import { Runner, magpieBin } from "../runner.mjs";
 import { createService } from "../server.mjs";
 
 function fixture(t) {
@@ -146,4 +147,44 @@ test("the board lists today's slots with how each went and which is next", async
   assert.deepEqual([today.next.at, today.next.kind], ["21:00", "keepalive"]);
   config.enabled = false; writeJSON(join(p.dir, "config.json"), config);
   assert.equal(runner.today(runner.config(), new Date("2026-10-29T02:00:00Z")).next, null);
+});
+
+test("add account runs Magpie's own browser sign-in once and reports how it went", async t => {
+  const p = fixture(t), spawned = [];
+  const spawner = (bin, args) => {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+    spawned.push({ bin, args, child });
+    return child;
+  };
+  const runner = new Runner(p.dir, { gap: 0, fetcher: async () => Response.json({ code: 0, data: {} }) }, { spawner, magpie: () => "/fake/magpie" });
+  assert.equal(runner.login().status, "waiting");
+  assert.equal(runner.login().status, "waiting", "a second click while waiting starts nothing");
+  assert.equal(spawned.length, 1);
+  assert.deepEqual([spawned[0].bin, spawned[0].args], ["/fake/magpie", ["plugin", "login", "workbuddy", "1"]]);
+  spawned[0].child.stdout.emit("data", "Sign in in your browser. If it didn't open, go to:\n\x1b[2mhttps://www.workbuddy.cn/login?state=abc\x1b[0m\n");
+  assert.equal(runner.boardView().signin.url, "https://www.workbuddy.cn/login?state=abc");
+  spawned[0].child.emit("exit", 0);
+  assert.equal(runner.signin.status, "done");
+  assert.ok(runner.boarding, "a finished sign-in refreshes the board");
+  await runner.boarding;
+
+  runner.login();
+  spawned[1].child.stderr.emit("data", "Error: sign-in timed out\n");
+  spawned[1].child.emit("exit", 1);
+  assert.deepEqual([runner.signin.status, runner.signin.message], ["failed", "Error: sign-in timed out"]);
+
+  const none = new Runner(p.dir, {}, { spawner, magpie: () => "" });
+  assert.throws(() => none.login(), /找不到 magpie/);
+  const page = new Runner(p.dir, {}, { spawner, magpie: () => "/fake/magpie" });
+  assert.equal(page.pageRequest({ id: "l1", action: "login", at: Date.now() }).ok, true);
+  assert.equal(spawned.length, 3);
+});
+
+test("the magpie command is found outside a LaunchAgent's bare PATH", t => {
+  const dir = mkdtempSync(join(tmpdir(), "wb-plus-bin-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeJSON(join(dir, "magpie"), {});
+  assert.equal(magpieBin({ PATH: `/usr/bin:${dir}` }), join(dir, "magpie"));
+  assert.equal(magpieBin({ WORKBUDDY_PLUS_MAGPIE_BIN: join(dir, "magpie"), PATH: "" }), join(dir, "magpie"));
 });

@@ -63,6 +63,7 @@ export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) 
         return send(202, runner.boardView());
       }
       if (url.pathname === "/api/page") return send(200, runner.pageRequest(value));
+      if (url.pathname === "/api/login") return send(202, runner.login());
       if (url.pathname === "/api/page-target") return send(200, runner.addPageTarget(value.file));
       return send(404, { error: "未知地址" });
     } catch (e) { send(400, { error: e.message }); }

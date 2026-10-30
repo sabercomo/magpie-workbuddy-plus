@@ -17,7 +17,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   }
   const nodes = new Map(), buttonNames = [...readFileSync(new URL("../public/index.html", import.meta.url), "utf8").matchAll(/data-action="([^"]+)"/g)].map(m => m[1]);
   const buttons = buttonNames.map(action => { const b = new Element("button"); b.dataset.action = action; return b; });
-  for (const id of ["schedule-state", "toggle-schedule", "error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "saved", "board", "board-state", "board-refresh"]) nodes.set(id, new Element("div"));
+  for (const id of ["schedule-state", "toggle-schedule", "error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "saved", "board", "board-state", "board-refresh", "board-login"]) nodes.set(id, new Element("div"));
   const form = nodes.get("config-form"); form.elements = {};
   for (const name of ["timezone", "proxy"]) form.elements[name] = new Element("input");
   nodes.get("schedule-fields").append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };
@@ -25,7 +25,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
     { id: "cn:a", name: "国内测试", realm: "cn", source: "magpie", enabled: true },
     { id: "cn:b", name: "国内测试二", realm: "cn", source: "magpie", enabled: true }
   ], jobs: [] };
-  const board = { at: Date.now(), enabled: true, today: { timezone: "Asia/Shanghai", next: { kind: "daily", at: "21:00", status: "upcoming" }, slots: [
+  const board = { at: Date.now(), enabled: true, signin: { status: "waiting", started: new Date().toISOString(), url: "https://www.workbuddy.cn/login?state=s" }, today: { timezone: "Asia/Shanghai", next: { kind: "daily", at: "21:00", status: "upcoming" }, slots: [
     { kind: "daily", at: "09:00", status: "succeeded", attempts: 1 }, { kind: "tasks", at: "09:10", status: "failed", attempts: 2 }, { kind: "daily", at: "21:00", status: "upcoming", attempts: 0 }
   ] }, accounts: [{ id: "cn:a", name: "国内测试", expires: 0, errors: {}, balance: { balance: 120, size: 300, packages: [{ name: "活动赠送", balance: 120, size: 300, expires: Date.now() + 86400_000 }] },
     streak: { days: 8, makeupCards: 1, active: true, nextTier: { days: 14, remaining: 6, credit: 50, energy: 3 } },
@@ -41,6 +41,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   for (const file of ["../page/board.js", "../public/app.js"]) vm.runInContext(readFileSync(new URL(file, import.meta.url), "utf8"), context);
   await setImmediate();
   const text = node => typeof node === "string" ? node : [node.textContent || "", ...node.children.map(text)].join(" ");
+  assert.match(text(nodes.get("board")), /^\s*正在等待 WorkBuddy 登录[\s\S]*https:\/\/www\.workbuddy\.cn\/login\?state=s/);
   // The list view: the account row and its expanded detail, then what needs a person.
   assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天[\s\S]*120 \/ 300[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*需要你留意 2 件[\s\S]*120 积分（活动赠送）将作废[\s\S]*「关注公众号」需手动完成 \+100 积分/);
   const button = (node, label) => typeof node === "string" ? undefined : node.textContent === label && node.onclick ? node : node.children.map(c => button(c, label)).find(Boolean);
