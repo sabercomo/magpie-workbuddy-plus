@@ -197,7 +197,8 @@ test("the magpie command is found outside a LaunchAgent's bare PATH", t => {
   const programs = join(dir, "local", "Programs", "Magpie");
   mkdirSync(programs, { recursive: true });
   writeJSON(join(programs, name), {});
-  assert.equal(magpieBin({ PATH: "", LOCALAPPDATA: join(dir, "local") }), join(programs, name));
+  // A machine with Magpie in one of the usual places (~/.local/bin) finds it there first.
+  assert.equal(magpieBin({ PATH: "", LOCALAPPDATA: join(dir, "local") }), magpieBin({ PATH: "" }) || join(programs, name));
 });
 
 test("the board carries today's check-in from Magpie's own record, never the login key", t => {
