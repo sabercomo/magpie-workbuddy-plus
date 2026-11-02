@@ -3,10 +3,11 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { accounts, calendar, checkins, initialize, publicAccount, readJSON, writeJSON } from "./storage.mjs";
+import { accounts, calendar, checkins, initialize, intlAccount, publicAccount, readJSON, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
 import { checkin, collect, writePage } from "./board.mjs";
+import { chinaModels, intlModels } from "./models.mjs";
 
 // A LaunchAgent's PATH is only the system's, so the usual install places
 // (Magpie's own ~/.local/bin link, Homebrew, the app) are looked in too.
@@ -48,7 +49,7 @@ export class Runner {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
     return {
       generated: new Date().toISOString(), at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
-      accounts: this.board.accounts.map(({ key, ...a }) => ({ ...a, checkin: checkin(found, key, day) })), request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
+      accounts: this.board.accounts.map(({ key, ...a }) => ({ ...a, checkin: checkin(found, key, day) })), models: this.board.models || null, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
       jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
     };
   }
@@ -122,9 +123,19 @@ export class Runner {
     this.boardStale = false;
     const config = this.config();
     this.boarding = (async () => {
-      const rows = [];
-      for (const account of this.list()) rows.push({ ...await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions }), config), key: account.key });
-      this.board = { at: Date.now(), accounts: rows };
+      const rows = [], list = this.list();
+      for (const account of list) rows.push({ ...await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions }), config), key: account.key });
+      // One personal login reads China's list; an enterprise's follows its own config.
+      const models = { at: Date.now() }, mine = list.find(a => !a.enterprise) || list[0], abroad = intlAccount(config);
+      if (mine) {
+        try { models.cn = await chinaModels(new WorkBuddyClient(mine, config, { gap: 300, ...this.clientOptions })); }
+        catch (e) { models.cn = { error: e.message.slice(0, 160) }; }
+      }
+      if (abroad) {
+        try { models.intl = await intlModels(abroad, { proxy: config.proxy, ...(this.clientOptions.fetcher ? { fetcher: this.clientOptions.fetcher } : {}) }); }
+        catch (e) { models.intl = { error: e.message.slice(0, 160) }; }
+      }
+      this.board = { at: Date.now(), accounts: rows, models };
       return this.board;
     })().finally(() => { this.boarding = null; this.publish(); });
     this.publish();

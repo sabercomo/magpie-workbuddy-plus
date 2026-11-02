@@ -23,7 +23,7 @@
   const parts = { balance: "积分", usage: "用量", travel: "猫猫旅行", streak: "连登", tasks: "成长任务", growth: "能量与 Buddy" };
   const expanded = new Set();
   const saved = { get() { try { return localStorage.getItem("wb-view"); } catch { return null; } }, set(v) { try { localStorage.setItem("wb-view", v); } catch {} } };
-  const views = [["list", "列表"], ["rings", "圆环"], ["widgets", "小组件"]];
+  const views = [["list", "列表"], ["rings", "圆环"], ["widgets", "小组件"], ["models", "模型"]];
   let seeded = false, mode = views.some(([k]) => k === saved.get()) ? saved.get() : "list", focus = "all", last = null, switched = false;
 
   function trip(t, now) {
@@ -430,6 +430,106 @@
     return grid;
   }
 
+  // Model lists as WorkBuddy's own client shows them, one build at a time:
+  // what the account's plan can use first, then what it shuts the plan out of.
+  const realms = [["cn", "国内版"], ["intl", "国际版"]];
+  const remembered = { get() { try { return localStorage.getItem("wb-realm"); } catch { return null; } }, set(v) { try { localStorage.setItem("wb-realm", v); } catch {} } };
+  let realm = remembered.get() === "intl" ? "intl" : "cn", byRate = false, lockedOpen = true;
+  const ctx = n => !n ? "—" : n >= 1e6 ? `${+(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M` : `${Math.round(n / 1000)}K`;
+  const times = r => `×${r.toFixed(2)}`;
+  const icon = (path, size = 13) => { const s = svg("svg", { width: size, height: size, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": 1.5, "aria-hidden": "true" }); s.innerHTML = path; return s; };
+  const copyIcon = '<rect x="5" y="5" width="8.5" height="8.5" rx="2"/><path d="M10.5 5V3.5a1.5 1.5 0 0 0-1.5-1.5H3.5A1.5 1.5 0 0 0 2 3.5V9a1.5 1.5 0 0 0 1.5 1.5H5"/>';
+
+  // Magpie's page may not grant the clipboard: then the id is selected for ⌘C.
+  function copier(id) {
+    const b = el("button", "wb-copy"), text = el("span", undefined, id), note = el("span", "wb-copy-note");
+    b.type = "button";
+    b.setAttribute("aria-label", `复制模型 ID ${id}`);
+    b.append(text, icon(copyIcon), note);
+    b.onclick = async () => {
+      try { await navigator.clipboard.writeText(id); note.textContent = "已复制"; }
+      catch {
+        const range = document.createRange(), pick = getSelection();
+        range.selectNodeContents(text); pick.removeAllRanges(); pick.addRange(range);
+        note.textContent = "按 ⌘C 复制";
+      }
+      setTimeout(() => { note.textContent = ""; }, 1600);
+    };
+    return b;
+  }
+
+  function modelRow(m, locked, planName) {
+    const row = el("div", "wb-mrow"), name = el("div", "wb-mname"), title = el("div", "wb-mtitle"), rate = el("div", "wb-rate");
+    title.append(el(locked ? "span" : "strong", locked ? "wb-mlocked-name" : undefined, m.name));
+    if (m.isDefault) title.append(el("span", "wb-pill ok", "默认"));
+    if (locked) title.append(el("span", "wb-pill outline", "Pro"));
+    if (m.promo && !locked) { const p = el("span", "wb-pill promo", m.promo.label); p.title = [m.promo.note, m.promo.until && `至 ${when(m.promo.until)}`].filter(Boolean).join(" · "); title.append(p); }
+    if (m.tier && !m.tier.exclusive) { const t = el("span", "wb-pill outline", m.tier.label); t.title = m.tier.note; title.append(t); }
+    if (locked) row.title = m.tier?.note || `${planName} 计划不能用`;
+    name.append(title, el("span", "wb-mdesc", m.desc));
+    if (m.rate === null) rate.append(el("span", "wb-sub", "随任务浮动"));
+    else if (m.rate === 0) rate.append(el("span", "wb-pill ok wb-free", "免费"));
+    else rate.append(el("strong", !locked && m.rate >= 3 ? "costly" : undefined, times(m.rate)));
+    if (!locked && m.promo?.rate !== undefined && m.promo.rate !== m.rate) rate.append(el("span", "wb-rate-off", `${m.promo.hours ? `${m.promo.hours} ` : ""}${m.promo.rate === 0 ? "免费" : times(m.promo.rate)}`));
+    row.append(name, copier(m.id), el("span", "wb-num wb-mctx", ctx(m.context)), rate);
+    return row;
+  }
+
+  function modelHead(label) {
+    const head = el("div", "wb-mrow wb-mhead");
+    head.append(el("span", undefined, label), el("span", undefined, "模型 ID"), el("span", "wb-num wb-mctx", "上下文"), el("span", "wb-num", "倍率"));
+    return head;
+  }
+
+  // The build switch sits in the view bar, beside the view it belongs to.
+  function modelsView(view, bar) {
+    const box = el("div", "wb-view-models"), all = view?.models || {}, pick = segs(realms.map(([k, t]) => [k, all[k]?.models ? `${t} ${all[k].models.length}` : t]), realm, v => { realm = v; remembered.set(v); again(); }, "选择版本");
+    pick.className += " wb-realms";
+    bar.append(pick);
+    const r = all[realm], where = realm === "intl" ? "国际版" : "国内版";
+    if (!r) { box.append(el("p", "wb-calm", realm === "intl" ? "Magpie 里没有登录 WorkBuddy 国际版（workbuddy-ai）。登录后这里会显示国际版模型和你的计划。" : "还没有读到国内版模型，看板刷新后显示。")); return box; }
+    if (r.error) { box.append(el("p", "wb-calm", `${where}模型读取失败：${r.error}`)); return box; }
+    const plan = r.plan || { name: "Free", paid: false }, locked = plan.paid ? [] : r.models.filter(m => m.tier?.exclusive), open = r.models.filter(m => !locked.includes(m));
+    const sort = list => byRate ? [...list].sort((a, b) => (a.rate ?? Infinity) - (b.rate ?? Infinity)) : list;
+    const priced = open.filter(m => m.rate !== null).sort((a, b) => a.rate - b.rate), [best, next] = priced;
+    const promos = open.filter(m => m.promo), kinds = new Map();
+    for (const m of promos) kinds.set(m.promo.label, (kinds.get(m.promo.label) || 0) + 1);
+    const queued = open.filter(m => m.tier && !m.tier.exclusive);
+    const cells = [
+      ["你现在能用", locked.length ? `${open.length} 个模型` : `全部 ${open.length} 个`,
+        locked.length ? `共 ${r.models.length} 个，另外 ${locked.length} 个是 Pro-only` : queued.length ? `不开会员也能用；${queued.length} 个高峰时会员优先` : "当前计划全部可用"],
+      realm === "intl"
+        ? [`${where}账号`, `${plan.name} 计划`, `${r.account || ""}${locked.length ? " · 升级 Pro 才能用全部" : ""}`]
+        : ["正在优惠", promos.length ? `${promos.length} 个模型` : "没有", [...kinds].map(([k, n]) => `${k} ${n}`).join(" · ") || "官方没有进行中的优惠"],
+      ["最省积分", best ? `${best.name} ${best.rate === 0 ? "免费" : times(best.rate)}` : "—", next ? `其次 ${next.name} ${next.rate === 0 ? "免费" : times(next.rate)}` : ""]
+    ];
+    const strip = el("div", "wb-kpis wb-kpis-3");
+    for (const [k, v, sub] of cells) { const t = el("div", "wb-kpi"); t.append(el("span", "wb-sub", k), el("strong", undefined, v), el("span", "wb-sub", sub)); strip.append(t); }
+    const hint = el("div", "wb-models-hint");
+    hint.append(el("span", "wb-sub", realm === "intl" ? "倍率是每次请求按基准扣积分的倍数：×0.5 扣一半，×2 扣两倍。点模型 ID 复制。" : "个人账号读到的列表；企业账号的模型由企业配置决定，可能不同。点模型 ID 复制。"),
+      segs([["official", "官方顺序"], ["rate", "倍率从低到高"]], byRate ? "rate" : "official", v => { byRate = v === "rate"; again(); }, "排序"));
+    const table = el("section", "wb-mtable");
+    table.setAttribute("aria-label", `${where}可用模型`);
+    table.append(modelHead(`${locked.length ? `${plan.name} 用户可用模型` : "全部用户可用模型"}：${open.length}`), ...sort(open).map(m => modelRow(m, false, plan.name)));
+    box.append(strip, hint, table);
+    if (locked.length) {
+      const shut = el("section", "wb-mtable wb-locked"), toggle = el("button", "wb-disclosure"), rows = el("div");
+      const label = /pro/i.test(locked[0].tier.label) ? "Pro-only" : locked[0].tier.label;
+      shut.setAttribute("aria-label", `${label} 模型`);
+      toggle.type = "button";
+      toggle.setAttribute("aria-expanded", String(lockedOpen));
+      toggle.append(icon('<rect x="3" y="7" width="10" height="7" rx="1.8"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>', 14), el("strong", undefined, `${label} 模型：${locked.length}`),
+        el("span", "wb-sub wb-grow", `${plan.name} 账号请求这些模型会被 WorkBuddy 拒绝，选模型时跳过它们`), el("span", "wb-chevron", "›"));
+      rows.hidden = !lockedOpen;
+      rows.append(...sort(locked).map(m => modelRow(m, true, plan.name)));
+      toggle.onclick = () => { lockedOpen = !lockedOpen; toggle.setAttribute("aria-expanded", String(lockedOpen)); rows.hidden = !lockedOpen; };
+      shut.append(toggle, rows);
+      box.append(shut);
+    }
+    box.append(el("p", "wb-legend", `读自 WorkBuddy 官方模型配置，与 WorkBuddy 客户端的模型列表一致 · ${when(all.at)} 更新 · 倍率与限制以官方为准`));
+    return box;
+  }
+
   function render(host, view, now = Date.now()) {
     last = [host, view];
     host.replaceChildren();
@@ -438,8 +538,8 @@
     if (!seeded) { seeded = true; const first = rows.find(a => !a.enterprise) || rows[0]; expanded.add(first.id); }
     const bar = el("div", "wb-viewbar");
     bar.append(segs(views, mode, v => { mode = v; saved.set(v); again(); }, "切换视图"));
-    const plan = schedule(view), body = (mode === "rings" ? ringsView : mode === "widgets" ? widgetsView : listView)(rows, now, plan);
-    if (plan && mode !== "list") body.append(plan);
+    const plan = schedule(view), body = mode === "models" ? modelsView(view, bar) : (mode === "rings" ? ringsView : mode === "widgets" ? widgetsView : listView)(rows, now, plan);
+    if (plan && mode !== "list" && mode !== "models") body.append(plan);
     if (switched) { body.className += " wb-enter"; switched = false; }
     host.append(...[signin(view, now), bar, body].filter(Boolean));
   }

@@ -60,7 +60,7 @@
 
 
 /* View switcher, shaped like Magpie's own segmented controls. */
-.wb-viewbar{display:flex;justify-content:flex-start;margin-bottom:12px}
+.wb-viewbar{display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .wb-segs{display:inline-flex;gap:2px;padding:2px;border-radius:8px;background:var(--wb-soft);max-width:100%;overflow-x:auto;scrollbar-width:none}
 .wb-seg-btn{all:unset;box-sizing:border-box;padding:3px 12px;border-radius:6px;font-size:12.5px;color:var(--wb-muted);white-space:nowrap;cursor:pointer;transition:background-color 120ms ease-out,color 120ms ease-out}
 .wb-seg-btn:hover{color:inherit}.wb-seg-btn:focus-visible{outline:2px solid var(--wb-accent);outline-offset:-2px}
@@ -138,6 +138,35 @@
 .wb-pill.urgent{color:var(--wb-urgent)}
 .wb-widgets>.wb-sched{grid-column:1/-1;margin-top:0}
 
+/* Models: one row per model, its id copied by a click; a plan's locked models dimmed below. */
+.wb-realms{margin-left:auto}
+.wb-kpis.wb-kpis-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.wb-models-hint{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 2px 10px}
+.wb-mtable{border:1px solid var(--wb-line);border-radius:12px;overflow:hidden;background:var(--wb-card);margin-bottom:12px}
+.wb-mrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,236px) 60px 108px;gap:12px;align-items:center;padding:8px 14px;border-top:1px solid color-mix(in srgb,var(--wb-line) 60%,transparent)}
+.wb-mhead{padding:9px 14px 7px;font-size:11.5px;color:var(--wb-muted);border-top:0}
+.wb-mname{display:flex;flex-direction:column;gap:1px;min-width:0}
+.wb-mtitle{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}.wb-mtitle strong{font-weight:600}
+.wb-mlocked-name{font-weight:600;opacity:.85}
+.wb-mdesc{font-size:12px;color:var(--wb-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wb-num{text-align:right;font-variant-numeric:tabular-nums}.wb-mctx{color:var(--wb-muted)}
+.wb-rate{display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-variant-numeric:tabular-nums}.wb-rate strong{font-weight:600}.wb-rate .costly{color:var(--wb-warn)}
+.wb-rate-off{font-size:11px;color:var(--wb-warn);white-space:nowrap}
+.wb-free{font-weight:600}
+.wb-pill.promo{background:color-mix(in srgb,var(--wb-warn) 13%,var(--wb-card));color:var(--wb-warn)}
+.wb-pill.outline{background:none;box-shadow:inset 0 0 0 1px var(--wb-line);color:var(--wb-muted)}
+.wb-copy{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;height:28px;padding:0 8px;margin-left:-8px;border-radius:7px;cursor:pointer;font:12px/1 ui-monospace,"SF Mono",Menlo,monospace;transition:background-color 120ms ease-out}
+.wb-copy:hover{background:var(--wb-hover)}.wb-copy:active{background:color-mix(in srgb,var(--wb-muted) 15%,transparent);transition:none}
+.wb-copy:focus-visible{outline:2px solid var(--wb-accent);outline-offset:1px}
+.wb-copy>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;user-select:all}
+.wb-copy svg{flex:none;color:var(--wb-muted)}
+.wb-copy-note{font:11px system-ui,sans-serif;color:var(--wb-accent);white-space:nowrap}
+.wb-locked .wb-mrow{color:var(--wb-muted)}
+.wb-disclosure{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;padding:11px 14px;cursor:pointer;color:var(--wb-muted)}
+.wb-disclosure strong{color:var(--magpie-text,inherit);font-weight:600;white-space:nowrap}.wb-grow{flex:1;min-width:0}
+.wb-disclosure:focus-visible{outline:2px solid var(--wb-accent);outline-offset:-2px}
+.wb-disclosure[aria-expanded="true"] .wb-chevron{transform:rotate(90deg)}
+
 @media (max-width:640px){
   .wb-b-top{grid-template-columns:1fr}
   .wb-widgets{grid-template-columns:repeat(2,minmax(0,1fr))}.wb-w-m{grid-column:1/-1}
@@ -145,5 +174,7 @@
   .wb-row{grid-template-columns:30px minmax(0,1fr) 94px 14px}.wb-row .wb-money{grid-column:2/4;grid-row:2}
   .wb-list-head{display:none}
   .wb-detail-grid{grid-template-columns:1fr;padding-left:14px}
+  .wb-kpis.wb-kpis-3{grid-template-columns:1fr}
+  .wb-mrow{grid-template-columns:minmax(0,1fr) 92px}.wb-mrow .wb-mctx{display:none}.wb-mrow>.wb-copy{grid-column:1/-1;grid-row:2}.wb-mhead>:nth-child(2){display:none}
 }
-@media (prefers-reduced-motion:reduce){.wb-detail,.wb-chevron,.wb-row,.wb-seg-btn,.wb-ringcard{transition:none}.wb-enter{animation:none}.wb-ringcard:active{transform:none}}
+@media (prefers-reduced-motion:reduce){.wb-detail,.wb-chevron,.wb-row,.wb-seg-btn,.wb-ringcard,.wb-copy{transition:none}.wb-enter{animation:none}.wb-ringcard:active{transform:none}}

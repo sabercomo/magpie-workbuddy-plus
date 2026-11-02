@@ -85,6 +85,15 @@ export function accounts(config) {
   return [...found.values()].map(a => ({ ...a, enabled: !config.disabledAccounts.includes(a.id), enterprise: !!a.auth.enterpriseId }));
 }
 
+// WorkBuddy's international build (workbuddy-ai) is read for its model list
+// and plan only; no task runs on it.
+export function intlAccount(config) {
+  const file = join(config.magpieDir, "plugin-auth.json");
+  const saved = existsSync(file) ? readJSON(file) : {};
+  const [key, auth] = Object.entries(saved).find(([k, a]) => k.split("#")[0] === "workbuddy-ai" && a?.type === "oauth" && a.access) || [];
+  return key ? { id: `intl:${auth.uid}`, realm: "intl", name: auth.accountId || auth.uid, auth, key, file } : null;
+}
+
 // The daily check-in is Magpie's: its switch, and what it recorded per login
 // under "workbuddy|<plugin-auth key>". Read only; nothing here claims it.
 export function checkins(config) {

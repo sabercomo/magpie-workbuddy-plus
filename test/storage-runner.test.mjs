@@ -202,3 +202,22 @@ test("the board carries today's check-in from Magpie's own record, never the log
   assert.deepEqual(view(), [{ outcome: "claimed", credit: 100, streak: 11, at: Date.parse(`${day}T00:00:18+08:00`) }, { outcome: "waiting" }]);
   assert.ok(!JSON.stringify(runner.boardView()).includes("workbuddy#u1"));
 });
+
+test("a board refresh reads both builds' model lists, each failing alone", async t => {
+  const p = fixture(t), authFile = join(p.magpieDir, "plugin-auth.json"), auths = readJSON(authFile);
+  auths["workbuddy-ai"] = { type: "oauth", uid: "u9", accountId: "abroad@example.test", access: "intl-access", expires: Date.now() + 86400_000 };
+  writeJSON(authFile, auths);
+  const cfg = { agents: [{ name: "cli", models: ["hy3"] }], models: [{ id: "hy3", name: "Hy3", credits: "x0.00" }] };
+  const runner = new Runner(p.dir, { gap: 0, fetcher: async url => {
+    const { host, pathname } = new URL(url);
+    if (host === "www.workbuddy.ai") return pathname === "/v3/config" ? Response.json({ code: 0, data: cfg }) : Response.json({ code: 5, msg: "billing down" }, { status: 500 });
+    if (pathname === "/v3/config") return Response.json({ code: 0, data: cfg });
+    if (pathname === "/billing/meter/get-user-resource-summary") return Response.json({ code: 0, data: { SubscriptionPackageName: "体验版", IsPaidUser: false } });
+    return Response.json({ code: 0, data: {} });
+  } });
+  await runner.refreshBoard();
+  const { models } = runner.boardView();
+  assert.deepEqual([models.cn.account, models.cn.plan.name, models.cn.models.map(m => m.id)], ["fixture@example.test", "体验版", ["hy3"]]);
+  assert.match(models.intl.error, /billing down/);
+  assert.ok(!JSON.stringify(runner.boardView()).includes("intl-access"));
+});
