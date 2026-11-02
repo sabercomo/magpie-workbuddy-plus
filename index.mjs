@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { closeSync, openSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, closeSync, openSync, mkdirSync, readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 import { dataDir } from "./storage.mjs";
+import { answering, portTaken } from "./server.mjs";
 
 // The service's port: the plugin option "port" (set with `magpie plugin options`,
 // since Magpie starts plugins with no environment of the user's), else
@@ -32,7 +33,7 @@ async function rpc(path, body) {
     if (!refused(e)) throw e;
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
     const file = join(dataDir, "service.log"), log = openSync(file, "a", 0o600);
-    const child = spawn(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "server.mjs")], { detached: true, stdio: ["ignore", log, log], env: { ...process.env, WORKBUDDY_PLUS_PORT: String(port) } });
+    const child = spawn(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "server.mjs")], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: { ...process.env, WORKBUDDY_PLUS_PORT: String(port) } });
     closeSync(log);
     child.unref();
     // A service that can't have the port says why in its log and exits.
@@ -45,9 +46,16 @@ async function rpc(path, body) {
     }
     if (!response) throw new Error(exited && lastLine(file) || `后台服务未启动，请查看 ${file}`);
   }
-  const value = await response.json();
-  if (!response.ok) throw new Error(value.error);
-  return value;
+  const value = await response.json().catch(() => undefined);
+  if (response.ok && value !== undefined) return value;
+  // Another program answering on the port (Windows' own http.sys serves some)
+  // means no service of ours can start there: say so where the page points.
+  if (!(await answering(port))) {
+    const reason = portTaken(port, `HTTP ${response.status}`);
+    try { appendFileSync(join(dataDir, "service.log"), reason + "\n", { mode: 0o600 }); } catch {}
+    throw new Error(reason);
+  }
+  throw new Error(value?.error || `后台服务返回 HTTP ${response.status}`);
 }
 
 const pageFile = join(dirname(fileURLToPath(import.meta.url)), "page", "data.js");

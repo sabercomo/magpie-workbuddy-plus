@@ -75,9 +75,9 @@ bun install.mjs
 <details>
 <summary><b>Windows 与其他平台</b></summary>
 
-Windows、Linux 同样用 `magpie plugin add` 安装，由 Magpie 启动服务；上面的 `bun install.mjs` 只用于 macOS，在其他系统上会直接报错退出。除 macOS 外的平台尚未完整验收。
+Windows、Linux 同样用 `magpie plugin add` 安装，由 Magpie 启动服务；上面的 `bun install.mjs` 只用于 macOS，在其他系统上会直接报错退出。Windows 10 上已用 Magpie 安装运行验证；Linux 尚未验收。
 
-Windows 会为 Hyper-V、WSL 等保留一些端口范围，默认端口 3439 可能落在里面，这时服务启动后会立即退出，并在 `%USERPROFILE%\.config\workbuddy-plus\service.log` 里写明原因。用 `netsh interface ipv4 show excludedportrange protocol=tcp` 查看保留范围，然后换一个不在范围内的端口（见「设置与数据」中的端口）。
+Windows 会为 Hyper-V、WSL 等保留一些端口范围，默认端口 3439 可能落在里面，也可能被其他程序（包括 Windows 自带的 HTTP 服务）占用。这时服务不会启动，并在 `%USERPROFILE%\.config\workbuddy-plus\service.log` 里写明原因。用 `netsh interface ipv4 show excludedportrange protocol=tcp` 查看保留范围，然后换一个不在范围内的端口（见「设置与数据」中的端口）。
 
 想不开 Magpie 也运行时，安装 Bun 并登录国内账号后，在源码目录运行：
 
@@ -100,7 +100,7 @@ bun server.mjs
 - 夜猫子任务按北京时间的有效窗口执行，每号每天最多上报一次。
 - 登录续期检查、失败重试、休眠后补跑当天已到的时段、重启去重。
 
-**账号看板**（只读，每 10 分钟随后台服务刷新，不领取或消耗任何东西）
+**账号看板**（只读，每 10 分钟随后台服务刷新，在 Magpie 新登录或退出的国内账号半分钟内反映到看板；不领取或消耗任何东西）
 
 - 「列表」：汇总和每个账号一行（积分条按作废先后着色、今日圆环、7 天走势），点开看积分包、用量、任务和旅行详情。
 - 「圆环」：一次看一个账号的今日圆环（活跃、旅行、任务）、积分作废时间线和用量。

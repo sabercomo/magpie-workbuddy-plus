@@ -10,10 +10,14 @@ import { checkin, collect, writePage } from "./board.mjs";
 import { chinaModels, intlModels } from "./models.mjs";
 
 // A LaunchAgent's PATH is only the system's, so the usual install places
-// (Magpie's own ~/.local/bin link, Homebrew, the app) are looked in too.
+// (Magpie's own ~/.local/bin link, Homebrew, the app) are looked in too. On
+// Windows the command is magpie.com (the console build beside magpie.exe),
+// which Magpie's installer puts in %LOCALAPPDATA%\Programs\Magpie, off the PATH.
 export function magpieBin(env = process.env) {
-  const places = [env.WORKBUDDY_PLUS_MAGPIE_BIN, ...(env.PATH || "").split(delimiter).filter(Boolean).map(d => join(d, "magpie")),
-    join(homedir(), ".local", "bin", "magpie"), "/opt/homebrew/bin/magpie", "/usr/local/bin/magpie", "/Applications/magpie.app/Contents/MacOS/magpie"];
+  const names = process.platform === "win32" ? ["magpie.com", "magpie.exe"] : ["magpie"];
+  const dirs = [...(env.PATH || "").split(delimiter).filter(Boolean), join(homedir(), ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/Applications/magpie.app/Contents/MacOS",
+    ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, "Programs", "Magpie")] : [])];
+  const places = [env.WORKBUDDY_PLUS_MAGPIE_BIN, ...dirs.flatMap(d => names.map(name => join(d, name)))];
   return places.find(f => f && existsSync(f)) || "";
 }
 
@@ -78,7 +82,7 @@ export class Runner {
     if (!bin) throw new Error("找不到 magpie 命令，请在 Magpie 的供应商页登录 WorkBuddy");
     const started = new Date().toISOString();
     let out = "";
-    const child = this.spawner(bin, ["plugin", "login", "workbuddy", "1"], { stdio: ["ignore", "pipe", "pipe"] });
+    const child = this.spawner(bin, ["plugin", "login", "workbuddy", "1"], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     const keep = data => {
       out = (out + data).replace(/\x1b\[[0-9;]*m/g, "").slice(-4000);
       const url = out.match(/https:\/\/\S+/)?.[0];
@@ -120,7 +124,12 @@ export class Runner {
   }
   refreshBoard(maxAge = 0) {
     if (this.boarding) return this.boarding;
-    if (!this.boardStale && Date.now() - this.board.at < maxAge) return Promise.resolve(this.board);
+    // A login added or removed in Magpie itself, not through the page, shows
+    // at the next beat instead of when the board is next due.
+    const shown = this.board.accounts.map(a => a.id).sort().join();
+    let current = shown;
+    try { current = this.list().map(a => a.id).sort().join(); } catch {}
+    if (!this.boardStale && current === shown && Date.now() - this.board.at < maxAge) return Promise.resolve(this.board);
     this.boardStale = false;
     const config = this.config();
     this.boarding = (async () => {

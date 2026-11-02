@@ -71,6 +71,8 @@ export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) 
   return { server: createServer(handler), runner, handler };
 }
 
+export const portTaken = (port, why) => `端口 ${port} 无法使用（${why}），也没有 WorkBuddy Plus 在上面应答：可能被其他程序占用，或在 Windows 系统保留的端口范围内（netsh interface ipv4 show excludedportrange protocol=tcp 可查看）。换一个端口：magpie plugin options <magpie plugin list 中的插件名> '{"port":4389}'，或设置环境变量 WORKBUDDY_PLUS_PORT`;
+
 // Whether the service on port is a WorkBuddy Plus: anything else there, or nothing, is not.
 export async function answering(port, fetcher = fetch) {
   try {
@@ -100,7 +102,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       setTimeout(() => server.listen(port, "127.0.0.1"), 5000);
       return;
     }
-    console.error(`端口 ${port} 无法使用（${e.code}），也没有 WorkBuddy Plus 在上面应答：可能被其他程序占用，或在 Windows 系统保留的端口范围内（netsh interface ipv4 show excludedportrange protocol=tcp 可查看）。换一个端口：magpie plugin options <magpie plugin list 中的插件名> '{"port":4389}'，或设置环境变量 WORKBUDDY_PLUS_PORT`);
+    console.error(portTaken(port, e.code));
     process.exit(1);
   });
   server.once("listening", () => {

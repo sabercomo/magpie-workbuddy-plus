@@ -440,7 +440,9 @@
   const icon = (path, size = 13) => { const s = svg("svg", { width: size, height: size, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": 1.5, "aria-hidden": "true" }); s.innerHTML = path; return s; };
   const copyIcon = '<rect x="5" y="5" width="8.5" height="8.5" rx="2"/><path d="M10.5 5V3.5a1.5 1.5 0 0 0-1.5-1.5H3.5A1.5 1.5 0 0 0 2 3.5V9a1.5 1.5 0 0 0 1.5 1.5H5"/>';
 
-  // Magpie's page may not grant the clipboard: then the id is selected for ⌘C.
+  // Magpie's page may not grant the clipboard: then the id is selected for
+  // ⌘C on a Mac, Ctrl+C elsewhere.
+  const copyKey = () => { const n = globalThis.navigator; return /Mac|iPhone|iPad/.test(n?.userAgentData?.platform || n?.platform || "") ? "⌘C" : "Ctrl+C"; };
   function copier(id) {
     const b = el("button", "wb-copy"), text = el("span", undefined, id), note = el("span", "wb-copy-note");
     b.type = "button";
@@ -451,7 +453,7 @@
       catch {
         const range = document.createRange(), pick = getSelection();
         range.selectNodeContents(text); pick.removeAllRanges(); pick.addRange(range);
-        note.textContent = "按 ⌘C 复制";
+        note.textContent = `按 ${copyKey()} 复制`;
       }
       setTimeout(() => { note.textContent = ""; }, 1600);
     };

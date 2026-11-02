@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { defaults, accounts, calendar, initialize, readJSON, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
@@ -43,7 +43,8 @@ test("only domestic Magpie logins are read; status never reveals credentials", t
   const runner = new Runner(p.dir);
   const status = JSON.stringify(runner.status());
   assert.ok(!/private-access|private-refresh|unrelated-secret|excluded-international/.test(status));
-  assert.equal(statSync(authFile).mode & 0o777, 0o600);
+  // Windows has no POSIX modes; its files report 0o666 whatever was asked.
+  if (process.platform !== "win32") assert.equal(statSync(authFile).mode & 0o777, 0o600);
 });
 
 test("concurrent refreshes spend one token and preserve unrelated Magpie logins", async t => {
@@ -188,9 +189,15 @@ test("add account runs Magpie's own browser sign-in once and reports how it went
 test("the magpie command is found outside a LaunchAgent's bare PATH", t => {
   const dir = mkdtempSync(join(tmpdir(), "wb-plus-bin-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  writeJSON(join(dir, "magpie"), {});
-  assert.equal(magpieBin({ PATH: `/usr/bin:${dir}` }), join(dir, "magpie"));
-  assert.equal(magpieBin({ WORKBUDDY_PLUS_MAGPIE_BIN: join(dir, "magpie"), PATH: "" }), join(dir, "magpie"));
+  const name = process.platform === "win32" ? "magpie.com" : "magpie";
+  writeJSON(join(dir, name), {});
+  assert.equal(magpieBin({ PATH: ["/usr/bin", dir].join(delimiter) }), join(dir, name));
+  assert.equal(magpieBin({ WORKBUDDY_PLUS_MAGPIE_BIN: join(dir, name), PATH: "" }), join(dir, name));
+  // Magpie's Windows installer leaves its folder off the PATH.
+  const programs = join(dir, "local", "Programs", "Magpie");
+  mkdirSync(programs, { recursive: true });
+  writeJSON(join(programs, name), {});
+  assert.equal(magpieBin({ PATH: "", LOCALAPPDATA: join(dir, "local") }), join(programs, name));
 });
 
 test("the board carries today's check-in from Magpie's own record, never the login key", t => {
@@ -224,6 +231,20 @@ test("a board refresh reads both builds' model lists, each failing alone", async
   assert.deepEqual([models.cn.account, models.cn.plan.name, models.cn.models.map(m => m.id)], ["fixture@example.test", "体验版", ["hy3"]]);
   assert.match(models.intl.error, /billing down/);
   assert.ok(!JSON.stringify(runner.boardView()).includes("intl-access"));
+});
+
+test("a login added in Magpie itself refreshes the board at the next beat, not when it is next due", async t => {
+  const p = fixture(t), authFile = join(p.magpieDir, "plugin-auth.json");
+  const runner = new Runner(p.dir, { gap: 0, fetcher: async () => Response.json({ code: 0, data: {} }) });
+  await runner.refreshBoard();
+  const at = runner.board.at;
+  assert.equal(await runner.refreshBoard(10 * 60_000), runner.board);
+  assert.equal(runner.board.at, at);
+  const auths = readJSON(authFile);
+  auths["workbuddy#u2"] = { ...p.auth, uid: "u2", accountId: "second@example.test" };
+  writeJSON(authFile, auths);
+  await runner.refreshBoard(10 * 60_000);
+  assert.deepEqual(runner.board.accounts.map(a => a.id), ["cn:u1", "cn:u2"]);
 });
 
 test("the service port comes from the plugin option, then the environment, then 3439", () => {
@@ -265,4 +286,26 @@ test("a port held by another program makes the service exit and say why; a WorkB
   const taken = await start({ config: {} });
   assert.equal(taken.code, "running");
   assert.match(taken.out, /已有 WorkBuddy Plus 在运行，本进程待命/);
+});
+
+// Windows' http.sys answers on some ports with nothing of ours there; the
+// plugin must not take its replies for the service's, and says why in the log.
+test("the plugin reports a port answered by another program instead of reading its reply", async t => {
+  const dir = mkdtempSync(join(tmpdir(), "wb-plus-foreign-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const other = createServer((request, response) => { response.statusCode = 404; response.end("Not Found"); });
+  await new Promise(resolve => other.listen(0, "127.0.0.1", resolve));
+  t.after(() => other.close());
+  const probe = join(dir, "probe.mjs");
+  writeFileSync(probe, `const { WorkBuddyPlusPlugin } = await import(${JSON.stringify(new URL("../index.mjs", import.meta.url).href)});
+const { tool } = await WorkBuddyPlusPlugin({}, { port: ${other.address().port} });
+try { await tool.status.execute({}); console.log("no error"); } catch (e) { console.log(e.message); }\n`);
+  const child = spawn(process.execPath, [probe], { env: { ...process.env, WORKBUDDY_PLUS_DIR: dir, WORKBUDDY_PLUS_MAGPIE_DIR: join(dir, "magpie") }, stdio: ["ignore", "pipe", "pipe"] });
+  let out = "";
+  child.stdout.on("data", d => { out += d; });
+  const code = await Promise.race([new Promise(resolve => child.once("exit", resolve)), delay(10000).then(() => "running")]);
+  child.kill();
+  assert.equal(code, 0);
+  assert.match(out, /端口 \d+ 无法使用（HTTP 404）[\s\S]*"port":4389/);
+  assert.match(readFileSync(join(dir, "service.log"), "utf8"), /无法使用（HTTP 404）/);
 });
