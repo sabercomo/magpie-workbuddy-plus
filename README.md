@@ -8,6 +8,8 @@
 [![Tests](https://github.com/sabercomo/magpie-workbuddy-plus/actions/workflows/test.yml/badge.svg)](https://github.com/sabercomo/magpie-workbuddy-plus/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
+**简体中文** · [English](README.en.md)
+
 <img src="docs/images/list.png" alt="Magpie 中的 WorkBuddy Plus 页面：账号列表视图" width="880">
 
 </div>
@@ -31,6 +33,10 @@
 截图来自 Magpie 内的插件页面，账号与数据均为演示用的虚构内容。
 
 <table>
+  <tr>
+    <td width="50%"><img src="docs/images/models-intl.png" alt="模型视图：国际版"><br><sub><b>模型 · 国际版</b>：Free 账号能用的模型在前，Pro-only 模型变灰收在下面；每个模型的 ID、上下文和积分倍率</sub></td>
+    <td width="50%"><img src="docs/images/models-cn.png" alt="模型视图：国内版"><br><sub><b>模型 · 国内版</b>：全部可用，标出订阅优先、限时免费和夜间折扣</sub></td>
+  </tr>
   <tr>
     <td width="50%"><img src="docs/images/rings.png" alt="圆环视图"><br><sub><b>圆环</b>：一次看一个账号，今日活跃、旅行、任务三环，积分作废时间线和用量</sub></td>
     <td width="50%"><img src="docs/images/widgets.png" alt="小组件视图"><br><sub><b>小组件</b>：按一件事一块汇总所有账号</sub></td>
@@ -204,6 +210,8 @@ git pull --ff-only
 bun install.mjs
 ```
 
+从 Magpie 安装的：执行 `magpie plugin update`。如果安装时指定了版本（`magpie plugin list` 里显示 `#v0.4.0` 这类后缀），先用 `magpie plugin rm` 移除，再按不带版本的地址重新 `magpie plugin add`；插件选项（例如端口）需要重新设置。已经在运行的后台服务仍是旧版代码，结束它（或注销、重启电脑）后，Magpie 下次加载插件时会以新版启动。
+
 在 Magpie 中停用插件只会停用工具入口。**要停止自动任务，先在面板点击「暂停定时」**，或执行 `bun cli.mjs pause`。
 
 <details>
@@ -226,7 +234,7 @@ magpie plugin rm "$HOME/Applications/Magpie-WorkBuddy-Plus"
 npm test
 ```
 
-测试覆盖国内账号筛选、国际账号排除、凭证不出现在状态响应、全部执行不调用每日签到、成长任务进度、旅行领奖、积分包合并与作废时间、成长任务分类、用量分页、看板快照不含凭证、页面请求去重、限流重试、添加账号流程、登录续期竞争、定时去重、面板操作和本机 HTTP 边界。
+测试覆盖国内账号筛选、国际账号排除、凭证不出现在状态响应、全部执行不调用每日签到、成长任务进度、旅行领奖、积分包合并与作废时间、成长任务分类、用量分页、看板快照不含凭证、页面请求去重、限流重试、添加账号流程、登录续期竞争、定时去重、面板操作、本机 HTTP 边界、模型目录和服务端口。
 
 README 截图用 `docs/demo-data.mjs` 写入虚构账号后在 Magpie 中截取。
 

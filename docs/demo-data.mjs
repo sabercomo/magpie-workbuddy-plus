@@ -65,6 +65,57 @@ const accounts = [
   }
 ];
 
+// Both builds' model lists as their configs read on 2026-11-02 (public
+// catalog data); only the account names are made up.
+const model = ([id, name, rate, context, desc, extra = {}]) => ({ id, name, desc, rate, context, isDefault: !!extra.def, ...extra.tier ? { tier: extra.tier } : {}, ...extra.promo ? { promo: extra.promo } : {} });
+const proOnly = { label: "Pro Only", note: "模型仅面向 Pro 用户开放。", exclusive: true };
+const queued = { label: "订阅优先", note: "资源紧张，旗舰版及高级版会员享优先调度。", exclusive: false };
+const models = {
+  at: now - 4 * 60_000,
+  cn: { account: "主力号", plan: { name: "体验版", paid: false }, models: [
+    ["auto", "Auto", null, 256000, "平衡效果与速度。自动为每个任务匹配最优模型，积分倍率随之浮动", { def: true }],
+    ["hy4-preview", "Hy4 preview", 0.29, 960000, "混元思考模型，具有增强的推理能力"],
+    ["hy3", "Hy3", 0, 192000, "混元思考模型，具有增强的推理能力", { promo: { label: "限时免费", note: "7月6日–11月15日，每日赠送免费额度。", hours: "", until: at(13, 0), rate: 0 } }],
+    ["hy3-x", "Hy3 (X)", 0.05, 192000, "混元思考模型，具有增强的推理能力"],
+    ["deepseek-v4.1-flash", "DeepSeek-V4.1-Flash", 0.11, 1000000, "已更新至 V4.1-Flash-1017 最新版，支持 1M 上下文窗口，原生多模态", { promo: { label: "夜间折扣", note: "周一至周五 09:00–12:00、14:00–18:00 属高峰原价，非高峰期积分5折", hours: "", until: 0 } }],
+    ["glm-5.3", "GLM-5.3", 0.69, 1000000, "旗舰模型，擅长复杂软件工程与长程 Agent 任务", { tier: queued }],
+    ["glm-5.3-flash", "GLM-5.3-Flash", 0.08, 1000000, "原生多模态模型，擅长视觉理解与专业任务", { tier: queued }],
+    ["glm-5.2", "GLM-5.2", 0.79, 1000000, "1M 上下文，擅长长程任务", { promo: { label: "夜间折扣", note: "每晚 23:00—次日 8:00 积分限时立减，错峰用更省", hours: "23:00–07:50", until: 0, rate: 0.5 } }],
+    ["space-bunny", "Space-Bunny", 0.08, 1000000, "推理速度极快，编码能力强劲，并支持原生多模态输入的匿名大模型"],
+    ["minimax-m3.1-flash", "MiniMax-M3.1-Flash", 0.08, 1000000, "原生多模态，擅长 office、agentic、编程任务，推理速度优异"],
+    ["kimi-k3.1-pro", "Kimi-K3.1-Pro", 0.97, 1000000, "Kimi 全新旗舰模型，3万亿级参数。办公、代码、3D 创作与长程 Agent 能力全面升级"],
+    ["kimi-k3-1", "Kimi-K3", 1.62, 1000000, "擅长处理复杂的长程自主任务，前端开发能力突出"],
+    ["kimi-k2.8-preview", "Kimi-K2.8-Preview", 0.77, 1000000, "擅长处理复杂的长程自主任务，前端开发能力突出", { tier: queued }],
+    ["deepseek-v4-pro", "DeepSeek-V4-Pro", 0.51, 1000000, "DeepSeek 旗舰模型，支持 1M 上下文窗口", { promo: { label: "夜间折扣", note: "周一至周五 09:00–12:00、14:00–18:00 属高峰原价，非高峰期积分5折", hours: "", until: 0 } }],
+    ["step-5-preview", "Step-5-Preview", 0.33, 1000000, "阶跃 StepFun 面向真实任务的新一代旗舰基模"],
+    ["mimo-v2.6-pro", "Xiaomi MiMo-V2.6-Pro", 0.13, 1000000, "旗舰推理模型，面向专业、长程、复杂工作流"]
+  ].map(model) },
+  intl: { account: "海外号", plan: { name: "Free", paid: false }, models: [
+    ["default-model", "Auto", null, 176000, "优秀的编码模型，适合日常使用", { def: true }],
+    ["fast-model", "Fast", 0.34, 200000, "响应快，适合简单任务"],
+    ["balanced-model", "Balanced", 0.59, 256000, "速度与质量兼顾，日常工作首选"],
+    ["primary-model", "Primary", 3.31, 272000, "高质量输出，胜任复杂任务"],
+    ["hy4-preview", "Hy4 Preview", 0.29, 1000000, "混元思考模型，具有增强的推理能力"],
+    ["hy3", "Hy3", 0, 192000, "混元思考模型，具有增强的推理能力"],
+    ["deepseek-v4.1-flash-sg", "Deepseek-V4.1-Flash", 0.03, 1000000, "DeepSeek 旗舰模型，支持 1M 上下文窗口，原生多模态"],
+    ["gpt-6-astra", "GPT-6-Astra", 6.67, 1000000, "OpenAI 旗舰模型，擅长复杂推理与长程任务", { tier: proOnly }],
+    ["gpt-6.1-sol", "GPT-6.1-Sol", 1.33, 1000000, "专为复杂编码和智能体工作流构建的模型", { tier: proOnly }],
+    ["gpt-6-sol", "GPT-6-Sol", 1.33, 1000000, "专为复杂编码和智能体工作流构建的模型", { tier: proOnly }],
+    ["gpt-6-luna", "GPT-6-Luna", 0.07, 1000000, "专为单一聚焦、高吞吐量任务打造的高效模型", { tier: proOnly }],
+    ["gpt-5.6-sol", "GPT-5.6-Sol", 3.47, 1000000, "OpenAI 旗舰模型，擅长复杂推理与长程任务", { tier: proOnly }],
+    ["gpt-5.6-terra", "GPT-5.6-Terra", 1.39, 1000000, "OpenAI 均衡模型，兼顾能力、速度与成本", { tier: proOnly }],
+    ["gpt-5.6-luna", "GPT-5.6-Luna", 0.14, 1000000, "OpenAI 轻量模型，响应快速，适合日常任务", { tier: proOnly }],
+    ["grok-4.7", "Grok-4.7", 1.9, 500000, "SpaceXAI 打造的前沿模型，专为编程、智能体任务及知识型工作而设计", { tier: proOnly }],
+    ["gemini-3.8-flash", "Gemini-3.8-Flash", 0.95, 1000000, "能力均衡，适合日常使用", { tier: proOnly }],
+    ["glm-5.3", "GLM-5.3", 0.69, 1000000, "能力均衡，适合日常使用"],
+    ["glm-5.3-flash", "GLM-5.3-Flash", 0.08, 1000000, "原生多模态模型，擅长视觉理解与专业任务"],
+    ["kimi-k3.1-pro", "Kimi-K3.1-Pro", 0.97, 1000000, "Kimi 全新旗舰模型，3万亿级参数", { tier: proOnly }],
+    ["kimi-k3.1-pro-highspeed", "Kimi-K3.1-Pro-Highspeed", 1.56, 1000000, "K3.1 Pro 高速版本，响应速度提升至 K3.1 Pro 的 2–3 倍", { tier: proOnly }],
+    ["kimi-k3", "Kimi-K3", 1.62, 1000000, "擅长处理复杂的长程自主任务，前端开发能力突出"],
+    ["minimax-m3.1-flash", "MiniMax-M3.1-Flash", 0.08, 1000000, "原生多模态，擅长 office、agentic、编程任务，推理速度优异"]
+  ].map(model) }
+};
+
 const hhmm = t => `${String(new Date(t).getHours()).padStart(2, "0")}:${String(new Date(t).getMinutes()).padStart(2, "0")}`;
 const slots = [["night", "01:00"], ["daily", "09:00"], ["tasks", "09:10"], ["daily", "21:00"], ["tasks", "21:10"], ["keepalive", "22:00"]].map(([kind, time]) => {
   const [h, m] = time.split(":").map(Number), due = at(0, h, m) <= now;
@@ -75,7 +126,7 @@ const job = (actions, minutes, last) => ({ id: `demo-${minutes}`, actions, statu
 writePage(join(process.argv[2], "data.js"), {
   generated: new Date(now).toISOString(), at: now - 4 * 60_000, refreshing: false, enabled: true,
   schedules: { daily: ["09:00", "21:00"], tasks: ["09:10", "21:10"], night: ["01:00"], keepalive: ["22:00"] },
-  accounts, today: { timezone: "Asia/Shanghai", slots, next: slots.find(s => s.status === "upcoming") || null },
+  accounts, models, today: { timezone: "Asia/Shanghai", slots, next: slots.find(s => s.status === "upcoming") || null },
   jobs: [
     job(["tasks"], 95, "主力号：成长任务完成 2 项，领取 80 积分"),
     job(["travel"], 130, "备用号：芝麻出发去大理"),
