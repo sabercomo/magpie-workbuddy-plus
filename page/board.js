@@ -472,7 +472,12 @@
     if (m.rate === null) rate.append(el("span", "wb-sub", "随任务浮动"));
     else if (m.rate === 0) rate.append(el("span", "wb-pill ok wb-free", "免费"));
     else rate.append(el("strong", !locked && m.rate >= 3 ? "costly" : undefined, times(m.rate)));
-    if (!locked && m.promo?.rate !== undefined && m.promo.rate !== m.rate) rate.append(el("span", "wb-rate-off", `${m.promo.hours ? `${m.promo.hours} ` : ""}${m.promo.rate === 0 ? "免费" : times(m.promo.rate)}`));
+    if (!locked && m.promo?.rate !== undefined && m.promo.rate !== m.rate) {
+      // A price worked out from the promotion's words, not given, reads as about.
+      const off = el("span", "wb-rate-off", `${m.promo.hours ? `${m.promo.hours} ` : ""}${m.promo.approx ? "约 " : ""}${m.promo.rate === 0 ? "免费" : times(m.promo.rate)}`);
+      off.title = m.promo.note;
+      rate.append(off);
+    }
     row.append(name, copier(m.id), el("span", "wb-num wb-mctx", ctx(m.context)), rate);
     return row;
   }

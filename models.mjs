@@ -35,11 +35,15 @@ export function catalog(cfg, now = Date.now()) {
     const offers = promos.filter(p => p.modelIds?.includes(id)), label = offers.map(p => p.badge?.label).find(Boolean);
     if (label) {
       const priced = offers.find(p => p.discount), said = priced && creditsOf(priced.discount.discountedCredits), factor = Number(priced?.discount?.factor);
-      const off = said ?? (Number.isFinite(factor) && rate !== null ? round(rate * factor) : null);
+      const note = offers.map(p => p.hover?.textZh || p.hover?.textEn).find(Boolean) || "";
+      // DeepSeek's off-peak discount is a badge alone: its price is only in its
+      // words (「非高峰期积分5折」), read as the factor they name.
+      const told = !priced && rate !== null && note.match(/(\d+(?:\.\d+)?)\s*折/);
+      const off = said ?? (Number.isFinite(factor) && rate !== null ? round(rate * factor) : told ? round(rate * told[1] / 10) : null);
       row.promo = {
-        label, note: offers.map(p => p.hover?.textZh || p.hover?.textEn).find(Boolean) || "",
-        hours: (priced?.schedule?.daily || []).map(h => `${hhmm(h.start)}–${hhmm(h.end)}`).join("、"),
-        until: Math.max(0, ...offers.map(p => Date.parse(p.schedule?.validUntil) || 0)), ...(off !== null ? { rate: off } : {})
+        label, note,
+        hours: priced ? (priced.schedule?.daily || []).map(h => `${hhmm(h.start)}–${hhmm(h.end)}`).join("、") : told && /非高峰/.test(note) ? "非高峰" : "",
+        until: Math.max(0, ...offers.map(p => Date.parse(p.schedule?.validUntil) || 0)), ...(off !== null ? { rate: off } : {}), ...(told ? { approx: true } : {})
       };
     }
     return row;

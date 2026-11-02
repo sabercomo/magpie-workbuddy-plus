@@ -39,7 +39,8 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
         { id: "auto", name: "Auto", desc: "自动选择", rate: null, context: 256000, isDefault: true },
         { id: "hy3", name: "Hy3", desc: "混元", rate: 0, context: 192000, promo: { label: "限时免费", note: "", hours: "", until: 0, rate: 0 } },
         { id: "glm-5.2", name: "GLM-5.2", desc: "长程", rate: 0.79, context: 1000000, promo: { label: "夜间折扣", note: "", hours: "23:00–07:50", until: 0, rate: 0.5 } },
-        { id: "glm-5.3", name: "GLM-5.3", desc: "旗舰", rate: 0.69, context: 1000000, tier: { label: "订阅优先", note: "会员优先调度", exclusive: false } }] },
+        { id: "glm-5.3", name: "GLM-5.3", desc: "旗舰", rate: 0.69, context: 1000000, tier: { label: "订阅优先", note: "会员优先调度", exclusive: false } },
+        { id: "deepseek-v4.1-flash", name: "DeepSeek-V4.1-Flash", desc: "", rate: 0.11, context: 1000000, promo: { label: "夜间折扣", note: "非高峰期积分5折", hours: "非高峰", until: 0, rate: 0.06, approx: true } }] },
       intl: { account: "abroad", plan: { name: "Free", paid: false }, models: [
         { id: "deepseek-v4.1-flash-sg", name: "Deepseek-V4.1-Flash", desc: "", rate: 0.03, context: 1000000 },
         { id: "primary-model", name: "Primary", desc: "", rate: 3.31, context: 272000 },
@@ -64,7 +65,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   button(nodes.get("board"), "小组件").onclick();
   assert.match(text(nodes.get("board")), /即将作废 明天 120 积分[\s\S]*今日 0\/1 完成[\s\S]*签到 1\/1[\s\S]*能量 30[\s\S]*成长任务 1\/2[\s\S]*关注公众号 需手动/);
   button(nodes.get("board"), "模型").onclick();
-  assert.match(text(nodes.get("board")), /国内版 4[\s\S]*国际版 3[\s\S]*你现在能用 全部 4 个 不开会员也能用；1 个高峰时会员优先[\s\S]*正在优惠 2 个模型 限时免费 1 · 夜间折扣 1[\s\S]*最省积分 Hy3 免费 其次 GLM-5.3 ×0.69[\s\S]*全部用户可用模型：4[\s\S]*Auto 默认[\s\S]*auto[\s\S]*256K\s+随任务浮动[\s\S]*GLM-5.2 夜间折扣[\s\S]*×0.79 23:00–07:50 ×0.50[\s\S]*GLM-5.3 订阅优先/);
+  assert.match(text(nodes.get("board")), /国内版 5[\s\S]*国际版 3[\s\S]*你现在能用 全部 5 个 不开会员也能用；1 个高峰时会员优先[\s\S]*正在优惠 3 个模型 限时免费 1 · 夜间折扣 2[\s\S]*最省积分 Hy3 免费 其次 DeepSeek-V4.1-Flash ×0.11[\s\S]*全部用户可用模型：5[\s\S]*Auto 默认[\s\S]*auto[\s\S]*256K\s+随任务浮动[\s\S]*GLM-5.2 夜间折扣[\s\S]*×0.79 23:00–07:50 ×0.50[\s\S]*GLM-5.3 订阅优先[\s\S]*DeepSeek-V4.1-Flash 夜间折扣[\s\S]*×0.11\s+非高峰 约 ×0.06/);
   button(nodes.get("board"), "国际版 3").onclick();
   // Pro-only models sit apart from what a Free plan can use, and a costly rate stands out.
   assert.match(text(nodes.get("board")), /你现在能用 2 个模型 共 3 个，另外 1 个是 Pro-only[\s\S]*国际版账号 Free 计划 abroad · 升级 Pro 才能用全部[\s\S]*最省积分 Deepseek-V4.1-Flash ×0.03[\s\S]*Free 用户可用模型：2[\s\S]*Primary[\s\S]*×3.31[\s\S]*Pro-only 模型：1[\s\S]*GPT-6-Luna Pro/);
