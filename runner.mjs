@@ -18,7 +18,8 @@ export function magpieBin(env = process.env) {
 }
 
 export class Runner {
-  constructor(dir, clientOptions = {}, { pageFile, spawner = spawn, magpie = magpieBin } = {}) {
+  constructor(dir, clientOptions = {}, { pageFile, panel = "", spawner = spawn, magpie = magpieBin } = {}) {
+    this.panel = panel;
     initialize(dir);
     this.spawner = spawner;
     this.magpie = magpie;
@@ -48,7 +49,7 @@ export class Runner {
   boardView() {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
     return {
-      generated: new Date().toISOString(), at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
+      generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
       accounts: this.board.accounts.map(({ key, ...a }) => ({ ...a, checkin: checkin(found, key, day) })), models: this.board.models || null, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
       jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
     };

@@ -1,11 +1,25 @@
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { closeSync, openSync, mkdirSync } from "node:fs";
+import { closeSync, openSync, mkdirSync, readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 import { dataDir } from "./storage.mjs";
 
-const base = () => `http://127.0.0.1:${process.env.WORKBUDDY_PLUS_PORT || 3439}`;
+// The service's port: the plugin option "port" (set with `magpie plugin options`,
+// since Magpie starts plugins with no environment of the user's), else
+// WORKBUDDY_PLUS_PORT, else 3439. Windows may reserve 3439 for itself.
+export function portOf(options, env = process.env) {
+  for (const value of [options?.port, env.WORKBUDDY_PLUS_PORT]) {
+    const port = Number(value);
+    if (Number.isInteger(port) && port > 0 && port < 65536) return port;
+  }
+  return 3439;
+}
+let port = portOf();
+const base = () => `http://127.0.0.1:${port}`;
+const refused = e => ["ECONNREFUSED", "ConnectionRefused"].includes(e.cause?.code || e.code);
+const lastLine = file => { try { return readFileSync(file, "utf8").trim().split("\n").at(-1) || ""; } catch { return ""; } };
+
 async function rpc(path, body) {
   const request = () => fetch(base() + path, {
     method: body === undefined ? "GET" : "POST",
@@ -15,18 +29,21 @@ async function rpc(path, body) {
   let response;
   try { response = await request(); }
   catch (e) {
-    if (!["ECONNREFUSED", "ConnectionRefused"].includes(e.cause?.code || e.code)) throw e;
+    if (!refused(e)) throw e;
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-    const log = openSync(join(dataDir, "service.log"), "a", 0o600);
-    const child = spawn(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "server.mjs")], { detached: true, stdio: ["ignore", log, log], env: process.env });
+    const file = join(dataDir, "service.log"), log = openSync(file, "a", 0o600);
+    const child = spawn(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "server.mjs")], { detached: true, stdio: ["ignore", log, log], env: { ...process.env, WORKBUDDY_PLUS_PORT: String(port) } });
     closeSync(log);
     child.unref();
-    for (let attempt = 0; attempt < 40; attempt++) {
+    // A service that can't have the port says why in its log and exits.
+    let exited = false;
+    child.once("exit", () => { exited = true; });
+    for (let attempt = 0; attempt < 40 && !exited; attempt++) {
       await delay(100);
       try { response = await request(); break; }
-      catch (e) { if (!["ECONNREFUSED", "ConnectionRefused"].includes(e.cause?.code || e.code)) throw e; }
+      catch (e) { if (!refused(e)) throw e; }
     }
-    if (!response) throw new Error(`后台服务未启动，请查看 ${join(dataDir, "service.log")}`);
+    if (!response) throw new Error(exited && lastLine(file) || `后台服务未启动，请查看 ${file}`);
   }
   const value = await response.json();
   if (!response.ok) throw new Error(value.error);
@@ -41,11 +58,12 @@ const pageFile = join(dirname(fileURLToPath(import.meta.url)), "page", "data.js"
 // Magpie also restarts its plugins with new options whenever the page's
 // buttons save a request into them; the service runs each request id once.
 export const WorkBuddyPlusPlugin = async (input, options) => {
+  port = portOf(options);
   const ready = rpc("/api/page-target", { file: pageFile }).catch(e => console.error("[workbuddy-plus]", e.message));
   if (options?.request) ready.then(() => rpc("/api/page", options.request)).catch(e => console.error("[workbuddy-plus]", e.message));
   return { tool: {
     status: {
-      description: "WorkBuddy Plus 的国内账号、执行记录、定时设置。成长任务、猫猫旅行、连登福利；面板 http://127.0.0.1:3439。不会返回登录密钥。",
+      description: "WorkBuddy Plus 的国内账号、执行记录、定时设置。成长任务、猫猫旅行、连登福利；本机面板默认 http://127.0.0.1:3439（端口可在插件选项 port 中修改）。不会返回登录密钥。",
       args: { type: "object", properties: {}, additionalProperties: false },
       execute: () => rpc("/api/status")
     },

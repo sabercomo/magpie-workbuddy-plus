@@ -12,8 +12,9 @@ function note(text, bad) { $("note").textContent = text; $("note").className = b
 function paint() {
   const view = globalThis.WBPLUS;
   const offline = !view || Date.now() - Date.parse(view.generated) > 25 * 60_000;
-  $("state").textContent = !view ? "后台服务还没有写出数据：用 bun install.mjs 安装后台服务，或调用一次本插件的 status 工具启动它。"
+  $("state").textContent = !view ? "后台服务还没有写出数据：Magpie 加载本插件时会启动它。一直这样的话，看 ~/.config/workbuddy-plus/service.log；Windows 上常见原因是端口被系统保留，见 README 的「端口」一节。"
     : `${view.refreshing ? "正在刷新…" : `余额更新于 ${WBBoard.when(view.at)}`} · ${view.enabled ? "定时运行中" : "定时已暂停"}${offline ? " · 后台服务可能未运行" : ""}`;
+  if (view?.panel) $("panel").textContent = view.panel;
   $("schedule").dataset.action = view?.enabled ? "pause" : "resume";
   $("schedule").textContent = view?.enabled ? "暂停定时" : "开启定时";
   WBBoard.render($("board"), view);

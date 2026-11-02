@@ -71,6 +71,14 @@ export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) 
   return { server: createServer(handler), runner, handler };
 }
 
+// Whether the service on port is a WorkBuddy Plus: anything else there, or nothing, is not.
+export async function answering(port, fetcher = fetch) {
+  try {
+    const response = await fetcher(`http://127.0.0.1:${port}/api/status`, { signal: AbortSignal.timeout(3000) });
+    return response.ok && !!(await response.json())?.config;
+  } catch { return false; }
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.WORKBUDDY_PLUS_PORT || 3439);
   // The port is taken before the runner is made: making one marks running
@@ -80,14 +88,23 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   // a loop, and takes over if the other stops.
   const server = createServer();
   let interval, waiting = false;
-  server.on("error", e => {
-    if (e.code !== "EADDRINUSE") throw e;
-    if (!waiting) console.log(`端口 ${port} 已有 WorkBuddy Plus 在运行，本进程待命，等它退出后接手`);
-    waiting = true;
-    setTimeout(() => server.listen(port, "127.0.0.1"), 5000);
+  server.on("error", async e => {
+    if (!["EADDRINUSE", "EACCES"].includes(e.code)) throw e;
+    // Only a WorkBuddy Plus answering there is worth waiting for. Windows
+    // refuses a port inside its reserved ranges (netsh excludedportrange) as
+    // denied or as taken, with nothing listening: waiting would never end,
+    // and each plugin load would start one more waiting process.
+    if (e.code === "EADDRINUSE" && await answering(port)) {
+      if (!waiting) console.log(`端口 ${port} 已有 WorkBuddy Plus 在运行，本进程待命，等它退出后接手`);
+      waiting = true;
+      setTimeout(() => server.listen(port, "127.0.0.1"), 5000);
+      return;
+    }
+    console.error(`端口 ${port} 无法使用（${e.code}），也没有 WorkBuddy Plus 在上面应答：可能被其他程序占用，或在 Windows 系统保留的端口范围内（netsh interface ipv4 show excludedportrange protocol=tcp 可查看）。换一个端口：magpie plugin options <magpie plugin list 中的插件名> '{"port":4389}'，或设置环境变量 WORKBUDDY_PLUS_PORT`);
+    process.exit(1);
   });
   server.once("listening", () => {
-    const { runner, handler } = createService({ runner: new Runner(dataDir, {}, { pageFile: fileURLToPath(new URL("./page/data.js", import.meta.url)) }) });
+    const { runner, handler } = createService({ runner: new Runner(dataDir, {}, { pageFile: fileURLToPath(new URL("./page/data.js", import.meta.url)), panel: `http://127.0.0.1:${port}` }) });
     server.on("request", handler);
     console.log(`WorkBuddy Plus: http://127.0.0.1:${port}`);
     // Missing/malformed local files are startup errors, not empty account lists.

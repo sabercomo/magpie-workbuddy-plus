@@ -8,7 +8,11 @@ import { defaults, accounts, calendar, initialize, readJSON, writeJSON } from ".
 import { WorkBuddyClient } from "../client.mjs";
 import { EventEmitter } from "node:events";
 import { Runner, magpieBin } from "../runner.mjs";
-import { createService } from "../server.mjs";
+import { createService, answering } from "../server.mjs";
+import { portOf } from "../index.mjs";
+import { createServer } from "node:http";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 function fixture(t) {
   const dir = mkdtempSync(join(tmpdir(), "wb-plus-state-"));
@@ -220,4 +224,45 @@ test("a board refresh reads both builds' model lists, each failing alone", async
   assert.deepEqual([models.cn.account, models.cn.plan.name, models.cn.models.map(m => m.id)], ["fixture@example.test", "体验版", ["hy3"]]);
   assert.match(models.intl.error, /billing down/);
   assert.ok(!JSON.stringify(runner.boardView()).includes("intl-access"));
+});
+
+test("the service port comes from the plugin option, then the environment, then 3439", () => {
+  assert.equal(portOf({ port: 4389 }, { WORKBUDDY_PLUS_PORT: "5000" }), 4389);
+  assert.equal(portOf({ port: "nope" }, { WORKBUDDY_PLUS_PORT: "5000" }), 5000);
+  assert.equal(portOf(undefined, {}), 3439);
+  assert.equal(portOf({ port: 70000 }, {}), 3439);
+});
+
+test("only a WorkBuddy Plus answering on the port counts as one running", async () => {
+  assert.equal(await answering(1, async () => Response.json({ config: {} })), true);
+  assert.equal(await answering(1, async () => Response.json({ hello: 1 })), false);
+  assert.equal(await answering(1, async () => { throw new Error("ECONNREFUSED"); }), false);
+});
+
+// Windows reserves port ranges (netsh excludedportrange) with nothing
+// listening; a port held by anything but a WorkBuddy Plus must not leave the
+// service waiting for a takeover that never comes.
+test("a port held by another program makes the service exit and say why; a WorkBuddy Plus there makes it wait", async t => {
+  const dir = mkdtempSync(join(tmpdir(), "wb-plus-port-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const start = async answer => {
+    const other = createServer((request, response) => response.end(JSON.stringify(answer)));
+    await new Promise(resolve => other.listen(0, "127.0.0.1", resolve));
+    const child = spawn(process.execPath, [fileURLToPath(new URL("../server.mjs", import.meta.url))], {
+      env: { ...process.env, WORKBUDDY_PLUS_DIR: dir, WORKBUDDY_PLUS_MAGPIE_DIR: join(dir, "magpie"), WORKBUDDY_PLUS_PORT: String(other.address().port) }, stdio: ["ignore", "pipe", "pipe"]
+    });
+    let out = "";
+    child.stdout.on("data", d => { out += d; });
+    child.stderr.on("data", d => { out += d; });
+    const code = await Promise.race([new Promise(resolve => child.once("exit", resolve)), delay(2500).then(() => "running")]);
+    child.kill();
+    other.close();
+    return { code, out };
+  };
+  const blocked = await start({ hello: "not workbuddy" });
+  assert.equal(blocked.code, 1);
+  assert.match(blocked.out, /无法使用（EADDRINUSE）[\s\S]*excludedportrange[\s\S]*"port":4389/);
+  const taken = await start({ config: {} });
+  assert.equal(taken.code, "running");
+  assert.match(taken.out, /已有 WorkBuddy Plus 在运行，本进程待命/);
 });

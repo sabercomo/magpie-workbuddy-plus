@@ -73,9 +73,13 @@ bun install.mjs
 </details>
 
 <details>
-<summary><b>其他平台手动运行</b></summary>
+<summary><b>Windows 与其他平台</b></summary>
 
-其他平台同样可以用 `magpie plugin add` 安装，由 Magpie 启动服务；这部分只在 macOS 上验收过。想不开 Magpie 也运行时，安装 Bun 并登录国内账号后，在源码目录运行：
+Windows、Linux 同样用 `magpie plugin add` 安装，由 Magpie 启动服务；上面的 `bun install.mjs` 只用于 macOS，在其他系统上会直接报错退出。除 macOS 外的平台尚未完整验收。
+
+Windows 会为 Hyper-V、WSL 等保留一些端口范围，默认端口 3439 可能落在里面，这时服务启动后会立即退出，并在 `%USERPROFILE%\.config\workbuddy-plus\service.log` 里写明原因。用 `netsh interface ipv4 show excludedportrange protocol=tcp` 查看保留范围，然后换一个不在范围内的端口（见「设置与数据」中的端口）。
+
+想不开 Magpie 也运行时，安装 Bun 并登录国内账号后，在源码目录运行：
 
 ```sh
 bun server.mjs
@@ -168,7 +172,15 @@ Magpie 的插件页面运行在不能联网的沙箱中，所以页面读取后�
 | 插件目录下 `page/data.js` | 给 Magpie 页面的看板快照，由后台服务改写 |
 | `~/Library/LaunchAgents/io.github.sabercomo.magpie-workbuddy-plus.plist` | macOS 后台启动配置（可选安装） |
 
-默认复用 `~/.config/magpie/plugin-auth.json` 的国内登录。Magpie 使用自定义配置目录时，遵循 `XDG_CONFIG_HOME`，也可以用 `WORKBUDDY_PLUS_MAGPIE_DIR` 指向其配置目录；`WORKBUDDY_PLUS_DIR` 可指定本插件数据目录，`WORKBUDDY_PLUS_PORT` 可修改服务端口。
+默认复用 `~/.config/magpie/plugin-auth.json` 的国内登录。Magpie 使用自定义配置目录时，遵循 `XDG_CONFIG_HOME`，也可以用 `WORKBUDDY_PLUS_MAGPIE_DIR` 指向其配置目录；`WORKBUDDY_PLUS_DIR` 可指定本插件数据目录。
+
+**端口**：服务默认监听 `127.0.0.1:3439`。在 Magpie 中运行时，用插件选项修改：
+
+```sh
+magpie plugin options <插件名> '{"port":4389}'
+```
+
+插件名见 `magpie plugin list`。不经过 Magpie 直接启动服务时用环境变量 `WORKBUDDY_PLUS_PORT`；macOS 后台安装在执行 `bun install.mjs` 时读取这个变量，之后改端口需要带着新值重新安装，并让插件选项保持同一端口。端口被其他程序占用或被系统保留时，服务不会等待，而是写明原因后退出；只有同一端口上已经有 WorkBuddy Plus 在运行时，新启动的服务才会待命接手。
 
 <details>
 <summary><b>看板读取哪些接口</b></summary>

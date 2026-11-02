@@ -127,7 +127,7 @@
       chip.append(line(el("strong", undefined, s.at), el("span", `wb-pill ${cls}`, isNext ? "下一次" : label)), el("span", "wb-sub", kinds[s.kind] || s.kind));
       row.append(chip);
     }
-    box.append(row, el("div", "wb-sub", "时段在本机面板 http://127.0.0.1:3439 调整，每类最多 24 个；电脑睡眠时不执行，唤醒后补跑当天已到点的时段。"));
+    box.append(row, el("div", "wb-sub", `时段在本机面板 ${view.panel || "http://127.0.0.1:3439"} 调整，每类最多 24 个；电脑睡眠时不执行，唤醒后补跑当天已到点的时段。`));
     return box;
   }
 
