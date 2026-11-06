@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { calendar } from "./storage.mjs";
-import { specs, manualTasks, buildEvent } from "./events.mjs";
+import { specs, manualTasks, buildEvent, growthTasks } from "./events.mjs";
 import { UpstreamError } from "./client.mjs";
 
 export const actions = ["all", "activity", "tasks", "travel", "bonus", "night", "keepalive", "inspect"];
@@ -25,16 +25,17 @@ export async function perform(action, client, context) {
     checkpoint();
     return result;
   };
+  const intl = account.realm === "intl", where = intl ? "国际版" : "国内";
   if (action === "keepalive") {
     const renewed = await client.refresh();
-    log(renewed ? "登录已续期" : "登录未临近到期，无需续期");
+    log(renewed ? "登录已续期" : intl ? "国际版登录由 Magpie 续期，未过期" : "登录未临近到期，无需续期");
     return { renewed, expires: account.auth.expires };
   }
   if (account.enterprise) { log("企业账号没有个人成长奖励，跳过"); return { skipped: true, reason: "enterprise" }; }
   const tasks = async () => {
     const result = await client.request("/v2/activity/growth/tasks");
     if (!Array.isArray(result?.tasks)) throw new Error("成长任务接口缺少 tasks 列表");
-    return result.tasks;
+    return growthTasks(result.tasks);
   };
   const claim = async task => {
     const got = await client.request(`/activity/growth/tasks/${encodeURIComponent(task.task_code)}/claim`, { body: {} });
@@ -46,6 +47,7 @@ export async function perform(action, client, context) {
     const code = task.task_code;
     if (task.accept_status === "claimed") return "done";
     if (completed(task)) return claim(task).then(() => "claimed");
+    if (task.intl) { log(`${task.title || code}：${task.note}`); return "manual"; }
     const spec = specs[code];
     if (!spec) { log(`${task.title || code}：${manualTasks[code] || "尚未适配此任务"}${task.jump_url ? `（${task.jump_url}）` : ""}`); return "manual"; }
     if (spec.night) {
@@ -106,16 +108,19 @@ export async function perform(action, client, context) {
     return { checked: list.length };
   };
 
+  // WorkBuddy AI counts a chat to one of its own models.
   const activity = () => daily("activity", async () => {
-    await client.request("/v2/report", { body: [buildEvent(account.auth.uid, { kind: "chat" })] });
+    await client.request("/v2/report", { body: [buildEvent(account.auth.uid, { kind: "chat", ...(intl ? { model: ["deepseek-v4.1-flash-sg", "Deepseek-V4.1-Flash"] } : {}) })] });
     const got = await client.request("/activity/growth/streak");
     if (!(got?.streak?.days > 0)) throw new Error("活跃已上报，但上游连登仍为 0，尚未确认生效");
-    log(`国内活跃已生效，连续 ${got.streak.days} 天`);
+    log(`${where}活跃已生效，连续 ${got.streak.days} 天`);
     return got.streak;
   });
   const travel = async () => {
     const base = "/activity/growth/buddy/travel";
     let status = await client.request(base + "/status");
+    // WorkBuddy AI answers an empty status: no Buddy, no destinations yet.
+    if (!status?.state) { log(`${where}还没有可旅行的猫猫，跳过`); return { skipped: true }; }
     if (status.state === "arrived") {
       const reward = await client.request(base + "/claim", { body: {} });
       log(`猫猫归来：已领取 ${reward?.reward_credit ?? 0} 积分`);
@@ -133,7 +138,25 @@ export async function perform(action, client, context) {
     log(`猫猫已出发：${location.name || location.id}`);
     return departed;
   };
+  // WorkBuddy AI's daily check-in, claimed only while it runs a check-in
+  // campaign; China's stays with Magpie's own plugin.
+  const checkin = async () => {
+    const status = await client.request("/v2/billing/meter/checkin-activity-status", { billing: true, body: {} });
+    if (!status?.active) { log("国际版目前没有签到活动，开启后会自动签到"); return { outcome: "closed" }; }
+    if (status.today_checked_in) { log("国际版今天已签到"); return { outcome: "done" }; }
+    try {
+      const got = await client.request("/v2/billing/meter/daily-checkin", { billing: true, body: {} });
+      log(`国际版签到：+${got?.credit ?? status.daily_credit ?? 0} 积分`);
+      return { outcome: "claimed", credit: got?.credit };
+    } catch (e) {
+      const said = { 1001: "国际版今天已签到", 1003: "国际版签到需要账号当天先活跃", 10001: "国际版签到活动未开启或已过期" }[e.code];
+      if (!said) throw e;
+      log(said);
+      return { outcome: e.code === 1001 ? "done" : "closed" };
+    }
+  };
   const bonus = async () => {
+    if (intl) await checkin();
     const heatmap = await client.request("/activity/growth/heatmap");
     let streak = await client.request("/activity/growth/streak");
     const yesterday = calendar(new Date(Date.now() - 86400_000), config.timezone).day;
@@ -156,7 +179,8 @@ export async function perform(action, client, context) {
       const result = await client.request("/activity/growth/lottery/draw", { body: { client_token: randomUUID() } });
       log(`成长抽奖 ${i + 1}/${lottery.chances}：${JSON.stringify(result)}`);
     }
-    for (const [path, title] of [["claim-gift", "新手礼包"], ["claim-compensation", "活动补偿"]]) {
+    // The starter gift and compensation are China's billing; WorkBuddy AI has neither.
+    for (const [path, title] of intl ? [] : [["claim-gift", "新手礼包"], ["claim-compensation", "活动补偿"]]) {
       const key = `${account.id}:${path}`;
       if (state.daily[key] === "settled") continue;
       try {

@@ -20,15 +20,16 @@
   // An enterprise's monthly allowance resets rather than lapses.
   const lapse = p => p.resets ? "重置" : "作废";
   const line = (...children) => { const n = el("div", "wb-line"); n.append(...children); return n; };
-  const parts = { balance: "积分", usage: "用量", travel: "猫猫旅行", streak: "连登", tasks: "成长任务", growth: "能量与 Buddy" };
+  const parts = { balance: "积分", usage: "用量", travel: "猫猫旅行", streak: "连登", tasks: "成长任务", growth: "能量与 Buddy", checkin: "签到" };
   const expanded = new Set();
   const saved = { get() { try { return localStorage.getItem("wb-view"); } catch { return null; } }, set(v) { try { localStorage.setItem("wb-view", v); } catch {} } };
   const views = [["list", "列表"], ["rings", "圆环"], ["widgets", "小组件"], ["models", "模型"]];
   let seeded = false, mode = views.some(([k]) => k === saved.get()) ? saved.get() : "list", focus = "all", last = null, switched = false;
 
-  function trip(t, now) {
+  // WorkBuddy AI has no Buddy travel yet: nothing to do there counts as done.
+  function trip(t, now, a) {
     if (!t) return null;
-    if (t.state === "none") return { label: "还没有猫", note: "执行成长任务时会领养首只猫", tone: "", done: 0 };
+    if (t.state === "none") return a?.realm === "intl" ? { label: "暂无猫猫旅行", note: "WorkBuddy AI 还没有开放猫猫旅行", tone: "", done: 1 } : { label: "还没有猫", note: "执行成长任务时会领养首只猫", tone: "", done: 0 };
     if (t.state === "arrived" || (t.state === "traveling" && t.arriveAt && now >= t.arriveAt)) return { label: "已归来，待领奖", note: `${t.location || "旅行"}结束，下一次「猫猫旅行」会领取${t.reward ? ` ${t.reward} 积分` : "奖励"}`, tone: "warn", done: 1 };
     if (t.state === "traveling") {
       const span = t.arriveAt - t.departAt, done = span > 0 ? Math.min(1, Math.max(0, (now - t.departAt) / span)) : 0;
@@ -38,12 +39,18 @@
     return { label: t.state || "未知", note: "", tone: "", done: 0 };
   }
 
-  // Magpie's daily check-in as a label and a tone. An enterprise login has no
-  // daily credits to claim, so it shows none.
+  // The daily check-in as a label and a tone: Magpie's for China, this
+  // plugin's own for WorkBuddy AI. An enterprise login has no daily credits
+  // to claim, so it shows none.
   function checked(a) {
     const c = a.checkin;
     if (!c || a.enterprise) return null;
     const streak = c.streak ? `连续签到 ${c.streak} 天` : "";
+    if (a.realm === "intl") return {
+      closed: { label: "暂无签到活动", tone: "", note: "WorkBuddy AI 目前没有签到活动，开启后插件会自动签到" },
+      done: { label: `已签到${c.credit ? ` +${num(c.credit)}` : ""}`, tone: "ok", note: streak || "由 WorkBuddy Plus 签到" },
+      waiting: { label: "未签到", tone: "", note: a.intlOff ? "国际版自动任务已关闭" : "下一次「活跃 · 旅行 · 福利」定时会签到" }
+    }[c.outcome] || { label: "签到读取失败", tone: "warn", note: c.message || "" };
     return {
       claimed: { label: `已签到${c.credit ? ` +${num(c.credit)}` : ""}`, tone: "ok", note: [c.at && `${clock(c.at)} 由 Magpie 签到`, streak].filter(Boolean).join(" · ") },
       done: { label: "已签到", tone: "ok", note: streak || "今天已经签过" },
@@ -58,7 +65,7 @@
   // Today's three rings, outside in: active, trip, growth tasks. The task ring
   // counts only what the scheduler can finish; manual ones are listed above.
   const doable = t => t ? t.total - t.open.filter(o => o.state === "manual" || o.state === "locked").length : 0;
-  const today = (a, now) => a.enterprise ? null : { active: a.streak?.active ? 1 : 0, trip: trip(a.travel, now)?.done || 0, tasks: doable(a.tasks) ? Math.min(1, a.tasks.claimed / doable(a.tasks)) : 1 };
+  const today = (a, now) => a.enterprise ? null : { active: a.streak?.active ? 1 : 0, trip: trip(a.travel, now, a)?.done || 0, tasks: doable(a.tasks) ? Math.min(1, a.tasks.claimed / doable(a.tasks)) : 1 };
   const closed = r => r && r.active >= 1 && r.trip >= 1 && r.tasks >= 1;
 
   function rings(r, big) {
@@ -177,7 +184,7 @@
     if (unsigned.some(([a]) => a.checkin.outcome === "off")) items.push({ tone: "soon", text: "Magpie 的 WorkBuddy 每日签到没有开启", aside: "设置 › 用量 › 插件", order: 1 });
     for (const [a, c] of unsigned.filter(([a]) => a.checkin.outcome !== "off")) items.push({ tone: c.tone === "urgent" ? "urgent" : "soon", text: `${a.name}：${c.label}`, aside: c.note, order: 1 });
     for (const e of lapsing(rows).filter(g => g.expires - now <= 10 * DAY)) items.push({ tone: tone(e.expires, now), text: e.resets ? `${e.name}还剩 ${num(e.balance)} 积分，用不完会清零` : `${num(e.balance)} 积分（${e.name}${e.count > 1 ? ` ×${e.count}` : ""}）将作废`, aside: `${when(e.expires)}${e.resets ? " 重置" : ""} · ${left(e.expires, now)}`, order: e.expires });
-    for (const e of manual.values()) items.push({ tone: "soon", text: `「${e.title}」需手动完成${e.count > 1 ? ` ×${e.count}` : ""}`, aside: e.credit ? `+${num(e.credit * e.count)} 积分` : "", title: e.note, order: Infinity });
+    for (const e of manual.values()) items.push({ tone: "soon", text: `「${e.title}」${e.intl ? "需在国际版客户端完成" : "需手动完成"}${e.count > 1 ? ` ×${e.count}` : ""}`, aside: e.credit ? `+${num(e.credit * e.count)} 积分` : "", title: e.note, order: Infinity });
     return items.sort((x, y) => x.order - y.order);
   }
 
@@ -238,7 +245,7 @@
       row.title = [task.target ? `${task.current}/${task.target}` : "", task.credit ? `+${task.credit} 积分` : "", task.ends ? `${date(task.ends)} 截止` : "", task.note].filter(Boolean).join(" · ");
       right.append(row);
     }
-    const tr = trip(a.travel, now);
+    const tr = trip(a.travel, now, a);
     if (tr) {
       right.append(line(el("span", "wb-label", "猫猫旅行"), el("span", `wb-pill ${tr.tone}`, a.travel?.name ? `${a.travel.name} · ${tr.label}` : tr.label)), el("div", "wb-sub", tr.note));
       if (tr.progress !== undefined) { const b = el("div", "wb-bar"), f = el("span"); f.style.width = `${Math.max(2, tr.progress * 100)}%`; b.append(f); right.append(b); }
@@ -258,7 +265,7 @@
     else panel.setAttribute("aria-hidden", "true");
 
     const who = el("span", "wb-who");
-    who.append(el("strong", undefined, a.name), el("span", "wb-sub", a.enterprise ? `企业${a.balance?.size ? ` · 每月 ${num(a.balance.size)} 积分` : ""}` : `个人${a.streak ? ` · 连登 ${a.streak.days} 天` : ""}${checked(a) ? ` · ${checked(a).label}` : ""}`));
+    who.append(el("strong", undefined, a.name), el("span", "wb-sub", a.enterprise ? `企业${a.balance?.size ? ` · 每月 ${num(a.balance.size)} 积分` : ""}` : `${a.realm === "intl" ? "国际版" : "个人"}${a.streak ? ` · 连登 ${a.streak.days} 天` : ""}${checked(a) ? ` · ${checked(a).label}` : ""}${a.intlOff ? " · 自动任务已关闭" : ""}`));
     const money = el("span", "wb-money");
     if (a.balance?.size) { const n = line(el("strong", undefined, num(a.balance.balance)), el("span", "wb-sub", `/ ${num(a.balance.size)}`)); n.className = "wb-line wb-amount"; money.append(n, meter(a.balance, now)); }
     else money.append(el("span", "wb-sub", a.errors.balance ? "积分读取失败" : a.enterprise ? "没有企业额度" : "没有积分包"));
@@ -331,7 +338,7 @@
     }
     const a = rows.find(x => x.id === focus), r = today(a, now), top = el("div", r ? "wb-b-top" : "wb-b-top solo");
     if (r) {
-      const card = el("div", "wb-card wb-b-rings"), legend = el("div", "wb-keys"), tr = trip(a.travel, now);
+      const card = el("div", "wb-card wb-b-rings"), legend = el("div", "wb-keys"), tr = trip(a.travel, now, a);
       for (const [k, label, value] of [["a", "今日活跃", a.streak ? (a.streak.active ? `连登 ${a.streak.days} 天` : "今天还没活跃") : "—"], ["b", "猫猫旅行", tr ? tr.label : "—"], ["c", "成长任务", a.tasks ? `${a.tasks.claimed}/${a.tasks.total}` : "—"]]) {
         const name = el("span", "wb-key"); name.append(el("i", `wb-dot wb-dot-${k}`), label);
         legend.append(line(name, el("span", "wb-sub", value)));
@@ -380,7 +387,7 @@
     const signed = personal.filter(a => checked(a)?.tone === "ok").length;
     if (personal.some(a => a.checkin)) rings_.append(el("span", "wb-w-foot", `签到 ${signed}/${personal.length}`));
     rings_.title = "外环活跃 · 中环旅行 · 内环任务";
-    const trips = personal.map(a => ({ a, t: trip(a.travel, now) })).filter(x => x.t), out = trips.filter(x => x.t.progress !== undefined);
+    const trips = personal.map(a => ({ a, t: trip(a.travel, now, a) })).filter(x => x.t && !(x.a.realm === "intl" && x.a.travel?.state === "none")), out = trips.filter(x => x.t.progress !== undefined);
     const labels = [...new Set(trips.map(x => x.t.label))];
     const cats = widget("s", "", "猫猫", el("strong", "wb-w-mid", !trips.length ? "—" : labels.length === 1 ? `${trips.length} 只${labels[0]}` : out.length ? `${out.length} 只在旅行` : `${trips.length} 只猫`));
     const notes = el("div", "wb-w-foot");

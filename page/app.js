@@ -2,7 +2,7 @@
 // background service rewrites, and asks for work by saving a request into
 // the plugin's options (see index.mjs).
 const $ = id => document.getElementById(id);
-const names = { all: "全部执行", activity: "连登活跃", tasks: "成长任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", keepalive: "登录续期", inspect: "查询状态", refresh: "刷新", login: "添加账号", pause: "暂停定时", resume: "开启定时" };
+const names = { all: "全部执行", activity: "连登活跃", tasks: "成长任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", keepalive: "登录续期", inspect: "查询状态", refresh: "刷新", login: "添加账号", pause: "暂停定时", resume: "开启定时", "intl-on": "开启国际版任务", "intl-off": "关闭国际版任务" };
 const statuses = { running: "执行中", queued: "排队中", succeeded: "已完成", failed: "有失败", deferred: "稍后重试", interrupted: "中断", cancelled: "已停止" };
 let pending = null;
 const build = globalThis.WBPLUS?.build;
@@ -17,6 +17,10 @@ function paint() {
   if (view?.panel) $("panel").textContent = view.panel;
   $("schedule").dataset.action = view?.enabled ? "pause" : "resume";
   $("schedule").textContent = view?.enabled ? "暂停定时" : "开启定时";
+  // Shown once a WorkBuddy AI login is on the board; its tasks run unless turned off here.
+  $("intl").hidden = !view?.intl?.accounts;
+  $("intl").dataset.action = view?.intl?.enabled === false ? "intl-on" : "intl-off";
+  $("intl").textContent = view?.intl?.enabled === false ? "开启国际版任务" : "关闭国际版任务";
   WBBoard.render($("board"), view);
   $("jobs").replaceChildren();
   if (view && !view.jobs?.length) $("jobs").append(Object.assign(document.createElement("p"), { className: "muted", textContent: "还没有执行记录" }));

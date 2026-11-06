@@ -54,7 +54,8 @@ export class Runner {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
-      accounts: this.board.accounts.map(({ key, ...a }) => ({ ...a, checkin: checkin(found, key, day) })), models: this.board.models || null, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
+      accounts: this.board.accounts.map(({ key, ...a }) => ({ ...a, checkin: a.realm === "intl" ? a.checkin : checkin(found, key, day) })), models: this.board.models || null,
+      intl: { enabled: config.intl !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
       jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
     };
   }
@@ -161,6 +162,7 @@ export class Runner {
       if (request.action === "refresh") { this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
       else if (request.action === "login") this.login();
       else if (["pause", "resume"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), enabled: request.action === "resume" });
+      else if (["intl-on", "intl-off"].includes(request.action)) { writeJSON(join(this.dir, "config.json"), { ...this.config(), intl: request.action === "intl-on" }); this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
       else note.job = this.submit([request.action], undefined, "page").id;
       note.ok = true;
     } catch (e) { note.error = e.message; }
@@ -237,8 +239,8 @@ export class Runner {
     if (!config.enabled) return;
     const { day, time } = calendar(now, config.timezone);
     const groups = {
-      daily: { realm: "cn", actions: ["activity", "travel", "bonus"] },
-      tasks: { realm: "cn", actions: ["tasks"] },
+      daily: { actions: ["activity", "travel", "bonus"] },
+      tasks: { actions: ["tasks"] },
       night: { realm: "cn", actions: ["night"] },
       keepalive: { actions: ["keepalive"] }
     };

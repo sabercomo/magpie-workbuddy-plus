@@ -17,7 +17,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   }
   const nodes = new Map(), buttonNames = [...readFileSync(new URL("../public/index.html", import.meta.url), "utf8").matchAll(/data-action="([^"]+)"/g)].map(m => m[1]);
   const buttons = buttonNames.map(action => { const b = new Element("button"); b.dataset.action = action; return b; });
-  for (const id of ["schedule-state", "toggle-schedule", "error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "saved", "board", "board-state", "board-refresh", "board-login"]) nodes.set(id, new Element("div"));
+  for (const id of ["schedule-state", "toggle-schedule", "error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "saved", "board", "board-state", "board-refresh", "board-login", "toggle-intl"]) nodes.set(id, new Element("div"));
   const form = nodes.get("config-form"); form.elements = {};
   for (const name of ["timezone", "proxy"]) form.elements[name] = new Element("input");
   nodes.get("schedule-fields").append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };

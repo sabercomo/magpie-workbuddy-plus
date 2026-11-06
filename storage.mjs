@@ -8,6 +8,8 @@ export const dataDir = process.env.WORKBUDDY_PLUS_DIR || join(homedir(), ".confi
 export const magpieDir = process.env.WORKBUDDY_PLUS_MAGPIE_DIR || join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "magpie");
 export const defaults = {
   enabled: false,
+  // WorkBuddy AI (international) logins run their tasks too unless turned off.
+  intl: true,
   timezone: "Asia/Shanghai",
   magpieDir,
   proxy: "",
@@ -75,18 +77,18 @@ export function accounts(config) {
   const saved = existsSync(file) ? readJSON(file) : {};
   const found = new Map();
   for (const [key, auth] of Object.entries(saved)) {
-    const provider = key.split("#")[0];
-    if (provider !== "workbuddy" || auth.type !== "oauth") continue;
+    const realm = { workbuddy: "cn", "workbuddy-ai": "intl" }[key.split("#")[0]];
+    if (!realm || auth.type !== "oauth") continue;
     if (!auth.access || !auth.uid) continue;
-    const realm = "cn";
     const id = `${realm}:${auth.uid}`;
     found.set(id, { id, realm, name: auth.accountId || auth.uid, auth, source: "magpie", file, key });
   }
-  return [...found.values()].map(a => ({ ...a, enabled: !config.disabledAccounts.includes(a.id), enterprise: !!a.auth.enterpriseId }));
+  // Turning WorkBuddy AI off stops its accounts as a whole; each still shows.
+  const intlOff = config.intl === false;
+  return [...found.values()].map(a => ({ ...a, enabled: !config.disabledAccounts.includes(a.id) && !(intlOff && a.realm === "intl"), ...(intlOff && a.realm === "intl" ? { intlOff } : {}), enterprise: !!a.auth.enterpriseId }));
 }
 
-// WorkBuddy's international build (workbuddy-ai) is read for its model list
-// and plan only; no task runs on it.
+// The international login the models view reads its list and plan with.
 export function intlAccount(config) {
   const file = join(config.magpieDir, "plugin-auth.json");
   const saved = existsSync(file) ? readJSON(file) : {};
@@ -103,7 +105,7 @@ export function checkins(config) {
 }
 
 export function publicAccount(a) {
-  return { id: a.id, name: a.name, realm: a.realm, source: a.source, enabled: a.enabled, enterprise: a.enterprise, expires: a.auth.expires };
+  return { id: a.id, name: a.name, realm: a.realm, source: a.source, enabled: a.enabled, ...(a.intlOff ? { intlOff: true } : {}), enterprise: a.enterprise, expires: a.auth.expires };
 }
 
 export function calendar(now, timezone) {

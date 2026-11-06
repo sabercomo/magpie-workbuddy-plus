@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { readJSON, writeJSON, withLock } from "./storage.mjs";
 
-const origin = "https://www.workbuddy.cn";
+// Each build answers on its own site; WorkBuddy AI keeps its billing there too.
+const sites = {
+  cn: { origin: "https://www.workbuddy.cn", billing: "https://www.codebuddy.cn", app: "WorkBuddy" },
+  intl: { origin: "https://www.workbuddy.ai", billing: "https://www.workbuddy.ai", app: "workbuddy-ai" }
+};
 
 export class UpstreamError extends Error {
   constructor(path, status, payload) {
@@ -39,10 +43,11 @@ export class WorkBuddyClient {
     this.gap = gap;
     this.signal = signal;
     this.lastRequest = 0;
+    this.site = sites[account.realm] || sites.cn;
   }
 
   headers() {
-    const a = this.account.auth;
+    const a = this.account.auth, { origin, app } = this.site;
     const headers = {
       Authorization: `Bearer ${a.access}`, "X-User-Id": a.uid,
       "Content-Type": "application/json", Accept: "application/json, text/plain, */*",
@@ -52,7 +57,7 @@ export class WorkBuddyClient {
       "X-Domain": a.domain || new URL(origin).host, "X-Product": "SaaS",
       "X-IDE-Type": "WorkBuddy", "X-IDE-Name": "WorkBuddy", "X-IDE-Version": "5.9.3",
       "X-Requested-With": "XMLHttpRequest", "X-Agent-Intent": "craft", "X-Agent-Purpose": "conversation",
-      "User-Agent": "WorkBuddy/5.9.3 WorkBuddy/5.9.3 CLI/2.165.0",
+      "User-Agent": `WorkBuddy/5.9.3 ${app}/5.9.3 CLI/2.165.0`,
       ...(a.enterpriseId ? { "X-Enterprise-Id": a.enterpriseId, "X-Tenant-Id": a.enterpriseId } : { "X-No-Enterprise-Id": "1" })
     });
     return headers;
@@ -67,7 +72,7 @@ export class WorkBuddyClient {
     return this.fetcher(url, { ...init, signal, ...(this.config.proxy ? { proxy: this.config.proxy } : {}) });
   }
 
-  async request(path, { body, billing = false, renew = true, envelope = false, base = billing ? "https://www.codebuddy.cn" : origin } = {}) {
+  async request(path, { body, billing = false, renew = true, envelope = false, base = billing ? this.site.billing : this.site.origin } = {}) {
     if (renew) await this.refresh();
     let response;
     for (let attempt = 0; ; attempt++) {
@@ -90,13 +95,18 @@ export class WorkBuddyClient {
   async refresh(force = false) {
     const account = this.account;
     if (!force && (!account.auth.expires || account.auth.expires > Date.now() + 2 * 3600_000)) return false;
+    // A WorkBuddy AI login is Magpie's to renew; only an expired one stops here.
+    if (account.realm === "intl") {
+      if (account.auth.expires <= Date.now()) throw new Error("国际版登录已过期，请在 Magpie 重新登录 WorkBuddy AI");
+      return false;
+    }
     const refreshLocked = async () => {
       const rows = readJSON(account.file);
       const auth = rows[account.key];
       account.auth = auth;
       if (!force && auth.expires > Date.now() + 2 * 3600_000) return false;
       if (!auth.refresh) throw new Error("账号登录已过期，请在 Magpie 重新登录");
-      const response = await this.fetch(origin + "/v2/plugin/auth/token/refresh", {
+      const response = await this.fetch(this.site.origin + "/v2/plugin/auth/token/refresh", {
         method: "POST", headers: { ...this.headers(), "X-Refresh-Token": auth.refresh, "X-Auth-Refresh-Source": "plugin" }, body: "{}"
       });
       const result = await response.json();

@@ -9,6 +9,7 @@ export function validateConfig(value) {
   if (typeof value.enabled !== "boolean" || typeof value.proxy !== "string" || typeof value.magpieDir !== "string") throw new Error("开关、代理或 Magpie 路径无效");
   if (value.proxy && !/^https?:\/\//.test(value.proxy)) throw new Error("代理需要 http:// 或 https:// 地址");
   new Intl.DateTimeFormat("en", { timeZone: value.timezone });
+  if (value.intl !== undefined && typeof value.intl !== "boolean") throw new Error("国际版开关无效");
   if (!Array.isArray(value.disabledAccounts) || value.disabledAccounts.some(a => typeof a !== "string")) throw new Error("账号停用列表无效");
   if (!value.schedules || Object.keys(value.schedules).sort().join() !== Object.keys(defaults.schedules).sort().join()) throw new Error("定时任务类别无效");
   for (const times of Object.values(value.schedules)) {

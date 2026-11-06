@@ -32,17 +32,19 @@ async function settled(runner) {
   throw new Error("fixture job did not settle");
 }
 
-test("only domestic Magpie logins are read; status never reveals credentials", t => {
+test("China and WorkBuddy AI logins are read, the latter switchable as a whole; status never reveals credentials", t => {
   const p = fixture(t);
   const authFile = join(p.magpieDir, "plugin-auth.json");
   const auths = readJSON(authFile);
-  auths["workbuddy-ai#u2"] = { ...p.auth, uid: "u2", access: "excluded-international" };
+  auths["workbuddy-ai"] = { ...p.auth, uid: "u2", access: "private-international" };
   writeJSON(authFile, auths);
-  assert.equal(accounts(p.config()).length, 1);
+  assert.deepEqual(accounts(p.config()).map(a => [a.id, a.realm, a.enabled]), [["cn:u1", "cn", true], ["intl:u2", "intl", true]]);
   assert.equal(accounts(p.config(), p.dir)[0].auth.access, "private-access");
+  // Off, its accounts stop but still show.
+  assert.deepEqual(accounts({ ...p.config(), intl: false }).map(a => [a.id, a.enabled, !!a.intlOff]), [["cn:u1", true, false], ["intl:u2", false, true]]);
   const runner = new Runner(p.dir);
   const status = JSON.stringify(runner.status());
-  assert.ok(!/private-access|private-refresh|unrelated-secret|excluded-international/.test(status));
+  assert.ok(!/private-access|private-refresh|unrelated-secret|private-international/.test(status));
   // Windows has no POSIX modes; its files report 0o666 whatever was asked.
   if (process.platform !== "win32") assert.equal(statSync(authFile).mode & 0o777, 0o600);
 });

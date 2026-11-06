@@ -15,15 +15,17 @@ async function refresh() {
   current=await api("/api/status");
   $("schedule-state").textContent=current.config.enabled?"定时运行中":"定时已暂停";
   $("toggle-schedule").textContent=current.config.enabled?"暂停定时":"开启定时";
+  // WorkBuddy AI logins run their tasks unless this turns them off as a whole.
+  $("toggle-intl").hidden=!current.accounts.some(a=>a.realm==="intl");$("toggle-intl").textContent=current.config.intl===false?"开启国际版任务":"关闭国际版任务";
   $("accounts").replaceChildren();
   for(const account of current.accounts){
     const row=element("div",undefined,"account"), checkbox=element("input");checkbox.type="checkbox";checkbox.checked=selected.has(account.id);checkbox.disabled=!account.enabled;checkbox.setAttribute("aria-label",`选择 ${account.name}`);
     checkbox.onchange=()=>checkbox.checked?selected.add(account.id):selected.delete(account.id);
     const info=element("div",undefined,"account-info"),title=element("div",account.name,"account-name"),meta=element("div");
-    meta.append(element("span",account.enterprise?"企业":"个人","tag"),element("span",account.enterprise?"无个人成长奖励":"复用 Magpie 登录","muted"));
+    meta.append(element("span",account.realm==="intl"?"国际版":account.enterprise?"企业":"个人","tag"),element("span",account.intlOff?"国际版自动任务已关闭":account.enterprise?"无个人成长奖励":"复用 Magpie 登录","muted"));
     info.append(title,meta);
     const toggle=element("button",account.enabled?"停用":"启用");toggle.onclick=async()=>{try{const config={...current.config,disabledAccounts:account.enabled?[...current.config.disabledAccounts,account.id]:current.config.disabledAccounts.filter(id=>id!==account.id)};selected.delete(account.id);await save(config);}catch(e){failure(e);}};
-    row.append(checkbox,info,toggle);$("accounts").append(row);
+    row.append(checkbox,info);if(!account.intlOff)row.append(toggle);$("accounts").append(row);
   }
   $("jobs").replaceChildren();
   for(const job of current.jobs){
@@ -52,6 +54,7 @@ $("board-refresh").onclick=()=>api("/api/board",{}).then(board).catch(failure);
 // Opens Magpie's own WorkBuddy sign-in in the browser; the board shows how it went.
 $("board-login").onclick=()=>api("/api/login",{}).then(()=>board()).catch(failure);
 $("toggle-schedule").onclick=()=>save({...current.config,enabled:!current.config.enabled}).catch(failure);
+$("toggle-intl").onclick=()=>save({...current.config,intl:current.config.intl===false}).catch(failure);
 for(const button of document.querySelectorAll("[data-action]"))button.onclick=async()=>{
   button.disabled=true;$("error").hidden=true;
   try{await api("/api/run",{action:button.dataset.action,accounts:[...selected]});await refresh();}catch(e){failure(e);}finally{button.disabled=false;}

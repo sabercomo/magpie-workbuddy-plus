@@ -22,6 +22,16 @@ export const manualTasks = {
   wb_wechat_oa_subscribe_task: "需要关注官方公众号满 24 小时", Expert_Philanthropy: "需要实际完成捐赠"
 };
 
+// WorkBuddy AI's growth tasks are a level ladder (code and status, no
+// progress or reward) counted from real use of its client; they read here in
+// China's shape, as tasks for a person to do until the server marks them done.
+export function growthTasks(list) {
+  return list.map(t => t.task_code !== undefined ? t : {
+    task_code: t.code, title: t.title, intl: true, note: "按 WorkBuddy AI 客户端里的实际使用计入",
+    accept_status: { completed: "completed", claimable: "completed", claimed: "claimed" }[t.status] || "accepted"
+  });
+}
+
 const experts = [
   ["ex_PZw8Gu81HfN4", "运维工程师"], ["ex_ROsDtJbzADFV", "产品经理"],
   ["ex_SMUnl0nJbPix", "UI设计师"], ["ex_ZTR062oVBOCW", "数据分析师"], ["ex_a3sSSFBy8qaC", "后端架构师"]
@@ -52,7 +62,8 @@ export function buildEvent(uid, spec, index = 0) {
     case "glmchat":
     case "cat": {
       const glm = spec.kind !== "chat";
-      return { ...chat, eventCode: "chat_request_send", mode: spec.kind === "cat" ? "night" : "craft", inputLength: 12, requestModelId: glm ? "glm-5.2" : "deepseek-v4-flash", requestModelName: glm ? "GLM-5.2" : "DeepSeek V4 Flash", isPlan: false, agentName: "default", agentType: "conversation" };
+      const [requestModelId, requestModelName] = spec.model || (glm ? ["glm-5.2", "GLM-5.2"] : ["deepseek-v4-flash", "DeepSeek V4 Flash"]);
+      return { ...chat, eventCode: "chat_request_send", mode: spec.kind === "cat" ? "night" : "craft", inputLength: 12, requestModelId, requestModelName, isPlan: false, agentName: "default", agentType: "conversation" };
     }
     default: throw new Error(`未知事件类型：${spec.kind}`);
   }

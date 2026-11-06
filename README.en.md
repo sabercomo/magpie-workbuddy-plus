@@ -2,7 +2,7 @@
 
 # WorkBuddy Plus
 
-**A companion plugin for WorkBuddy (China) in Magpie**<br>
+**A companion plugin for WorkBuddy in Magpie (China and WorkBuddy AI)**<br>
 Growth tasks, Buddy travel, login-streak rewards and schedules, plus one board that shows every account at a glance.
 
 [![Tests](https://github.com/sabercomo/magpie-workbuddy-plus/actions/workflows/test.yml/badge.svg)](https://github.com/sabercomo/magpie-workbuddy-plus/actions/workflows/test.yml)
@@ -15,7 +15,7 @@ Growth tasks, Buddy travel, login-streak rewards and schedules, plus one board t
 </div>
 
 > [!NOTE]
-> An unofficial project that **supports WorkBuddy China only** (the `workbuddy` accounts in Magpie). It runs no activity or tasks on WorkBuddy AI, the international build; for that build it only reads the model list and the account's plan, for the Models view. Sign-in, models, API forwarding and the daily check-in stay with Magpie's WorkBuddy plugin; this plugin never calls the check-in endpoint.
+> An unofficial project for WorkBuddy China (the `workbuddy` accounts in Magpie) and WorkBuddy AI, the international build (`workbuddy-ai`). Sign-in, models and API forwarding stay with Magpie's WorkBuddy plugin. **China's daily check-in stays with Magpie** and this plugin never calls China's check-in; Magpie doesn't check in on WorkBuddy AI, so this plugin does, whenever WorkBuddy AI runs a check-in campaign.
 >
 > The plugin's page and messages are in Chinese. This README gives the Chinese names of buttons and views in quotes so you can find them.
 
@@ -27,6 +27,7 @@ Growth tasks, Buddy travel, login-streak rewards and schedules, plus one board t
 | **Runs the tasks for you** | Login-streak activity, growth tasks (accept and claim), Buddy travel (send out and claim), streak rewards and the night-owl task, on a schedule, retried on failure. |
 | **Account board** | Each account's credits, when each credit package lapses, the last 7 days of usage, and travel and task progress, in switchable views. |
 | **Which models you can use** | The Models view (「模型」) lists both builds' models with their ids, context and credit multipliers, sets WorkBuddy AI's Pro-only models apart, and marks subscriber priority and running promotions. |
+| **WorkBuddy AI too** | With a WorkBuddy AI login in Magpie, that account is kept active daily, its streak tiers are redeemed, and it checks in whenever a campaign runs. On by default; both the page and the panel have 「关闭国际版任务」 (turn off international tasks). |
 | **What needs you** | Credits about to lapse, enterprise allowance resets, tasks only you can do and logins about to expire, gathered at the bottom of the board. |
 | **Add accounts** | A button opens WorkBuddy's official browser sign-in; this plugin never handles a token. |
 
@@ -105,6 +106,7 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 - Growth tasks: accept, report events, check progress and claim; a task not reached is never recorded as claimed.
 - Buddy travel: send out and claim on return; handles `first_buddy` on first use.
 - Streak make-up cards, 7/14/28-day streak exchanges, growth draws, starter packs and event compensation checks. This streak is a different event from the daily check-in credits.
+- **WorkBuddy AI (international)**, on by default and turned off with 「关闭国际版任务」 on the page or panel: daily activity that lights the heatmap and builds the streak; the 14-day (+50 credits) and 28-day (+150) tiers redeemed automatically; and the daily check-in whenever WorkBuddy AI runs a campaign (Magpie checks in on China only; as of 2026-11 WorkBuddy AI answers 「签到活动未开启或已过期」, no campaign running, and the plugin starts claiming once one does). WorkBuddy AI's growth tasks (its 「养虾」 levels) count real use of its client and can't be simulated, so they're listed as 「需在国际版客户端完成」 (do in the WorkBuddy AI client); it has no Buddy travel yet, so that's skipped.
 - The night-owl task runs inside its valid window in Beijing time, at most once per account per day.
 - Login renewal checks, retries, catch-up after sleep for the day's slots, and no double runs after a restart.
 
@@ -115,7 +117,7 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 - Widgets (「小组件」): one fact per tile across all accounts: next lapse, today, Buddies, energy, credits, 7-day usage, growth tasks.
 - Models (「模型」): switch between China (「国内版」) and WorkBuddy AI (「国际版」). Models the current plan can use come first; WorkBuddy AI's Pro-only models are dimmed below. Each row has the model id (click to copy), context and multiplier; multipliers of 3 or more are orange, and limited-time free, night discounts and subscriber priority follow WorkBuddy's own labels. WorkBuddy AI needs a `workbuddy-ai` sign-in in Magpie.
 - At the bottom, today's schedule (「今日定时」) shows each slot's result and the next run; the alerts (「需要你留意」) list credits lapsing within 10 days, enterprise allowance resets, tasks to do by hand, and accounts that failed to read or whose login is about to expire.
-- Each personal account shows Magpie's daily check-in result for today (checked in +100, not yet, needs the WorkBuddy client…); a switched-off or missed check-in goes to the alerts. Enterprise accounts have no daily check-in credits and show none.
+- Each personal account shows today's daily check-in: for China, Magpie's record (checked in +100, not yet, needs the WorkBuddy client…), with a switched-off or missed check-in in the alerts; for WorkBuddy AI, this plugin's own result, or 「暂无签到活动」 (no campaign) while none runs. Enterprise accounts have no daily check-in credits and show none. WorkBuddy AI accounts are tagged 「国际版」 in the list.
 - Enterprise accounts show their monthly allowance, usage and reset time.
 
 **Entry points**
@@ -134,11 +136,11 @@ All times are `Asia/Shanghai` and can be changed in the panel; clearing a kind's
 | Time | Action |
 | --- | --- |
 | 01:00 | China night-owl task |
-| 09:00, 21:00 | China activity, Buddy travel, streak rewards |
-| 09:10, 21:10 | China growth tasks |
+| 09:00, 21:00 | Activity, Buddy travel, streak rewards (plus the check-in on WorkBuddy AI) |
+| 09:10, 21:10 | Growth tasks |
 | 22:00 | Login renewal check, renewing two hours ahead |
 
-Schedules are checked every 30 seconds. A failure is retried at least 15 minutes later, up to 3 tries per slot. When WorkBuddy rate-limits (HTTP 429) the run first waits and retries; a run still limited is marked "retry later" (「稍后重试」) rather than failed, and is retried on the same spacing. Each kind takes up to 24 times. Streak activity doesn't repeat once it succeeded that day; travel and task rewards are checked against WorkBuddy's state. The daily check-in follows Magpie's own setting and is not one of this plugin's schedules.
+Schedules are checked every 30 seconds. A failure is retried at least 15 minutes later, up to 3 tries per slot. When WorkBuddy rate-limits (HTTP 429) the run first waits and retries; a run still limited is marked "retry later" (「稍后重试」) rather than failed, and is retried on the same spacing. Each kind takes up to 24 times. Streak activity doesn't repeat once it succeeded that day; travel and task rewards are checked against WorkBuddy's state. China's daily check-in follows Magpie's own setting and is not one of this plugin's schedules; WorkBuddy AI's check-in runs in the activity, travel and streak-rewards slots.
 
 ## Tools and terminal
 
@@ -174,7 +176,7 @@ Magpie runs plugin pages in a sandbox with no network, so the page reads `page/d
 
 | Location | Contents |
 | --- | --- |
-| `~/.config/workbuddy-plus/config.json` | Schedules, account switches and HTTP proxy |
+| `~/.config/workbuddy-plus/config.json` | Schedules, account switches, the WorkBuddy AI switch (`intl`) and HTTP proxy |
 | `~/.config/workbuddy-plus/state.json` | Run history and de-duplication state |
 | `~/.config/workbuddy-plus/service.log` | Service log |
 | `page/data.js` in the plugin folder | The board snapshot for Magpie's page, rewritten by the service |
@@ -193,7 +195,7 @@ The plugin name is the one `magpie plugin list` shows. When you start the servic
 <details>
 <summary><b>What the board reads</b></summary>
 
-The board only reads `get-user-resource` (credit packages; `get-enterprise-user-usage` for an enterprise account's monthly allowance), `get-user-request-usage` (official usage, counting only credits, requests and models; request contents are not kept) and the growth center's tasks, energy, Buddy collection, draw count, travel and streak state. It claims or spends nothing. Enterprise accounts show only their allowance and usage. The daily check-in result is read from Magpie's own `plugin-checkin.json` and its switch; this plugin never calls the check-in endpoint.
+The board only reads `get-user-resource` (credit packages; `get-enterprise-user-usage` for an enterprise account's monthly allowance), `get-user-request-usage` (official usage, counting only credits, requests and models; request contents are not kept) and the growth center's tasks, energy, Buddy collection, draw count, travel and streak state. It claims or spends nothing. Enterprise accounts show only their allowance and usage. China's daily check-in result is read from Magpie's own `plugin-checkin.json` and its switch; this plugin never calls China's check-in endpoint. For WorkBuddy AI it reads `checkin-activity-status` and calls `daily-checkin` when a campaign runs and today isn't claimed yet.
 
 The Models view reads both builds' `/v3/config` (the WorkBuddy client's own model config: models, multipliers, the Pro Only and subscriber-priority tiers, promotions) and `get-user-resource-summary` (the account's plan). It calls no model and spends no credits. The China list is read with the first personal account; the WorkBuddy AI list only with the `workbuddy-ai` account signed in to Magpie, whose login this plugin never renews: when it expires, the page asks you to sign in again in Magpie.
 
@@ -236,7 +238,7 @@ No npm dependencies to install. Tests use mock accounts and a mock upstream, and
 npm test
 ```
 
-The tests cover China account selection, international account exclusion, credentials kept out of status replies, run-all never calling the daily check-in, growth task progress, travel rewards, package merging and lapse dates, task categories, usage paging, board snapshots without credentials, page request de-duplication, rate-limit retries, the add-account flow, login renewal races, schedule de-duplication, the panel and the local HTTP boundary, the model catalog, and the service port.
+The tests cover China and WorkBuddy AI account selection and the WorkBuddy AI switch, WorkBuddy AI tasks and check-in, credentials kept out of status replies, run-all never calling the daily check-in, growth task progress, travel rewards, package merging and lapse dates, task categories, usage paging, board snapshots without credentials, page request de-duplication, rate-limit retries, the add-account flow, login renewal races, schedule de-duplication, the panel and the local HTTP boundary, the model catalog, and the service port.
 
 The README screenshots are taken in Magpie after `docs/demo-data.mjs` writes made-up accounts.
 

@@ -8,8 +8,7 @@ import { WorkBuddyClient } from "../client.mjs";
 import { perform } from "../engine.mjs";
 
 const ok = data => Response.json({ code: 0, data });
-function fixture(t, serve) {
-  const realm = "cn";
+function fixture(t, serve, realm = "cn") {
   const dir = mkdtempSync(join(tmpdir(), "wb-plus-test-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   initialize(dir);
@@ -150,4 +149,37 @@ test("night tasks report at most once per account/day even when their target spa
 test("the day boundary uses the selected timezone", () => {
   assert.equal(calendar(new Date("2026-10-28T16:01:00Z"), "Asia/Shanghai").day, "2026-10-29");
   assert.equal(calendar(new Date("2026-10-28T16:01:00Z"), "UTC").day, "2026-10-28");
+});
+
+// WorkBuddy AI: the same growth center on its own site, its check-in claimed
+// here while a campaign runs, no Buddy travel, and tasks counted from real use.
+test("a WorkBuddy AI account runs on its own site and claims its check-in only while a campaign runs", async t => {
+  let campaign = false;
+  const p = fixture(t, (path, request, seen) => {
+    if (path === "/v2/report") return ok({});
+    if (path === "/activity/growth/streak") return ok({ streak: { days: 1 } });
+    if (path === "/activity/growth/buddy/travel/status") return ok({});
+    if (path === "/v2/billing/meter/checkin-activity-status") return ok({ active: campaign, today_checked_in: false, daily_credit: 100 });
+    if (path === "/v2/billing/meter/daily-checkin") return ok({ credit: 100 });
+    if (path === "/activity/growth/heatmap") return ok({ cells: [] });
+    if (path === "/activity/growth/lottery/summary") return ok({ chances: 0 });
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: [{ code: "first_chat", title: "完成一次对话", status: "available" }] });
+    throw new Error("unexpected endpoint " + path);
+  }, "intl");
+  await p.run("activity");
+  assert.equal(p.seen[0].body[0].requestModelId, "deepseek-v4.1-flash-sg");
+  assert.equal(p.seen[0].headers.Origin, "https://www.workbuddy.ai");
+  assert.match(p.logs.at(-1), /国际版活跃已生效/);
+  assert.deepEqual(await p.run("travel"), { skipped: true });
+  await p.run("bonus");
+  assert.ok(!p.seen.some(s => s.path === "/v2/billing/meter/daily-checkin"), "no claim without a campaign");
+  assert.ok(!p.seen.some(s => /claim-gift|claim-compensation/.test(s.path)), "China's billing gifts are not asked of WorkBuddy AI");
+  assert.match(p.logs.join("\n"), /国际版目前没有签到活动/);
+  campaign = true;
+  await p.run("bonus");
+  assert.ok(p.seen.some(s => s.path === "/v2/billing/meter/daily-checkin"));
+  assert.match(p.logs.join("\n"), /国际版签到：\+100 积分/);
+  await p.run("tasks");
+  assert.match(p.logs.at(-1), /1 项需要你手动完成：完成一次对话/);
+  assert.ok(!p.seen.some(s => s.path.includes("/tasks/accept")), "WorkBuddy AI's tasks are not simulated");
 });

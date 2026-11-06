@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { calendar } from "./storage.mjs";
-import { specs, manualTasks } from "./events.mjs";
+import { specs, manualTasks, growthTasks } from "./events.mjs";
 
 // Read-only account board: credit packages, official request usage, the
 // Buddy's trip, growth tasks, energy and the login streak. Package merging and usage paging are
@@ -121,9 +121,9 @@ export function taskBoard(list, now = Date.now()) {
   const done = t => t.accept_status === "completed" || (t.progress?.target > 0 && t.progress.current >= t.progress.target);
   const order = { claimable: 0, auto: 1, manual: 2, locked: 3 };
   const open = live.filter(t => t.accept_status !== "claimed").map(t => ({
-    title: t.title || t.task_code,
+    title: t.title || t.task_code, ...(t.intl ? { intl: true } : {}),
     state: done(t) ? "claimable" : t.locked === true ? "locked" : specs[t.task_code] ? "auto" : "manual",
-    note: manualTasks[t.task_code] || "", current: t.progress?.current ?? 0, target: t.progress?.target ?? 0,
+    note: manualTasks[t.task_code] || t.note || "", current: t.progress?.current ?? 0, target: t.progress?.target ?? 0,
     credit: Number(t.reward_credit) || 0, energy: Number(t.reward_energy) || 0, ends: t.valid_end ? Date.parse(t.valid_end) : 0
   })).sort((a, b) => order[a.state] - order[b.state] || (a.ends || Infinity) - (b.ends || Infinity));
   return { total: live.length, claimed: live.length - open.length, credit: open.reduce((s, t) => s + t.credit, 0), open };
@@ -132,7 +132,7 @@ export function taskBoard(list, now = Date.now()) {
 async function tasks(client) {
   const list = (await client.request("/v2/activity/growth/tasks"))?.tasks;
   if (!Array.isArray(list)) throw new Error("成长任务接口缺少 tasks 列表");
-  return taskBoard(list);
+  return taskBoard(growthTasks(list));
 }
 
 // Energy is what the growth center's Buddy draws spend.
@@ -156,11 +156,20 @@ export function checkin(found, key, day) {
   return { outcome: String(r.outcome || "failed"), credit: Number(r.credit) || 0, streak: Number(r.streak) || 0, at: Date.parse(r.claimed || r.at) || 0, ...(r.msg ? { message: String(r.msg).slice(0, 160) } : {}) };
 }
 
+// WorkBuddy AI's check-in, which this plugin claims itself: "closed" while
+// no check-in campaign runs there. China's is read from Magpie's record.
+async function intlCheckin(client) {
+  const s = await client.request("/v2/billing/meter/checkin-activity-status", { billing: true, body: {} });
+  if (!s?.active) return { outcome: "closed" };
+  return s.today_checked_in ? { outcome: "done", credit: Number(s.today_credit) || 0, streak: Number(s.streak_days) || 0 } : { outcome: "waiting" };
+}
+
 // Each part fails alone: a refused usage query still shows the balance.
 export async function collect(account, client, config) {
-  const row = { id: account.id, name: account.name, enterprise: account.enterprise, expires: account.auth.expires, errors: {} };
+  const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {}, ...(account.intlOff ? { intlOff: true } : {}) };
   const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone) };
   if (!account.enterprise) Object.assign(parts, { travel: () => travel(client), streak: () => streak(client), tasks: () => tasks(client), growth: () => growth(client) });
+  if (!account.enterprise && account.realm === "intl") parts.checkin = () => intlCheckin(client);
   for (const [name, run] of Object.entries(parts)) {
     try { row[name] = await run(); }
     catch (e) { row.errors[name] = e.message.slice(0, 160); }
