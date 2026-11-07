@@ -19,7 +19,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const buttons = buttonNames.map(action => { const b = new Element("button"); b.dataset.action = action; return b; });
   for (const id of ["schedule-state", "toggle-schedule", "error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "saved", "board", "board-state", "board-refresh", "board-login", "toggle-intl"]) nodes.set(id, new Element("div"));
   const form = nodes.get("config-form"); form.elements = {};
-  for (const name of ["timezone", "proxy"]) form.elements[name] = new Element("input");
+  for (const name of ["timezone", "proxy", "spread"]) form.elements[name] = new Element("input");
   nodes.get("schedule-fields").append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };
   const calls = [], status = { config: structuredClone(defaults), accounts: [
     { id: "cn:a", name: "国内测试", realm: "cn", source: "magpie", enabled: true },
@@ -31,8 +31,9 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
     streak: { days: 8, makeupCards: 1, active: true, nextTier: { days: 14, remaining: 6, credit: 50, energy: 3 } },
     growth: { energy: 30, earned: 110, spent: 80, draws: 0, buddies: 2, rarity: { SR: 1, R: 1 }, current: ["团子"] },
     tasks: { total: 2, claimed: 1, credit: 100, open: [{ title: "关注公众号", state: "manual", note: "需要关注官方公众号", current: 0, target: 1, credit: 100, energy: 5, ends: 0 }] },
-    travel: { state: "traveling", location: "咖啡馆", departAt: Date.now() - 3600_000, arriveAt: Date.now() + 3600_000 }, usage: { credit: 3, count: 2, days: [{ date: "2026-10-29", credit: 3, count: 2 }], models: [] },
-    checkin: { outcome: "claimed", credit: 100, streak: 11, at: Date.now() } },
+    travel: { state: "traveling", location: "咖啡馆", departAt: Date.now() - 3600_000, arriveAt: Date.now() + 3600_000 }, usage: { credit: 3, count: 2, days: [{ date: "2026-10-29", credit: 3, count: 2 }], models: [], charges: 14, free: 1, recent: [{ at: Date.now() - 1 * 60_000, credit: 0.37, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 2 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 3 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 4 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 5 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 6 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 7 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 8 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 9 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 10 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 11 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }, { at: Date.now() - 12 * 60_000, credit: 0.2, model: "glm-5.2", client: "WorkBuddy" }] },
+    checkin: { outcome: "claimed", credit: 100, streak: 11, at: Date.now() },
+    ledger: { gained: 110, used: 3, sources: [["每日签到", 100], ["猫猫旅行", 10]], entries: [{ at: Date.now() - 60_000, credit: 10, name: "CodeBuddy个人版国内运营裂变包", left: 0, source: "猫猫旅行" }, { at: Date.now() - 3600_000, credit: 100, name: "CodeBuddy个人版国内运营裂变包", left: 100, ends: Date.now() + 20 * 86400_000, source: "每日签到" }] } },
     { id: "cn:e", name: "企业号", enterprise: true, expires: 0, errors: {}, checkin: { outcome: "inactive" } }],
     models: { at: Date.now(),
       cn: { account: "国内测试", plan: { name: "体验版", paid: false }, models: [
@@ -57,6 +58,10 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   assert.match(text(nodes.get("board")), /^\s*正在等待 WorkBuddy 登录[\s\S]*https:\/\/www\.workbuddy\.cn\/login\?state=s/);
   // The list view: the account row and its expanded detail, then what needs a person.
   assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天 · 已签到 \+100[\s\S]*120 \/ 300[\s\S]*每日签到 已签到 \+100 \d\d:\d\d 由 Magpie 签到 · 连续签到 11 天[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*需要你留意 2 件[\s\S]*120 积分（活动赠送）将作废[\s\S]*「关注公众号」需手动完成 \+100 积分/);
+  // 积分流水: the week's totals, then each change, a gain named by what ran.
+  assert.match(text(nodes.get("board")), /积分流水 · 近 7 天 获得 \+110 · 用掉 3[\s\S]*每日签到 \+100 · 猫猫旅行 \+10[\s\S]*\+10 猫猫旅行 已用完[\s\S]*\+100 每日签到 余 100 · \d\d\/\d\d 作废/);
+  // 扣分明细: each charged request with two decimals, ten shown, the rest folded.
+  assert.match(text(nodes.get("board")), /扣分明细 · 近 7 天 14 次扣分 · 另有 1 次免费[\s\S]*−0.37 glm-5.2 WorkBuddy[\s\S]*再显示 2 条[\s\S]*只保留最近 12 条/);
   const button = (node, label) => typeof node === "string" ? undefined : node.textContent === label && node.onclick ? node : node.children.map(c => button(c, label)).find(Boolean);
   button(nodes.get("board"), "圆环").onclick();
   assert.match(text(nodes.get("board")), /全部[\s\S]*国内测试 120 积分 今日完成 2\/3/);

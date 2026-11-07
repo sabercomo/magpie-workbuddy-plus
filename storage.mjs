@@ -10,6 +10,8 @@ export const defaults = {
   enabled: false,
   // WorkBuddy AI (international) logins run their tasks too unless turned off.
   intl: true,
+  // Scheduled slots run within ±spread minutes of their set time.
+  spread: 10,
   timezone: "Asia/Shanghai",
   magpieDir,
   proxy: "",

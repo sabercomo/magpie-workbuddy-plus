@@ -2,11 +2,13 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { accounts, calendar, checkins, initialize, intlAccount, publicAccount, readJSON, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
 import { checkin, collect, writePage } from "./board.mjs";
+import { ledger } from "./history.mjs";
 import { chinaModels, intlModels } from "./models.mjs";
 
 // A LaunchAgent's PATH is only the system's, so the usual install places
@@ -21,8 +23,22 @@ export function magpieBin(env = process.env) {
   return places.find(f => f && existsSync(f)) || "";
 }
 
+// A slot runs at a moment within ±spread minutes of its set time, different
+// each day and on each install, so installs don't all reach WorkBuddy at
+// 09:00 on the dot. The night task keeps to its 23:00–08:00 window.
+export function shifted(day, kind, at, spread, salt) {
+  if (!(spread > 0)) return at;
+  const [h, m] = at.split(":").map(Number), n = parseInt(createHash("sha256").update(`${salt}:${day}:${kind}:${at}`).digest("hex").slice(0, 8), 16);
+  let minutes = h * 60 + m + (n % (2 * spread + 1)) - spread;
+  const [low, high] = kind === "night" ? (at >= "23:00" ? [23 * 60, 1439] : [0, 8 * 60 - 1]) : [0, 1439];
+  minutes = Math.min(high, Math.max(low, minutes));
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
 export class Runner {
-  constructor(dir, clientOptions = {}, { pageFile, panel = "", spawner = spawn, magpie = magpieBin } = {}) {
+  // pace: the wait between accounts in a scheduled run, 5–45 s.
+  constructor(dir, clientOptions = {}, { pageFile, panel = "", spawner = spawn, magpie = magpieBin, pace = () => 5000 + Math.random() * 40_000 } = {}) {
+    this.pace = pace;
     this.panel = panel;
     initialize(dir);
     this.spawner = spawner;
@@ -43,6 +59,10 @@ export class Runner {
     this.save();
   }
   config() { return readJSON(join(this.dir, "config.json")); }
+  // Minutes a slot may move either way; settings from before it have 10.
+  spread(config = this.config()) { return Number.isInteger(config.spread) ? config.spread : 10; }
+  // The install's own seed for its slot moments, kept with its state.
+  salt() { if (!this.state.salt) { this.state.salt = randomUUID(); this.save(); } return this.state.salt; }
   save() { writeJSON(join(this.dir, "state.json"), this.state); }
   list() { return accounts(this.config(), this.dir); }
   status() {
@@ -54,7 +74,7 @@ export class Runner {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
-      accounts: this.board.accounts.map(({ key, ...a }) => ({ ...a, checkin: a.realm === "intl" ? a.checkin : checkin(found, key, day) })), models: this.board.models || null,
+      accounts: this.board.accounts.map(({ key, ...a }) => this.withLedger(a, key, found, day)), models: this.board.models || null,
       intl: { enabled: config.intl !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
       jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
     };
@@ -104,16 +124,17 @@ export class Runner {
     return this.signin;
   }
 
-  // Today's slots in time order, each with the job tick() gave it, if any.
+  // Today's slots in time order, each with the job tick() gave it, if any,
+  // and runAt, the moment it runs today.
   today(config = this.config(), now = new Date()) {
     const { day, time } = calendar(now, config.timezone);
     const slots = Object.entries(config.schedules).flatMap(([kind, times]) => times.map(at => {
-      const record = this.state.slots[`${day}:${kind}:${at}`], job = record && this.state.jobs.find(j => j.id === record.job);
+      const record = this.state.slots[`${day}:${kind}:${at}`], job = record && this.state.jobs.find(j => j.id === record.job), runAt = shifted(day, kind, at, this.spread(config), this.salt());
       // The night task only counts 23:00–08:00; past that window a missed slot is gone.
-      const status = job ? job.status : at > time ? "upcoming" : kind === "night" && time >= "08:00" ? "missed" : "pending";
-      return { kind, at, status, attempts: record?.attempts || 0 };
+      const status = job ? job.status : runAt > time ? "upcoming" : kind === "night" && time >= "08:00" ? "missed" : "pending";
+      return { kind, at, runAt, status, attempts: record?.attempts || 0 };
     })).sort((a, b) => a.at.localeCompare(b.at) || a.kind.localeCompare(b.kind));
-    return { timezone: config.timezone, slots, next: config.enabled ? slots.find(s => s.status === "upcoming") || null : null };
+    return { timezone: config.timezone, spread: this.spread(config), slots, next: config.enabled ? slots.find(s => s.status === "upcoming") || null : null };
   }
   publish() {
     const view = this.boardView(), targets = this.state.pageTargets || [];
@@ -151,6 +172,15 @@ export class Runner {
     })().finally(() => { this.boarding = null; this.publish(); });
     this.publish();
     return this.boarding;
+  }
+  // An account as the board shows it: its check-in (Magpie's for China, its
+  // own for WorkBuddy AI) and its credit history, the grants named from this
+  // plugin's run logs and Magpie's check-in time. The raw grants stay here.
+  withLedger({ balance, ...a }, key, found, day) {
+    const signed = found.records[`workbuddy|${key}`], at = signed?.outcome === "claimed" ? Date.parse(signed.claimed || signed.at) : 0;
+    const logs = this.state.jobs.flatMap(job => job.accounts.includes(a.id) ? job.logs.filter(l => l.account === a.id) : []);
+    const shown = balance ? (({ grants, ...rest }) => rest)(balance) : balance;
+    return { ...a, balance: shown, checkin: a.realm === "intl" ? a.checkin : checkin(found, key, day), ...(balance?.grants ? { ledger: ledger(balance, a.usage, logs, at) } : {}) };
   }
   // Magpie hands the page's last request back on every plugin restart, so
   // each request id runs once and an old one is only acknowledged.
@@ -199,7 +229,11 @@ export class Runner {
     job.started = new Date().toISOString();
     this.save();
     this.publish();
-    for (const snapshot of list) {
+    for (const [index, snapshot] of list.entries()) {
+      // A scheduled run doesn't reach WorkBuddy for every account in the same second.
+      if (index && job.trigger.startsWith("schedule:") && this.spread() > 0) {
+        try { await delay(this.pace(), undefined, { signal: controller.signal }); } catch { break; }
+      }
       const config = this.config();
       const account = this.list().find(a => a.id === snapshot.id);
       const client = new WorkBuddyClient(account, config, { ...this.clientOptions, signal: controller.signal });
@@ -249,7 +283,7 @@ export class Runner {
       const ids = this.list().filter(a => a.enabled && (!group.realm || a.realm === group.realm) && (kind === "keepalive" || !a.enterprise)).map(a => a.id);
       if (!ids.length || this.busy(ids)) continue;
       for (const slot of times) {
-        if (slot > time) continue;
+        if (shifted(day, kind, slot, this.spread(config), this.salt()) > time) continue;
         // A late wake-up at noon cannot make the 01:00 night event count.
         if (kind === "night" && time >= "08:00" && time < "23:00") continue;
         const key = `${day}:${kind}:${slot}`;

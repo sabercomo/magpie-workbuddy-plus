@@ -42,6 +42,7 @@ async function refresh() {
   if(!filled){
     for(const [key,times] of Object.entries(current.config.schedules)){const label=element("label",scheduleNames[key]);const input=element("input");input.name=`schedule-${key}`;input.value=times.join(", ");input.placeholder="HH:MM, HH:MM";label.append(input);$("schedule-fields").append(label);}
     for(const key of ["timezone","proxy"])$("config-form").elements[key].value=current.config[key];
+    $("config-form").elements.spread.value=Number.isInteger(current.config.spread)?current.config.spread:10;
     filled=true;
   }
   $("updated").textContent=`更新于 ${new Date().toLocaleTimeString()}`;
@@ -63,6 +64,7 @@ $("config-form").onsubmit=async event=>{
   event.preventDefault();const form=event.currentTarget, config={...current.config,schedules:{}};
   for(const key of Object.keys(scheduleNames))config.schedules[key]=[...new Set(form.elements[`schedule-${key}`].value.split(",").map(s=>s.trim()).filter(Boolean))].sort();
   for(const key of ["timezone","proxy"])config[key]=form.elements[key].value.trim();
+  config.spread=Number(form.elements.spread.value||0);
   try{await save(config);$("saved").textContent="已保存";}catch(e){failure(e);}
 };
 refresh().catch(failure);board().catch(failure);

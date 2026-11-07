@@ -28,7 +28,7 @@ export async function perform(action, client, context) {
   const intl = account.realm === "intl", where = intl ? "国际版" : "国内";
   if (action === "keepalive") {
     const renewed = await client.refresh();
-    log(renewed ? "登录已续期" : intl ? "国际版登录由 Magpie 续期，未过期" : "登录未临近到期，无需续期");
+    log(renewed ? `${intl ? "国际版" : ""}登录已续期` : "登录未临近到期，无需续期");
     return { renewed, expires: account.auth.expires };
   }
   if (account.enterprise) { log("企业账号没有个人成长奖励，跳过"); return { skipped: true, reason: "enterprise" }; }

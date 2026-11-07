@@ -138,6 +138,17 @@
 .wb-pill.urgent{color:var(--wb-urgent)}
 .wb-widgets>.wb-sched{grid-column:1/-1;margin-top:0}
 
+/* 积分流水: when, how much, what gave it, what's left of it. */
+.wb-ledger{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.wb-ledger-row{display:grid;grid-template-columns:auto 52px minmax(0,1fr) auto;gap:10px;align-items:baseline;font-variant-numeric:tabular-nums}
+.wb-ledger-row strong{font-weight:600;text-align:right}.wb-gain{color:var(--wb-accent)}
+.wb-ledger-why{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 扣分明细: same rows, a charge in place of a grant; the rest behind a fold. */
+.wb-spend{color:inherit}
+.wb-more>summary{cursor:pointer;margin-top:4px;list-style:none}
+.wb-more>summary::-webkit-details-marker{display:none}
+.wb-more>summary::before{content:"▸ "}.wb-more[open]>summary::before{content:"▾ "}
+
 /* Models: one row per model, its id copied by a click; a plan's locked models dimmed below. */
 .wb-realms{margin-left:auto}
 .wb-kpis.wb-kpis-3{grid-template-columns:repeat(3,minmax(0,1fr))}

@@ -52,6 +52,25 @@ test("usage pages past the 3000-row cap, deduplicates and keeps no prompt text",
   assert.ok(!JSON.stringify(got).includes("private prompt"));
 });
 
+test("usage keeps the newest charged requests as deductions, free ones only counted", async () => {
+  const rows = [
+    { requestId: "a", model: "glm-5.2", credit: 0.37, client: "WorkBuddy", requestTime: "2026-10-29 09:00:00", input: "secret", inputTrunc: "secret" },
+    { requestId: "b", model: "hy3", credit: 0, client: "WorkBuddy", requestTime: "2026-10-29 10:00:00" },
+    { requestId: "c", model: "kimi", credit: 1.5, requestTime: "2026-10-29 11:00:00" },
+    { requestId: "d", model: "glm-5.2", credit: 2, requestTime: "2026-10-28 08:00:00" },
+    { requestId: "old", model: "glm-5.2", credit: 9, requestTime: "2026-10-01 08:00:00" }
+  ];
+  const { client } = clientFor(() => ok({ data: rows }));
+  const got = await usage(client, "Asia/Shanghai", 7, new Date("2026-10-29T04:00:00Z"), 2);
+  assert.equal(got.charges, 3);
+  assert.equal(got.free, 1);
+  assert.deepEqual(got.recent, [
+    { at: Date.parse("2026-10-29T11:00:00+08:00"), credit: 1.5, model: "kimi" },
+    { at: Date.parse("2026-10-29T09:00:00+08:00"), credit: 0.37, model: "glm-5.2", client: "WorkBuddy" }
+  ]);
+  assert.ok(!JSON.stringify(got).includes("secret"));
+});
+
 test("one failing part leaves the rest of an account's board readable", async () => {
   const { account, client } = clientFor(url => {
     if (url.pathname === "/billing/meter/get-user-resource") return ok({ Response: { Data: { Accounts: [{ PackageName: "赠送", CapacityRemain: 3, CapacitySize: 3 }] } } });
@@ -145,4 +164,24 @@ test("an enterprise allowance is what's left of the month, and none when it gran
   assert.deepEqual(allowance({ credit: 2100, limitNum: 2000, cycleResetTime: "2026-11-01 00:00:00" }), { balance: 0, size: 2000, used: 2100, resets: Date.parse("2026-11-01T00:00:00+08:00"), packages: [] });
   assert.equal(allowance({ credit: 3, limitNum: 0 }), null);
   assert.equal(allowance(null), null);
+});
+
+// One package name holds many grants: only the grant due soon is due soon.
+test("a package keeps each grant's own lapse time, so a small early grant doesn't mark the whole package", () => {
+  const now = Date.parse("2026-11-07T10:00:00+08:00");
+  const got = summarize([
+    { PackageName: "国内运营裂变包", CapacityRemain: 3, CapacitySize: 100, CycleEndTime: "2026-11-07 12:42:00" },
+    { PackageName: "国内运营裂变包", CapacityRemain: 100, CapacitySize: 100, CycleEndTime: "2026-11-12 09:00:00" },
+    { PackageName: "国内运营裂变包", CapacityRemain: 100, CapacitySize: 100, CycleEndTime: "2026-11-12 09:00:00" },
+    { PackageName: "国内运营裂变包", CapacityRemain: 9796, CapacitySize: 9796, CycleEndTime: "2026-11-27 09:00:00" },
+    { PackageName: "国内运营裂变包", CapacityRemain: 0, CapacitySize: 100, CycleEndTime: "2026-11-08 09:00:00" }
+  ], now);
+  const [p] = got.packages;
+  assert.equal(p.balance, 9999);
+  assert.equal(p.expires, Date.parse("2026-11-07T12:42:00+08:00"));
+  assert.deepEqual(p.lots, [
+    { balance: 3, expires: Date.parse("2026-11-07T12:42:00+08:00") },
+    { balance: 200, expires: Date.parse("2026-11-12T09:00:00+08:00") },
+    { balance: 9796, expires: Date.parse("2026-11-27T09:00:00+08:00") }
+  ]);
 });

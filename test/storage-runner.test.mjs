@@ -7,7 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { defaults, accounts, calendar, initialize, readJSON, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
 import { EventEmitter } from "node:events";
-import { Runner, magpieBin } from "../runner.mjs";
+import { Runner, magpieBin, shifted } from "../runner.mjs";
 import { createService, answering } from "../server.mjs";
 import { portOf } from "../index.mjs";
 import { createServer } from "node:http";
@@ -21,7 +21,8 @@ function fixture(t) {
   const auth = { type: "oauth", uid: "u1", accountId: "fixture@example.test", access: "private-access", refresh: "private-refresh", expires: Date.now() + 86400_000 };
   const magpieDir = join(dir, "magpie");
   writeJSON(join(magpieDir, "plugin-auth.json"), { "workbuddy#u1": auth, other: { type: "api", key: "unrelated-secret" } });
-  writeJSON(join(dir, "config.json"), { ...defaults, magpieDir, schedules: Object.fromEntries(Object.keys(defaults.schedules).map(key => [key, []])) });
+  // Slots fire on their set minute here; the ±spread moment has its own test.
+  writeJSON(join(dir, "config.json"), { ...defaults, spread: 0, magpieDir, schedules: Object.fromEntries(Object.keys(defaults.schedules).map(key => [key, []])) });
   return { dir, auth, magpieDir, config: () => readJSON(join(dir, "config.json")) };
 }
 async function settled(runner) {
@@ -311,4 +312,26 @@ try { await tool.status.execute({}); console.log("no error"); } catch (e) { cons
   assert.equal(code, 0);
   assert.match(out, /端口 \d+ 无法使用（HTTP 404）[\s\S]*"port":4389/);
   assert.match(readFileSync(join(dir, "service.log"), "utf8"), /无法使用（HTTP 404）/);
+});
+
+test("a slot moves within ±spread minutes, the same all day, differently each day, the night task kept to its window", t => {
+  const days = ["2026-11-07", "2026-11-08", "2026-11-09", "2026-11-10", "2026-11-11"];
+  const at = days.map(day => shifted(day, "daily", "09:00", 10, "salt"));
+  for (const runAt of at) assert.ok(runAt >= "08:50" && runAt <= "09:10", runAt);
+  assert.equal(shifted("2026-11-07", "daily", "09:00", 10, "salt"), at[0], "stable within a day");
+  assert.ok(new Set(at).size > 1, "varies across days");
+  assert.notEqual(days.map(day => shifted(day, "daily", "09:00", 10, "other")).join(), at.join(), "varies across installs");
+  assert.equal(shifted("2026-11-07", "daily", "09:00", 0, "salt"), "09:00");
+  for (const day of days) {
+    assert.ok(shifted(day, "night", "07:55", 30, "salt") <= "07:59");
+    assert.ok(shifted(day, "night", "23:05", 30, "salt") >= "23:00");
+    assert.ok(shifted(day, "keepalive", "23:55", 30, "salt") <= "23:59");
+  }
+  // The board says when each slot runs today; a scheduled run waits between accounts.
+  const p = fixture(t), config = p.config();
+  config.spread = 10; config.schedules.daily = ["09:00"];
+  writeJSON(join(p.dir, "config.json"), config);
+  const runner = new Runner(p.dir);
+  const slot = runner.today(runner.config(), new Date("2026-11-07T00:00:00Z")).slots[0];
+  assert.equal(slot.runAt, shifted("2026-11-07", "daily", "09:00", 10, runner.state.salt));
 });

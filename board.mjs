@@ -15,23 +15,42 @@ const beijing = text => {
   return Number.isFinite(t) ? t : 0;
 };
 
+// One package name holds many grants, each lapsing on its own date (every
+// growth reward is a 20-day grant of 「国内运营裂变包」), so each keeps its
+// lots: what lapses when. The package's own expiry is its earliest lot's.
+//
+// Each row is also one grant, made when the credit was given: a check-in, a
+// task's reward, a Buddy's trip. The last 30 days of them are the account's
+// credit history (grants), newest first, with what's left of each.
 export function summarize(rows, now = Date.now()) {
-  const groups = new Map();
+  const groups = new Map(), grants = [];
   for (const a of rows) {
     const end = beijing(a.CycleEndTime);
+    const made = Number(a.CreateTime) || beijing(a.CycleStartTime);
+    // A grant may be written minutes after it was given (a draw's prize): its
+    // cycle's start is the moment itself.
+    const start = beijing(a.CycleStartTime);
+    if (made > now - 30 * 86400_000) grants.push({ at: made, ...(start && start !== made ? { start } : {}), credit: round(Number(a.CapacitySize) || 0), name: a.PackageName || a.ProductName || "积分包", left: round(Number(a.CapacityRemain) || 0), ...(end ? { ends: end } : {}) });
     if (end && end <= now) continue;
     const name = a.PackageName || a.ProductName || "积分包";
-    const g = groups.get(name) || { name, balance: 0, size: 0, expires: 0 };
+    const g = groups.get(name) || { name, balance: 0, size: 0, expires: 0, lots: new Map() };
     const remain = Number(a.CapacityRemain) || 0;
     g.balance += remain;
     g.size += Number(a.CapacitySize) || 0;
     // A spent row's end date says nothing about when the remaining credit lapses.
-    if (remain > 0) for (const t of [end, Number(a.DeductionEndTime) || 0, beijing(a.ExpiredTime)]) if (t > 0 && t <= now + farFuture && (!g.expires || t < g.expires)) g.expires = t;
+    if (remain > 0) {
+      const lapse = Math.min(...[end, Number(a.DeductionEndTime) || 0, beijing(a.ExpiredTime)].filter(t => t > 0 && t <= now + farFuture));
+      const at = Number.isFinite(lapse) ? lapse : 0;
+      g.lots.set(at, (g.lots.get(at) || 0) + remain);
+      if (at && (!g.expires || at < g.expires)) g.expires = at;
+    }
     groups.set(name, g);
   }
-  const all = [...groups.values()].map(g => ({ ...g, balance: round(g.balance), size: round(g.size) }));
+  const all = [...groups.values()].map(g => ({ ...g, balance: round(g.balance), size: round(g.size),
+    lots: [...g.lots].map(([expires, balance]) => ({ balance: round(balance), expires })).sort((x, y) => (x.expires || Infinity) - (y.expires || Infinity)) }));
   const packages = all.filter(g => g.balance > 0).sort((a, b) => (a.expires || Infinity) - (b.expires || Infinity) || b.balance - a.balance);
-  return { balance: round(all.reduce((s, g) => s + g.balance, 0)), size: round(all.reduce((s, g) => s + g.size, 0)), packages };
+  return { balance: round(all.reduce((s, g) => s + g.balance, 0)), size: round(all.reduce((s, g) => s + g.size, 0)), packages,
+    grants: grants.filter(g => g.credit > 0).sort((x, y) => y.at - x.at).slice(0, 120) };
 }
 
 // An enterprise login has no packages; its credits are a monthly allowance on
@@ -54,7 +73,8 @@ async function balance(client, account) {
   }
   let data;
   try { data = await client.request("/billing/meter/get-user-resource", { body: {} }); }
-  catch { data = await client.request("/v2/billing/meter/get-user-resource", { body: {}, base: "https://copilot.tencent.com" }); }
+  // China's second billing host knows nothing of a WorkBuddy AI login: its first error stands.
+  catch (e) { if (account?.realm === "intl") throw e; data = await client.request("/v2/billing/meter/get-user-resource", { body: {}, base: "https://copilot.tencent.com" }); }
   const found = data?.Response?.Data ?? data;
   // Enterprise logins answer Accounts: null with TotalCount 0: no personal packages.
   const rows = found?.Accounts ?? (found?.TotalCount === 0 ? [] : undefined);
@@ -64,9 +84,14 @@ async function balance(client, account) {
 
 // The server returns at most 3000 rows per window and keeps the earliest,
 // so a full page moves the window start to its newest row and asks again.
-export async function usage(client, timezone, span = 7, now = new Date()) {
+//
+// Each row is one request and what it cost. The newest charged ones are kept
+// as the board's deductions (扣分明细): when, how much, which model, from
+// which client; never the request's text (input / inputTrunc).
+export async function usage(client, timezone, span = 7, now = new Date(), keep = 50) {
   const dates = Array.from({ length: span }, (_, i) => calendar(new Date(now - (span - 1 - i) * 86400_000), timezone).day);
-  const end = `${dates.at(-1)} 23:59:59`, seen = new Set(), byDay = new Map(dates.map(d => [d, { date: d, credit: 0, count: 0 }])), byModel = new Map();
+  const end = `${dates.at(-1)} 23:59:59`, seen = new Set(), byDay = new Map(dates.map(d => [d, { date: d, credit: 0, count: 0 }])), byModel = new Map(), charged = [];
+  let free = 0;
   let start = `${dates[0]} 00:00:00`;
   for (let pass = 0; pass < 20; pass++) {
     const page = (await client.request("/billing/meter/get-user-request-usage", { body: { startTime: start, endTime: end, pageNum: 1, pageSize: 3000 } }))?.data;
@@ -78,6 +103,8 @@ export async function usage(client, timezone, span = 7, now = new Date()) {
       seen.add(key);
       const credit = Number(r.credit) || 0, day = byDay.get(time.slice(0, 10)), model = byModel.get(r.model) || { model: String(r.model || "未知"), credit: 0, count: 0 };
       if (day) { day.credit += credit; day.count++; }
+      if (day && credit > 0) charged.push({ at: beijing(time), credit: round(credit), model: String(r.model || "未知"), ...(r.client ? { client: String(r.client) } : {}) });
+      else if (day) free++;
       model.credit += credit; model.count++;
       byModel.set(r.model, model);
       if (time > newest) newest = time;
@@ -88,7 +115,8 @@ export async function usage(client, timezone, span = 7, now = new Date()) {
   const days = [...byDay.values()].map(d => ({ ...d, credit: round(d.credit) }));
   return {
     days, credit: round(days.reduce((s, d) => s + d.credit, 0)), count: days.reduce((s, d) => s + d.count, 0),
-    models: [...byModel.values()].sort((a, b) => b.credit - a.credit).slice(0, 4).map(m => ({ ...m, credit: round(m.credit) }))
+    models: [...byModel.values()].sort((a, b) => b.credit - a.credit).slice(0, 4).map(m => ({ ...m, credit: round(m.credit) })),
+    charges: charged.length, free, recent: charged.sort((x, y) => y.at - x.at).slice(0, keep)
   };
 }
 

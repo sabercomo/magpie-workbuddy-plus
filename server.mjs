@@ -10,6 +10,7 @@ export function validateConfig(value) {
   if (value.proxy && !/^https?:\/\//.test(value.proxy)) throw new Error("代理需要 http:// 或 https:// 地址");
   new Intl.DateTimeFormat("en", { timeZone: value.timezone });
   if (value.intl !== undefined && typeof value.intl !== "boolean") throw new Error("国际版开关无效");
+  if (value.spread !== undefined && !(Number.isInteger(value.spread) && value.spread >= 0 && value.spread <= 60)) throw new Error("随机错开应为 0–60 分钟");
   if (!Array.isArray(value.disabledAccounts) || value.disabledAccounts.some(a => typeof a !== "string")) throw new Error("账号停用列表无效");
   if (!value.schedules || Object.keys(value.schedules).sort().join() !== Object.keys(defaults.schedules).sort().join()) throw new Error("定时任务类别无效");
   for (const times of Object.values(value.schedules)) {

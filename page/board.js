@@ -90,15 +90,19 @@
     return chart;
   }
 
-  // Packages that lapse at the same moment under the same name read as one line.
+  // A package's grants each lapse on their own date (its lots); a package
+  // from before lots were kept is one lot, at the package's date.
+  const lotsOf = p => p.lots?.length ? p.lots : [{ balance: p.balance, expires: p.expires }];
+
+  // What lapses: a package's grants on one day, across accounts, as one entry.
   function lapsing(rows) {
     const groups = new Map();
-    for (const a of rows) for (const p of a.balance?.packages || []) {
-      if (!p.expires) continue;
-      const key = `${short(p.name)}|${p.expires}`, g = groups.get(key) || { name: short(p.name), expires: p.expires, resets: !!p.resets, balance: 0, count: 0 };
-      g.balance += p.balance; g.count++; groups.set(key, g);
+    for (const a of rows) for (const p of a.balance?.packages || []) for (const l of lotsOf(p)) {
+      if (!l.expires || !(l.balance > 0)) continue;
+      const key = `${short(p.name)}|${date(l.expires)}`, g = groups.get(key) || { name: short(p.name), expires: l.expires, resets: !!p.resets, balance: 0, accounts: new Set() };
+      g.balance += l.balance; g.accounts.add(a.id); if (l.expires < g.expires) g.expires = l.expires; groups.set(key, g);
     }
-    return [...groups.values()].sort((x, y) => x.expires - y.expires);
+    return [...groups.values()].map(g => ({ ...g, count: g.accounts.size })).sort((x, y) => x.expires - y.expires);
   }
 
   function segs(options, current, pick, label) {
@@ -124,17 +128,19 @@
     if (!t?.slots) return null;
     const box = el("section", "wb-sched"), next = t.next;
     box.setAttribute("aria-label", "今日定时");
-    box.append(line(el("span", "wb-label", `今日定时 · 每天 ${t.slots.length} 次`), el("span", "wb-sub", !view.enabled ? "定时已暂停" : next ? `下一次 ${next.at} ${kinds[next.kind] || next.kind}` : "今天的时段都已过")));
+    box.append(line(el("span", "wb-label", `今日定时 · 每天 ${t.slots.length} 次`), el("span", "wb-sub", !view.enabled ? "定时已暂停" : next ? `下一次 ${next.runAt || next.at} ${kinds[next.kind] || next.kind}` : "今天的时段都已过")));
     const row = el("div", "wb-slots");
     for (const s of t.slots) {
       let [label, cls] = slotStates[s.status] || [s.status, ""];
       if (s.status === "pending" && !view.enabled) [label, cls] = ["已暂停", ""];
       if (s.status === "failed" && s.attempts) label = `失败 ${s.attempts}/3`;
       const isNext = next && next.at === s.at && next.kind === s.kind, chip = el("div", isNext ? "wb-slot next" : "wb-slot");
-      chip.append(line(el("strong", undefined, s.at), el("span", `wb-pill ${cls}`, isNext ? "下一次" : label)), el("span", "wb-sub", kinds[s.kind] || s.kind));
+      // The moment it runs today, set ±spread minutes around its set time.
+      if (s.runAt && s.runAt !== s.at) chip.title = `设定 ${s.at}，今天 ${s.runAt} 执行`;
+      chip.append(line(el("strong", undefined, s.runAt || s.at), el("span", `wb-pill ${cls}`, isNext ? "下一次" : label)), el("span", "wb-sub", kinds[s.kind] || s.kind));
       row.append(chip);
     }
-    box.append(row, el("div", "wb-sub", `时段在本机面板 ${view.panel || "http://127.0.0.1:3439"} 调整，每类最多 24 个；电脑睡眠时不执行，唤醒后补跑当天已到点的时段。`));
+    box.append(row, el("div", "wb-sub", `时段在本机面板 ${view.panel || "http://127.0.0.1:3439"} 调整，每类最多 24 个；${t.spread ? `每个时段在设定时间前后 ${t.spread} 分钟内随机执行，每天不同；` : ""}电脑睡眠时不执行，唤醒后补跑当天已到点的时段。`));
     return box;
   }
 
@@ -161,10 +167,15 @@
     return s;
   }
 
-  // Each package is a segment, ordered by when it lapses; the track is what's spent.
+  // Each package is a segment per lapse colour, its grants in date order; the
+  // track is what's spent. Only the credit that lapses soon is coloured so.
   function meter(b, now) {
     const m = el("div", "wb-meter");
-    for (const p of b.packages) { const seg = el("span", `wb-seg ${tone(p.expires, now)}`); seg.style.width = `${p.balance / b.size * 100}%`; seg.title = `${short(p.name)} ${num(p.balance)} 积分 · ${p.expires ? `${when(p.expires)} ${lapse(p)}` : "长期有效"}`; m.append(seg); }
+    for (const p of b.packages) {
+      const parts = [];
+      for (const l of lotsOf(p)) { const k = l.expires ? tone(l.expires, now) : "long", last = parts.at(-1); if (last?.k === k) { last.balance += l.balance; } else parts.push({ k, balance: l.balance, expires: l.expires }); }
+      for (const part of parts) { const seg = el("span", `wb-seg ${part.k}`); seg.style.width = `${part.balance / b.size * 100}%`; seg.title = `${short(p.name)} ${num(part.balance)} 积分 · ${part.expires ? `${when(part.expires)} 起${lapse(p)}` : "长期有效"}`; m.append(seg); }
+    }
     return m;
   }
 
@@ -183,7 +194,10 @@
     const unsigned = rows.map(a => [a, checked(a)]).filter(([, c]) => c && ["warn", "urgent"].includes(c.tone));
     if (unsigned.some(([a]) => a.checkin.outcome === "off")) items.push({ tone: "soon", text: "Magpie 的 WorkBuddy 每日签到没有开启", aside: "设置 › 用量 › 插件", order: 1 });
     for (const [a, c] of unsigned.filter(([a]) => a.checkin.outcome !== "off")) items.push({ tone: c.tone === "urgent" ? "urgent" : "soon", text: `${a.name}：${c.label}`, aside: c.note, order: 1 });
-    for (const e of lapsing(rows).filter(g => g.expires - now <= 10 * DAY)) items.push({ tone: tone(e.expires, now), text: e.resets ? `${e.name}还剩 ${num(e.balance)} 积分，用不完会清零` : `${num(e.balance)} 积分（${e.name}${e.count > 1 ? ` ×${e.count}` : ""}）将作废`, aside: `${when(e.expires)}${e.resets ? " 重置" : ""} · ${left(e.expires, now)}`, order: e.expires });
+    // One line per package: a package lapsing in daily grants sums what lapses within 10 days.
+    const soon = new Map();
+    for (const e of lapsing(rows).filter(g => g.expires - now <= 10 * DAY)) { const s = soon.get(e.name); if (s) { s.balance += e.balance; s.days++; } else soon.set(e.name, { ...e, first: e.balance, days: 1 }); }
+    for (const e of soon.values()) items.push({ tone: tone(e.expires, now), text: e.resets ? `${e.name}还剩 ${num(e.balance)} 积分，用不完会清零` : e.days > 1 ? `${num(e.balance)} 积分（${e.name}）10 天内分 ${e.days} 天作废` : `${num(e.balance)} 积分（${e.name}${e.count > 1 ? ` ×${e.count}` : ""}）将作废`, aside: e.days > 1 ? `最早 ${when(e.expires)} · ${num(e.first)} 积分` : `${when(e.expires)}${e.resets ? " 重置" : ""} · ${left(e.expires, now)}`, order: e.expires });
     for (const e of manual.values()) items.push({ tone: "soon", text: `「${e.title}」${e.intl ? "需在国际版客户端完成" : "需手动完成"}${e.count > 1 ? ` ×${e.count}` : ""}`, aside: e.credit ? `+${num(e.credit * e.count)} 积分` : "", title: e.note, order: Infinity });
     return items.sort((x, y) => x.order - y.order);
   }
@@ -215,12 +229,62 @@
     return strip;
   }
 
+  // 积分流水: the week's grants, newest first, each with what gave it, how
+  // much of it is left and when that lapses; above, the totals by source.
+  function history(l, now) {
+    const head = line(el("span", "wb-label", "积分流水 · 近 7 天"), el("span", "wb-sub", l ? `获得 +${num(l.gained)} · 用掉 ${num(l.used)}` : ""));
+    if (!l?.entries.length) return [head, el("div", "wb-sub", "近 7 天没有新到账的积分")];
+    const list = el("div", "wb-ledger");
+    for (const e of l.entries.slice(0, 10)) {
+      const row = el("div", "wb-ledger-row");
+      row.append(el("span", "wb-sub", when(e.at)), el("strong", "wb-gain", `+${num(e.credit)}`), el("span", "wb-ledger-why", e.source || short(e.name)),
+        el("span", `wb-sub wb-when ${e.left > 0 && e.ends ? tone(e.ends, now) : ""}`, e.left <= 0 ? "已用完" : e.ends ? `余 ${num(e.left)} · ${date(e.ends)} 作废` : `余 ${num(e.left)}`));
+      row.title = short(e.name);
+      list.append(row);
+    }
+    return [head, el("div", "wb-sub", l.sources.map(([k, v]) => `${k} +${num(v)}`).join(" · ")), list];
+  }
+
+  // 扣分明细: the newest charged requests, one row each: when, what it cost,
+  // which model, from which client. A request often costs a fraction of a
+  // credit, so these keep two decimals. Ten show; the rest open below.
+  const fine = n => Number(n).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+  const unfolded = new Set();
+  function spending(u, id) {
+    if (!u?.recent) return [];
+    const head = line(el("span", "wb-label", "扣分明细 · 近 7 天"), el("span", "wb-sub", `${num(u.charges)} 次扣分${u.free ? ` · 另有 ${num(u.free)} 次免费` : ""}`));
+    if (!u.recent.length) return [head, el("div", "wb-sub", "近 7 天没有扣分的请求")];
+    const row = e => {
+      const r = el("div", "wb-ledger-row");
+      r.append(el("span", "wb-sub", when(e.at)), el("strong", "wb-spend", `−${fine(e.credit)}`), el("span", "wb-ledger-why", e.model), el("span", "wb-sub", e.client || ""));
+      r.title = `${e.model}${e.client ? ` · ${e.client}` : ""} · ${fine(e.credit)} 积分`;
+      return r;
+    };
+    const list = el("div", "wb-ledger");
+    list.append(...u.recent.slice(0, 10).map(row));
+    const out = [head, list];
+    if (u.recent.length > 10) {
+      // The page redraws every 15 seconds; an opened list stays open.
+      const more = el("details", "wb-more"), rest = el("div", "wb-ledger");
+      more.open = unfolded.has(id);
+      more.ontoggle = () => { if (more.open) unfolded.add(id); else unfolded.delete(id); };
+      rest.append(...u.recent.slice(10).map(row));
+      more.append(el("summary", "wb-sub", `再显示 ${u.recent.length - 10} 条`), rest);
+      out.push(more);
+    }
+    if (u.charges > u.recent.length) out.push(el("div", "wb-sub", `只保留最近 ${u.recent.length} 条；更早的计入上面的合计`));
+    return out;
+  }
+
   function detail(a, now) {
     const grid = el("div", "wb-detail-grid"), left_ = el("div", "wb-col-l"), right = el("div", "wb-col-r");
     left_.append(el("div", "wb-label", "积分包"));
     for (const p of a.balance?.packages || []) {
-      const k = tone(p.expires, now);
-      left_.append(line(el("span", "wb-name", `${short(p.name)} ${num(p.balance)}`), el("span", `wb-when ${k}`, p.expires ? `${left(p.expires, now)}${p.resets ? "重置" : ""}` : "长期有效")));
+      const k = tone(p.expires, now), lots = lotsOf(p).filter(l => l.expires), soon = lots.filter(l => l.expires - now <= 10 * DAY).reduce((s, l) => s + l.balance, 0);
+      const row = line(el("span", "wb-name", `${short(p.name)} ${num(p.balance)}`), el("span", `wb-when ${k}`, !p.expires ? "长期有效" : lots.length > 1 ? `${left(p.expires, now)}起陆续${lapse(p)}` : `${left(p.expires, now)}${p.resets ? "重置" : ""}`));
+      if (lots.length > 1) row.title = lots.map(l => `${when(l.expires)} ${num(l.balance)}`).join("\n");
+      left_.append(row);
+      if (lots.length > 1 && soon > 0 && soon < p.balance) left_.append(el("div", `wb-sub wb-when ${k}`, `其中 ${num(soon)} 积分 10 天内${lapse(p)}`));
     }
     if (a.balance && !a.balance.packages.length) left_.append(el("div", "wb-sub", a.enterprise ? (a.balance.size ? "本月企业额度已用完" : "没有企业额度") : "没有可用积分包"));
     const u = a.usage;
@@ -229,6 +293,7 @@
       left_.append(bars(u));
       if (u.models.length) left_.append(el("div", "wb-sub", u.models.map(m => `${m.model} ${num(m.credit)}`).join(" · ")));
     }
+    left_.append(...history(a.ledger, now), ...spending(u, a.id));
     grid.append(left_);
     if (a.enterprise) return grid;
 
@@ -297,18 +362,22 @@
     return box;
   }
 
-  // Packages on a line from today to the last dated lapse; dot size follows the credit.
+  // What lapses each day, on a line from today to the last dated lapse; dot
+  // size follows the credit. Only the first days, the last and the largest are
+  // labelled, so a package lapsing in daily grants stays readable.
   function timeline(b, now) {
-    const dated = b.packages.filter(p => p.expires), lasting = b.packages.filter(p => !p.expires), wrap = el("div", "wb-timeline");
-    if (dated.length) {
-      const end = Math.max(...dated.map(p => p.expires)), span = Math.max(end - now, DAY), most = Math.max(...dated.map(p => p.balance), 1);
+    const byDay = new Map();
+    for (const g of lapsing([{ id: "", balance: b }])) { const d = byDay.get(date(g.expires)); if (d) { d.balance += g.balance; d.name += `、${g.name}`; } else byDay.set(date(g.expires), { ...g }); }
+    const days_ = [...byDay.values()], lasting = b.packages.filter(p => !p.expires), wrap = el("div", "wb-timeline");
+    if (days_.length) {
+      const end = Math.max(...days_.map(p => p.expires)), span = Math.max(end - now, DAY), most = Math.max(...days_.map(p => p.balance), 1);
       const track = el("div", "wb-track");
-      dated.forEach((p, i) => {
-        const x = Math.min(100, Math.max(0, (p.expires - now) / span * 100)), size = Math.round(8 + 10 * Math.sqrt(p.balance / most));
-        const dot = el("span", `wb-pkg-dot ${tone(p.expires, now)}`), label = el("span", `wb-tl-label ${tone(p.expires, now)}${i % 2 ? " low" : ""}${x > 75 ? " end" : x < 12 ? " start" : ""}`, `${date(p.expires)} · ${num(p.balance)}`);
+      days_.forEach((p, i) => {
+        const x = Math.min(100, Math.max(0, (p.expires - now) / span * 100)), size = Math.round(8 + 10 * Math.sqrt(p.balance / most)), shown = i < 3 || i === days_.length - 1 || p.balance === most;
+        const dot = el("span", `wb-pkg-dot ${tone(p.expires, now)}`), label = el("span", `wb-tl-label ${tone(p.expires, now)}${i % 2 ? " low" : ""}${x > 75 ? " end" : x < 12 ? " start" : ""}`, shown ? `${date(p.expires)} · ${num(p.balance)}` : "");
         dot.style.left = label.style.left = `${x}%`;
         dot.style.width = dot.style.height = `${size}px`;
-        dot.title = `${short(p.name)} ${num(p.balance)} 积分 · ${when(p.expires)} ${lapse(p)} · ${left(p.expires, now)}`;
+        dot.title = `${p.name} ${num(p.balance)} 积分 · ${when(p.expires)} ${lapse(p)} · ${left(p.expires, now)}`;
         track.append(dot, label);
       });
       wrap.append(track, line(el("span", "wb-sub", "今天"), el("span", "wb-sub", "积分作废时间线 · 圆点越大积分越多")));

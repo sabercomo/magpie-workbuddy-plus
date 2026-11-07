@@ -95,11 +95,6 @@ export class WorkBuddyClient {
   async refresh(force = false) {
     const account = this.account;
     if (!force && (!account.auth.expires || account.auth.expires > Date.now() + 2 * 3600_000)) return false;
-    // A WorkBuddy AI login is Magpie's to renew; only an expired one stops here.
-    if (account.realm === "intl") {
-      if (account.auth.expires <= Date.now()) throw new Error("国际版登录已过期，请在 Magpie 重新登录 WorkBuddy AI");
-      return false;
-    }
     const refreshLocked = async () => {
       const rows = readJSON(account.file);
       const auth = rows[account.key];

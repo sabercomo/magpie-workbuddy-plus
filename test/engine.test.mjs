@@ -183,3 +183,19 @@ test("a WorkBuddy AI account runs on its own site and claims its check-in only w
   assert.match(p.logs.at(-1), /1 项需要你手动完成：完成一次对话/);
   assert.ok(!p.seen.some(s => s.path.includes("/tasks/accept")), "WorkBuddy AI's tasks are not simulated");
 });
+
+// A WorkBuddy AI login is renewed like China's, on its own site, so the
+// keep-alive slot keeps it alive though nothing chats on it.
+test("keepalive renews a WorkBuddy AI login on www.workbuddy.ai", async t => {
+  const p = fixture(t, path => {
+    if (path === "/v2/plugin/auth/token/refresh") return ok({ accessToken: "renewed-access", refreshToken: "renewed-refresh", expiresIn: 5184000 });
+    throw new Error("unexpected endpoint " + path);
+  }, "intl");
+  p.context.account.auth.expires = Date.now() + 60_000;
+  writeJSON(p.context.account.file, { [p.context.account.key]: p.context.account.auth });
+  const got = await p.run("keepalive");
+  assert.equal(got.renewed, true);
+  assert.equal(p.seen[0].headers.Origin, "https://www.workbuddy.ai");
+  assert.equal(readJSON(p.context.account.file)[p.context.account.key].access, "renewed-access");
+  assert.match(p.logs.at(-1), /国际版登录已续期/);
+});

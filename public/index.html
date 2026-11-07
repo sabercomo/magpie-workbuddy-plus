@@ -12,8 +12,8 @@
   </div></section>
   <section><details id="settings"><summary>定时与设置 <span class="muted">时区、执行时段、代理设置</span></summary>
     <form id="config-form"><div id="schedule-fields" class="fields"></div><div class="fields">
-      <label>时区<input name="timezone" required></label><label>HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label>
-    </div><p class="muted">同类多个时段用逗号分隔，清空可关闭该类定时。连登活跃每天成功后不重复执行，任务与旅行会核对上游状态。每日签到请在 Magpie 开启。</p><button type="submit">保存设置</button><span id="saved" role="status"></span></form>
+      <label>时区<input name="timezone" required></label><label>HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label><label>随机错开（分钟，0 关闭）<input name="spread" type="number" min="0" max="60" step="1"></label>
+    </div><p class="muted">同类多个时段用逗号分隔，清空可关闭该类定时。每个时段在设定时间前后「随机错开」分钟内执行，每天不同，多个账号之间也会间隔几十秒，避免整点统一请求。连登活跃每天成功后不重复执行，任务与旅行会核对上游状态。每日签到请在 Magpie 开启。</p><button type="submit">保存设置</button><span id="saved" role="status"></span></form>
   </details></section>
   <section><div class="section-head"><h2>执行记录</h2><span id="updated" class="muted"></span></div><div id="jobs"></div></section>
   <footer>仅本机访问 · 独立定时服务 · Magpie 关闭后仍可执行 · 日志时间按本机显示</footer>
