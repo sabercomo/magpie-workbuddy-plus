@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { accounts, calendar, checkins, initialize, intlAccount, publicAccount, readJSON, writeJSON } from "./storage.mjs";
+import { accounts, calendar, checkins, initialize, intlAccount, maskProxy, publicAccount, readJSON, validateConfig, version, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
 import { checkin, collect, writePage } from "./board.mjs";
@@ -66,16 +66,20 @@ export class Runner {
   save() { writeJSON(join(this.dir, "state.json"), this.state); }
   list() { return accounts(this.config(), this.dir); }
   status() {
-    return { config: this.config(), accounts: this.list().map(publicAccount), jobs: this.state.jobs, daily: this.state.daily, slots: this.state.slots };
+    return { version, config: this.config(), accounts: this.list().map(publicAccount), jobs: this.state.jobs, daily: this.state.daily, slots: this.state.slots };
   }
+  // A job queued or running: the service must not be swapped out under it.
+  working() { return this.controllers.size > 0 || this.state.jobs.some(j => ["running", "queued"].includes(j.status)); }
   // The check-in is read on every publish: Magpie claims it at midnight,
   // between board refreshes.
   boardView() {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
+      // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
+      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy) },
       accounts: this.board.accounts.map(({ key, ...a }) => this.withLedger(a, key, found, day)), models: this.board.models || null,
-      intl: { enabled: config.intl !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
+      intl: { enabled: config.intl !== false, web: config.intlWeb !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
       jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
     };
   }
@@ -184,7 +188,7 @@ export class Runner {
     const signed = found.records[`workbuddy|${key}`], at = signed?.outcome === "claimed" ? Date.parse(signed.claimed || signed.at) : 0;
     const logs = this.state.jobs.flatMap(job => job.accounts.includes(a.id) ? job.logs.filter(l => l.account === a.id) : []);
     const shown = balance ? (({ grants, ...rest }) => rest)(balance) : balance;
-    return { ...a, balance: shown, checkin: a.realm === "intl" ? a.checkin : checkin(found, key, day), ...(balance?.grants ? { ledger: ledger(balance, a.usage, logs, at) } : {}) };
+    return { ...a, balance: shown, checkin: a.realm === "intl" ? a.checkin : checkin(found, key, day), ...(balance?.grants ? { ledger: ledger(balance, a.usage, logs, at, Date.now(), 7, a.realm) } : {}) };
   }
   // Magpie hands the page's last request back on every plugin restart, so
   // each request id runs once and an old one is only acknowledged.
@@ -196,6 +200,14 @@ export class Runner {
       if (request.action === "refresh") { this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
       else if (request.action === "login") this.login();
       else if (["pause", "resume"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), enabled: request.action === "resume" });
+      else if (request.action === "config") {
+        // Settings saved from Magpie's page: times, spread, time zone, proxy. A
+        // proxy shown masked and sent back unchanged keeps the saved one.
+        const current = this.config(), given = request.config || {};
+        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
+          ...(given.proxy !== undefined && given.proxy !== maskProxy(current.proxy) ? { proxy: given.proxy } : {}) };
+        writeJSON(join(this.dir, "config.json"), validateConfig(next));
+      }
       else if (["intl-on", "intl-off"].includes(request.action)) { writeJSON(join(this.dir, "config.json"), { ...this.config(), intl: request.action === "intl-on" }); this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
       else note.job = this.submit([request.action], undefined, "page").id;
       note.ok = true;

@@ -3,23 +3,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { Runner } from "./runner.mjs";
-import { dataDir, defaults, writeJSON } from "./storage.mjs";
+import { dataDir, newer, validateConfig, version, writeJSON } from "./storage.mjs";
 
-export function validateConfig(value) {
-  if (typeof value.enabled !== "boolean" || typeof value.proxy !== "string" || typeof value.magpieDir !== "string") throw new Error("开关、代理或 Magpie 路径无效");
-  if (value.proxy && !/^https?:\/\//.test(value.proxy)) throw new Error("代理需要 http:// 或 https:// 地址");
-  new Intl.DateTimeFormat("en", { timeZone: value.timezone });
-  if (value.intl !== undefined && typeof value.intl !== "boolean") throw new Error("国际版开关无效");
-  if (value.spread !== undefined && !(Number.isInteger(value.spread) && value.spread >= 0 && value.spread <= 60)) throw new Error("随机错开应为 0–60 分钟");
-  if (!Array.isArray(value.disabledAccounts) || value.disabledAccounts.some(a => typeof a !== "string")) throw new Error("账号停用列表无效");
-  if (!value.schedules || Object.keys(value.schedules).sort().join() !== Object.keys(defaults.schedules).sort().join()) throw new Error("定时任务类别无效");
-  for (const times of Object.values(value.schedules)) {
-    if (!Array.isArray(times) || times.length > 24 || times.some(t => typeof t !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t))) throw new Error("时间应为 HH:MM，每类最多 24 个；留空可关闭该类定时");
-  }
-  return value;
-}
+export { validateConfig };
 
-export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) {
+export function createService({ dir = dataDir, runner = new Runner(dir), stop = () => {} } = {}) {
   const root = new URL("./public/", import.meta.url), shared = new URL("./page/", import.meta.url);
   const handler = async (request, response) => {
     const send = (code, body) => {
@@ -67,6 +55,14 @@ export function createService({ dir = dataDir, runner = new Runner(dir) } = {}) 
       if (url.pathname === "/api/page") return send(200, runner.pageRequest(value));
       if (url.pathname === "/api/login") return send(202, runner.login());
       if (url.pathname === "/api/page-target") return send(200, runner.addPageTarget(value.file));
+      // A plugin updated to a newer version asks this service to step aside so
+      // it can start its own code; never with a job in flight.
+      if (url.pathname === "/api/handoff") {
+        if (!newer(value.version, version)) return send(409, { error: `当前服务已是 ${version}`, version });
+        if (runner.working()) return send(409, { error: "有任务正在执行，稍后再换新版本", version, busy: true });
+        send(202, { stopping: true, version });
+        return stop();
+      }
       return send(404, { error: "未知地址" });
     } catch (e) { send(400, { error: e.message }); }
   };
@@ -108,9 +104,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(1);
   });
   server.once("listening", () => {
-    const { runner, handler } = createService({ runner: new Runner(dataDir, {}, { pageFile: fileURLToPath(new URL("./page/data.js", import.meta.url)), panel: `http://127.0.0.1:${port}` }) });
+    const stop = () => {
+      console.log(`WorkBuddy Plus ${version}：插件已更新到新版本，本进程退出，由新版接手`);
+      clearInterval(interval);
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(0), 3000).unref();
+    };
+    const { runner, handler } = createService({ stop, runner: new Runner(dataDir, {}, { pageFile: fileURLToPath(new URL("./page/data.js", import.meta.url)), panel: `http://127.0.0.1:${port}` }) });
     server.on("request", handler);
-    console.log(`WorkBuddy Plus: http://127.0.0.1:${port}`);
+    console.log(`WorkBuddy Plus ${version}: http://127.0.0.1:${port}`);
     // Missing/malformed local files are startup errors, not empty account lists.
     runner.list();
     const beat = () => {

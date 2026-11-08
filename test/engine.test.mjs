@@ -21,9 +21,19 @@ function fixture(t, serve, realm = "cn") {
     seen.push({ path, body: init.body === undefined ? undefined : JSON.parse(init.body), headers: init.headers });
     return serve(path, seen.at(-1), seen);
   } });
-  const context = { account, config, state, log: message => logs.push(message), checkpoint() {}, pollDelay: 0, signal: new AbortController().signal };
+  const context = { account, config, state, log: message => logs.push(message), checkpoint() {}, pollDelay: 0, signal: new AbortController().signal, web: { poll: 0, sleep: async () => {} } };
   return { run: action => perform(action, client, context), client, context, state, seen, logs };
 }
+
+// WorkBuddy AI's web app and an agent sandbox, as webActivity sees them.
+const webApp = (status = () => "completed") => (path, request) => {
+  if (path === "/console/as/conversations/" && request.body) return ok({ id: "c1", status: "CREATING" });
+  if (path === "/console/as/conversations/c1/session") return ok({ link: "https://sandbox.test/acp", token: "sandbox-token", sessionId: "c1", cwd: "/workspace" });
+  if (path === "/console/as/conversations/c1") return ok({ status: status() });
+  if (/^\/console\/as\/conversations\/c1\/(stop|delete)$/.test(path)) return ok({ id: "c1" });
+  if (path === "/acp" && !request.body) return new Response('data: {"method":"session/update","params":{"update":{"sessionUpdate":"agent_message_chunk"}}}\n\n', { headers: { "Content-Type": "text/event-stream", "Acp-Connection-Id": "acp-1" } });
+  if (path === "/acp") return new Response("", { status: 202 });
+};
 
 test("all performs domestic tasks without calling daily check-in", async t => {
   const p = fixture(t, path => {
@@ -155,7 +165,10 @@ test("the day boundary uses the selected timezone", () => {
 // here while a campaign runs, no Buddy travel, and tasks counted from real use.
 test("a WorkBuddy AI account runs on its own site and claims its check-in only while a campaign runs", async t => {
   let campaign = false;
+  const web = webApp();
   const p = fixture(t, (path, request, seen) => {
+    const w = web(path, request);
+    if (w) return w;
     if (path === "/v2/report") return ok({});
     if (path === "/activity/growth/streak") return ok({ streak: { days: 1 } });
     if (path === "/v2/billing/meter/checkin-activity-status") return ok({ active: campaign, today_checked_in: false, daily_credit: 100 });
@@ -168,7 +181,7 @@ test("a WorkBuddy AI account runs on its own site and claims its check-in only w
   await p.run("activity");
   assert.equal(p.seen[0].body[0].requestModelId, "deepseek-v4.1-flash-sg");
   assert.equal(p.seen[0].headers.Origin, "https://www.workbuddy.ai");
-  assert.match(p.logs.at(-1), /国际版活跃已生效/);
+  assert.match(p.logs.join("\n"), /国际版活跃已生效[\s\S]*国际版网页会话已跑完/);
   // No Buddy travel there: nothing is asked and nothing logged.
   const before = p.logs.length;
   assert.deepEqual(await p.run("travel"), { skipped: true, reason: "intl" });
@@ -201,4 +214,46 @@ test("keepalive renews a WorkBuddy AI login on www.workbuddy.ai", async t => {
   assert.equal(p.seen[0].headers.Origin, "https://www.workbuddy.ai");
   assert.equal(readJSON(p.context.account.file)[p.context.account.key].access, "renewed-access");
   assert.match(p.logs.at(-1), /国际版登录已续期/);
+});
+
+// The daily reward takes a finished web conversation, run the way the web app does.
+test("a WorkBuddy AI account's daily activity runs one web conversation through its sandbox and frees it", async t => {
+  let status = "working";
+  const web = webApp(() => status);
+  const p = fixture(t, (path, request) => {
+    const w = web(path, request);
+    if (w) return w;
+    if (path === "/v2/report") return ok({});
+    if (path === "/activity/growth/streak") return ok({ streak: { days: 2 } });
+    throw new Error("unexpected endpoint " + path);
+  }, "intl");
+  // The turn never finishing: it fails, the conversation is stopped and deleted, the streak report stands.
+  p.context.web.wait = 1;
+  await assert.rejects(p.run("activity"), /没有跑完/);
+  assert.deepEqual(p.seen.filter(s => /\/c1\/(stop|delete)$/.test(s.path)).map(s => s.path.split("/").pop()), ["stop", "delete"]);
+  assert.equal(p.seen.filter(s => s.path === "/v2/report").length, 1);
+
+  // Retried: only the web turn runs again, and this time finishes.
+  p.seen.length = 0; status = "completed"; p.context.web.wait = 60_000;
+  const got = await p.run("activity");
+  assert.equal(p.seen.filter(s => s.path === "/v2/report").length, 0, "the streak report isn't repeated");
+  assert.equal(got.web.conversation, "c1");
+  const create = p.seen.find(s => s.path === "/console/as/conversations/" && s.body);
+  assert.deepEqual(create.body, { prompt: "Hi", model: "deepseek-v4.1-flash", conversationOrigin: "workbuddy-app", plugins: [{ name: "weixinpay", marketplace: "codebuddy-builtin" }] });
+  assert.equal(create.headers.Authorization, "Bearer secret-token");
+  assert.equal(create.headers["X-IDE-Type"], undefined, "the web app sends no desktop fingerprint");
+  const calls = p.seen.filter(s => s.path === "/acp" && s.body).map(s => s.body.method);
+  assert.deepEqual(calls, ["initialize", "session/load", "session/set_model", "session/prompt"]);
+  assert.ok(p.seen.filter(s => s.path === "/acp" && s.body).every(s => s.headers["Acp-Connection-Id"] === "acp-1" && s.headers.Authorization === "Bearer sandbox-token"));
+  assert.deepEqual(p.seen.filter(s => /\/c1\/(stop|delete)$/.test(s.path)).map(s => s.path.split("/").pop()), ["stop"], "a finished one is kept, only stopped");
+  assert.match(p.logs.at(-1), /国际版网页会话已跑完（deepseek-v4.1-flash，1 段回复/);
+
+  // Done for the day; and switched off, no web turn at all.
+  p.seen.length = 0;
+  await p.run("activity");
+  assert.ok(!p.seen.some(s => s.path.startsWith("/console")));
+  assert.deepEqual(p.logs.slice(-2), ["连登活跃：今天已完成", "国际版网页会话：今天已完成"]);
+  delete p.state.daily["intl:u1:web"]; p.context.config.intlWeb = false;
+  await p.run("activity");
+  assert.ok(!p.seen.some(s => s.path.startsWith("/console")), "intlWeb: false skips the web turn");
 });

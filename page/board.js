@@ -46,8 +46,9 @@
     const c = a.checkin;
     if (!c || a.enterprise) return null;
     const streak = c.streak ? `连续签到 ${c.streak} 天` : "";
+    // No campaign running on WorkBuddy AI: nothing to show until one starts.
+    if (a.realm === "intl" && c.outcome === "closed") return null;
     if (a.realm === "intl") return {
-      closed: { label: "暂无签到活动", tone: "", note: "WorkBuddy AI 目前没有签到活动，开启后插件会自动签到" },
       done: { label: `已签到${c.credit ? ` +${num(c.credit)}` : ""}`, tone: "ok", note: streak || "由 WorkBuddy Plus 签到" },
       waiting: { label: "未签到", tone: "", note: a.intlOff ? "国际版自动任务已关闭" : "下一次「活跃 · 旅行 · 福利」定时会签到" }
     }[c.outcome] || { label: "签到读取失败", tone: "warn", note: c.message || "" };
@@ -60,6 +61,14 @@
       inactive: { label: "今天没签上", tone: "warn", note: "签到时账号今天还没活跃，Magpie 今天不会再试" },
       ineligible: { label: "需在客户端签到", tone: "warn", note: "WorkBuddy 不接受从 Magpie 给这个账号签到" }
     }[c.outcome] || { label: "签到失败", tone: "urgent", note: c.message || "在 Magpie 设置 › 用量 › 插件 查看原因" };
+  }
+
+  // WorkBuddy AI's daily activity reward (a 30/50 Bonus Pack): earned today or not.
+  function earned(a, now) {
+    const got = (a.ledger?.entries || []).filter(e => e.source === "每日活跃奖励").sort((x, y) => y.at - x.at)[0];
+    if (got && days(got.at, now) === 0) return { label: `今日已领 +${num(got.credit)}`, tone: "ok", note: `${clock(got.at)} 到账，来自完成的网页会话` };
+    const why = a.intlOff ? "国际版自动任务已关闭" : last?.[1]?.intl?.web === false ? "网页会话已关闭，需要在 workbuddy.ai 网页端自己完成一次对话" : "下一次「活跃 · 旅行 · 福利」定时会在网页端跑一次会话来领取";
+    return { label: "今日未领", tone: "", note: `${why}${got ? `；上次 ${when(got.at)} +${num(got.credit)}` : ""}` };
   }
 
   // Today's three rings, outside in: active, trip, growth tasks. The task ring
@@ -143,7 +152,7 @@
       chip.append(line(el("strong", undefined, s.runAt || s.at), el("span", `wb-pill ${cls}`, isNext ? "下一次" : label)), el("span", "wb-sub", kinds[s.kind] || s.kind));
       row.append(chip);
     }
-    box.append(row, el("div", "wb-sub", `时段在本机面板 ${view.panel || "http://127.0.0.1:3439"} 调整，每类最多 24 个；${t.spread ? `每个时段在设定时间前后 ${t.spread} 分钟内随机执行，每天不同；` : ""}电脑睡眠时不执行，唤醒后补跑当天已到点的时段。`));
+    box.append(row, el("div", "wb-sub", `时段在「定时与设置」里调整，每类最多 24 个；${t.spread ? `每个时段在设定时间前后 ${t.spread} 分钟内随机执行，每天不同；` : ""}电脑睡眠时不执行，唤醒后补跑当天已到点的时段。`));
     return box;
   }
 
@@ -185,7 +194,8 @@
   function attention(rows, now) {
     const items = [], manual = new Map();
     for (const a of rows) {
-      for (const t of a.tasks?.open || []) {
+      // WorkBuddy AI's tasks count real use of its client; there is nothing to remind of.
+      for (const t of a.realm === "intl" ? [] : a.tasks?.open || []) {
         if (t.state !== "manual") continue;
         const e = manual.get(t.title) || { ...t, count: 0 };
         e.count++; manual.set(t.title, e);
@@ -236,7 +246,9 @@
 
   function kpis(rows, now) {
     const personal = rows.filter(a => !a.enterprise), credit = rows.reduce((s, a) => s + (a.usage?.credit || 0), 0);
-    const claimed = personal.reduce((s, a) => s + (a.tasks?.claimed || 0), 0), total = personal.reduce((s, a) => s + (a.tasks?.total || 0), 0), pending = personal.reduce((s, a) => s + (a.tasks?.credit || 0), 0);
+    // WorkBuddy AI's tasks count use of its client, nothing to do here: left out of the totals.
+    const china = personal.filter(a => a.realm !== "intl");
+    const claimed = china.reduce((s, a) => s + (a.tasks?.claimed || 0), 0), total = china.reduce((s, a) => s + (a.tasks?.total || 0), 0), pending = china.reduce((s, a) => s + (a.tasks?.credit || 0), 0);
     const done = personal.filter(a => closed(today(a, now))).length;
     const strip = el("div", "wb-kpis");
     for (const [k, v, sub] of [
@@ -329,11 +341,12 @@
     if (a.enterprise) { right.append(...spent); grid.append(right); return grid; }
 
     const g = a.growth, s = a.streak, t = a.tasks, top = g && ["UR", "SSR", "SR"].find(r => g.rarity[r]);
-    const ci = checked(a);
+    const ci = checked(a), intl = a.realm === "intl";
     if (ci) right.append(line(el("span", "wb-label", "每日签到"), el("span", `wb-pill ${ci.tone}`, ci.label)), ...(ci.note ? [el("div", "wb-sub", ci.note)] : []));
+    if (intl) { const r = earned(a, now); right.append(line(el("span", "wb-label", "每日活跃奖励"), el("span", `wb-pill ${r.tone}`, r.label)), el("div", "wb-sub", r.note)); }
     // 成长 folds away by default; an opened one stays open across redraws.
     const fold = el("details", "wb-fold"), head = el("summary", "wb-line"), body = el("div", "wb-fold-body");
-    head.append(el("span", "wb-label", "成长"), el("span", "wb-sub wb-fold-arrow", t ? `任务 ${t.claimed}/${t.total}` : ""));
+    head.append(el("span", "wb-label", "成长"), el("span", "wb-sub wb-fold-arrow", intl ? (s ? `连登 ${s.days} 天` : "") : t ? `任务 ${t.claimed}/${t.total}` : ""));
     fold.open = grown.has(a.id);
     fold.ontoggle = () => { if (fold.open) grown.add(a.id); else grown.delete(a.id); };
     fold.append(head, body);
@@ -341,7 +354,8 @@
     body.append(el("div", "wb-stats", [g && `能量 ${num(g.energy)}`, g && `Buddy ${g.buddies}${top ? `（含 ${top}）` : ""}`, g && `抽奖 ${g.draws}`, s && `补签卡 ${s.makeupCards}`].filter(Boolean).join(" · ")));
     if (s?.nextTier) body.append(el("div", "wb-sub", `再连登 ${s.nextTier.remaining} 天到 ${s.nextTier.days} 天档：${[s.nextTier.credit && `+${s.nextTier.credit} 积分`, s.nextTier.energy && `+${s.nextTier.energy} 能量`].filter(Boolean).join(" · ") || "奖励"}`));
     const states = { claimable: ["可领奖", "ok"], auto: ["定时会完成", "go"], manual: ["需手动", "warn"], locked: ["未解锁", ""] };
-    for (const task of t?.open || []) {
+    // WorkBuddy AI's tasks can only be done in its client: they aren't listed.
+    for (const task of intl ? [] : t?.open || []) {
       const [label, cls] = states[task.state] || [task.state, ""];
       const row = line(el("span", "wb-name", task.title), el("span", `wb-pill ${cls}`, label));
       row.title = [task.target ? `${task.current}/${task.target}` : "", task.credit ? `+${task.credit} 积分` : "", task.ends ? `${date(task.ends)} 截止` : "", task.note].filter(Boolean).join(" · ");
@@ -491,8 +505,8 @@
     const ringRow = el("div", "wb-w-rings");
     for (const a of personal) { const r = today(a, now), cell = el("div", "wb-w-ring"); cell.append(rings(r), el("span", "wb-sub", a.name)); ringRow.append(cell); }
     rings_.append(el("strong", "wb-w-mid", personal.length ? `${personal.filter(a => closed(today(a, now))).length}/${personal.length} 完成` : "—"), ringRow);
-    const signed = personal.filter(a => checked(a)?.tone === "ok").length;
-    if (personal.some(a => a.checkin)) rings_.append(el("span", "wb-w-foot", `签到 ${signed}/${personal.length}`));
+    const signable = personal.filter(a => checked(a)), signed = signable.filter(a => checked(a).tone === "ok").length;
+    if (signable.length) rings_.append(el("span", "wb-w-foot", `签到 ${signed}/${signable.length}`));
     rings_.title = "外环活跃 · 中环旅行 · 内环任务";
     const trips = personal.map(a => ({ a, t: trip(a.travel, now, a) })).filter(x => x.t), out = trips.filter(x => x.t.progress !== undefined);
     const labels = [...new Set(trips.map(x => x.t.label))];
@@ -531,7 +545,7 @@
       usage.append(chart, keys);
     }
 
-    const tasks = personal.filter(a => a.tasks), claimed = tasks.reduce((s, a) => s + a.tasks.claimed, 0), all = tasks.reduce((s, a) => s + a.tasks.total, 0), pending = tasks.reduce((s, a) => s + a.tasks.credit, 0);
+    const tasks = personal.filter(a => a.tasks && a.realm !== "intl"), claimed = tasks.reduce((s, a) => s + a.tasks.claimed, 0), all = tasks.reduce((s, a) => s + a.tasks.total, 0), pending = tasks.reduce((s, a) => s + a.tasks.credit, 0);
     const growth = widget("w", "", "成长任务");
     growth.append(el("strong", "wb-w-corner", all ? `${claimed}/${all}` : "—"));
     const manual = new Map();

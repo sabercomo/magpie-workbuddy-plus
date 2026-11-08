@@ -2,7 +2,7 @@
 // background service rewrites, and asks for work by saving a request into
 // the plugin's options (see index.mjs).
 const $ = id => document.getElementById(id);
-const names = { all: "全部执行", activity: "连登活跃", tasks: "成长任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", keepalive: "登录续期", inspect: "查询状态", refresh: "刷新", login: "添加账号", pause: "暂停定时", resume: "开启定时", "intl-on": "开启国际版任务", "intl-off": "关闭国际版任务" };
+const names = { all: "全部执行", activity: "连登活跃", tasks: "成长任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", keepalive: "登录续期", inspect: "查询状态", refresh: "刷新", login: "添加账号", pause: "暂停定时", resume: "开启定时", "intl-on": "开启国际版任务", "intl-off": "关闭国际版任务", config: "保存设置" };
 const statuses = { running: "执行中", queued: "排队中", succeeded: "已完成", failed: "有失败", deferred: "稍后重试", interrupted: "中断", cancelled: "已停止" };
 let pending = null;
 const build = globalThis.WBPLUS?.build;
@@ -22,6 +22,7 @@ function paint() {
   $("intl").dataset.action = view?.intl?.enabled === false ? "intl-on" : "intl-off";
   $("intl").textContent = view?.intl?.enabled === false ? "开启国际版任务" : "关闭国际版任务";
   WBBoard.render($("board"), view);
+  fill(view);
   $("jobs").replaceChildren();
   if (view && !view.jobs?.length) $("jobs").append(Object.assign(document.createElement("p"), { className: "muted", textContent: "还没有执行记录" }));
   for (const job of view?.jobs || []) {
@@ -37,6 +38,42 @@ function paint() {
   }
 }
 
+// The settings form follows the saved settings until it's edited; an edit is
+// kept through the redraws until it's saved.
+const kinds = ["daily", "tasks", "night", "keepalive"];
+let edited = false;
+function fill(view) {
+  const form = $("settings-form");
+  if (!view?.settings || edited) return;
+  for (const k of kinds) form.elements[k].value = (view.schedules?.[k] || []).join(", ");
+  form.elements.spread.value = view.settings.spread;
+  form.elements.timezone.value = view.settings.timezone || "";
+  form.elements.proxy.value = view.settings.proxy || "";
+}
+$("settings-form").oninput = () => { edited = true; };
+
+async function ask(action, extra = {}) {
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const options = (await magpie.options.get()) || {};
+  await magpie.options.set({ ...options, request: { id, action, at: Date.now(), ...extra } });
+  pending = id;
+  note(`${names[action]}：已提交，等待 Magpie 重载插件…`);
+  setTimeout(reload, 2000);
+}
+
+$("settings-form").onsubmit = async event => {
+  event.preventDefault();
+  const form = event.target, button = form.querySelector("button");
+  const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
+  const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
+  const bad = kinds.flatMap(k => config.schedules[k]).find(t => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t));
+  if (bad) return note(`时间「${bad}」不对，应为 HH:MM，例如 09:00`, true);
+  button.disabled = true;
+  try { await ask("config", { config }); edited = false; }
+  catch (e) { note(`提交失败：${e.message}`, true); }
+  finally { setTimeout(() => { button.disabled = false; }, 3000); }
+};
+
 // The page may load only its own files, so data.js is fetched again as a script.
 function reload() {
   const script = document.createElement("script");
@@ -51,15 +88,9 @@ function reload() {
 }
 
 for (const button of document.querySelectorAll("[data-action]")) button.onclick = async () => {
-  const action = button.dataset.action, id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const action = button.dataset.action;
   button.disabled = true;
-  try {
-    const options = (await magpie.options.get()) || {};
-    await magpie.options.set({ ...options, request: { id, action, at: Date.now() } });
-    pending = id;
-    note(`${names[action]}：已提交，等待 Magpie 重载插件…`);
-    setTimeout(reload, 2000);
-  } catch (e) { note(`提交失败：${e.message}`, true); }
+  try { await ask(action); } catch (e) { note(`提交失败：${e.message}`, true); }
   finally { setTimeout(() => { button.disabled = false; }, 3000); }
 };
 

@@ -142,6 +142,21 @@ test("page snapshot carries no credentials and each page request runs once", asy
   assert.equal(readJSON(join(dir, "config.json")).enabled, false);
   assert.match(runner.pageRequest({ id: "a2", action: "pause", at: Date.now() - 3600_000 }).error, /过期/);
   assert.match(runner.pageRequest({ id: "a3", action: "checkin", at: Date.now() }).error, /无效的操作/);
+
+  // Settings saved from Magpie's page, for installs whose local panel can't be reached.
+  writeJSON(join(dir, "config.json"), { ...runner.config(), proxy: "http://user:secret@proxy.example:8080" });
+  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080" });
+  assert.ok(!JSON.stringify(runner.boardView()).includes("secret"));
+  const schedules = { daily: ["08:30"], tasks: ["08:40", "20:40"], night: [], keepalive: ["22:00"] };
+  assert.equal(runner.pageRequest({ id: "c1", action: "config", at: Date.now(), config: { schedules, spread: 5, timezone: "Asia/Shanghai", proxy: "http://***@proxy.example:8080" } }).ok, true);
+  const saved = readJSON(join(dir, "config.json"));
+  assert.deepEqual(saved.schedules, schedules);
+  assert.equal(saved.spread, 5);
+  assert.equal(saved.proxy, "http://user:secret@proxy.example:8080", "a masked proxy sent back keeps the saved one");
+  runner.pageRequest({ id: "c2", action: "config", at: Date.now(), config: { proxy: "" } });
+  assert.equal(readJSON(join(dir, "config.json")).proxy, "");
+  assert.match(runner.pageRequest({ id: "c3", action: "config", at: Date.now(), config: { schedules: { ...schedules, daily: ["25:00"] } } }).error, /HH:MM/);
+  assert.deepEqual(readJSON(join(dir, "config.json")).schedules, schedules, "a refused change saves nothing");
 });
 
 test("task board puts claimable first, then what the scheduler does, then manual tasks", () => {

@@ -10,6 +10,8 @@ export const defaults = {
   enabled: false,
   // WorkBuddy AI (international) logins run their tasks too unless turned off.
   intl: true,
+  // …and their daily web conversation for the activity reward (30/50 credits).
+  intlWeb: true,
   // Scheduled slots run within ±spread minutes of their set time.
   spread: 10,
   timezone: "Asia/Shanghai",
@@ -116,3 +118,26 @@ export function calendar(now, timezone) {
   }).formatToParts(now).map(p => [p.type, p.value]));
   return { day: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}`, hour: Number(parts.hour) };
 }
+
+// This copy's version, which the plugin compares with the running service's.
+export const version = (() => { try { return JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version || "0"; } catch { return "0"; } })();
+// Whether version a is newer than b (plain x.y.z).
+export const newer = (a, b) => { const x = String(a).split(".").map(Number), y = String(b || "0").split(".").map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+
+export function validateConfig(value) {
+  if (typeof value.enabled !== "boolean" || typeof value.proxy !== "string" || typeof value.magpieDir !== "string") throw new Error("开关、代理或 Magpie 路径无效");
+  if (value.proxy && !/^https?:\/\//.test(value.proxy)) throw new Error("代理需要 http:// 或 https:// 地址");
+  new Intl.DateTimeFormat("en", { timeZone: value.timezone });
+  if (value.intl !== undefined && typeof value.intl !== "boolean") throw new Error("国际版开关无效");
+  if (value.intlWeb !== undefined && typeof value.intlWeb !== "boolean") throw new Error("国际版网页会话开关无效");
+  if (value.spread !== undefined && !(Number.isInteger(value.spread) && value.spread >= 0 && value.spread <= 60)) throw new Error("随机错开应为 0–60 分钟");
+  if (!Array.isArray(value.disabledAccounts) || value.disabledAccounts.some(a => typeof a !== "string")) throw new Error("账号停用列表无效");
+  if (!value.schedules || Object.keys(value.schedules).sort().join() !== Object.keys(defaults.schedules).sort().join()) throw new Error("定时任务类别无效");
+  for (const times of Object.values(value.schedules)) {
+    if (!Array.isArray(times) || times.length > 24 || times.some(t => typeof t !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t))) throw new Error("时间应为 HH:MM，每类最多 24 个；留空可关闭该类定时");
+  }
+  return value;
+}
+
+// A proxy's credentials never reach the page: it sees user:pass as ***.
+export const maskProxy = proxy => String(proxy || "").replace(/\/\/[^/@]*@/, "//***@");

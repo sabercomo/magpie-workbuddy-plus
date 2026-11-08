@@ -9,7 +9,8 @@ import { WorkBuddyClient } from "../client.mjs";
 import { EventEmitter } from "node:events";
 import { Runner, magpieBin, shifted } from "../runner.mjs";
 import { createService, answering } from "../server.mjs";
-import { portOf } from "../index.mjs";
+import { portOf, handoff } from "../index.mjs";
+import { newer, version } from "../storage.mjs";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -120,6 +121,48 @@ test("HTTP service serves the panel, rejects cross-site mutations, and validates
   assert.equal(checkin.status, 400);
   assert.match((await checkin.json()).error, /无效的操作/);
   const status = await (await fetch(base + "/api/status")).text(); assert.ok(!status.includes("private-access"));
+});
+
+// After a plugin update the running service still has the old code; the
+// newer plugin asks it to step aside, never while a job runs.
+test("an older service steps aside for a newer plugin, never mid-job; the same or an older plugin leaves it be", async t => {
+  assert.ok(newer("0.5.10", "0.5.9") && newer("1.0.0", "0.9.9") && !newer("0.5.4", "0.5.4") && !newer("0.5.3", "0.5.4") && newer("0.5.5", undefined));
+  const p = fixture(t);
+  let stopped = 0;
+  const { server, runner } = createService({ dir: p.dir, stop: () => { stopped++; } });
+  server.listen(0, "127.0.0.1"); await new Promise(resolve => server.once("listening", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const ask = v => fetch(base + "/api/handoff", { method: "POST", headers: { "Content-Type": "application/json", "X-WorkBuddy-Plus": "1" }, body: JSON.stringify({ version: v }) });
+  assert.equal((await (await fetch(base + "/api/status")).json()).version, version);
+  assert.equal((await ask(version)).status, 409);
+  runner.state.jobs.unshift({ id: "j", actions: ["tasks"], accounts: [], status: "running", logs: [] });
+  const busy = await ask("999.0.0");
+  assert.equal(busy.status, 409);
+  assert.equal((await busy.json()).busy, true);
+  assert.equal(stopped, 0);
+  runner.state.jobs[0].status = "succeeded";
+  assert.equal((await ask("999.0.0")).status, 202);
+  assert.equal(stopped, 1);
+
+  // The plugin side: asks only a service older than itself, then waits for it to go.
+  const calls = [];
+  let gone = false;
+  const fetcher = async (url, init = {}) => {
+    calls.push(new URL(url).pathname);
+    if (gone) throw Object.assign(new Error("refused"), { code: "ECONNREFUSED" });
+    if (url.endsWith("/api/status")) return Response.json({ config: {}, version: "0.5.4" });
+    gone = true;
+    return Response.json({ stopping: true }, { status: 202 });
+  };
+  assert.equal(await handoff({ fetcher, wait: async () => {}, mine: "0.5.4" }), "current");
+  assert.equal(await handoff({ fetcher, wait: async () => {}, mine: "0.5.5" }), "stopped");
+  assert.deepEqual(calls, ["/api/status", "/api/status", "/api/handoff", "/api/status"]);
+  // A busy service is asked again a minute later.
+  const later = [];
+  const busyFetcher = async url => url.endsWith("/api/status") ? Response.json({ config: {}, version: "0.5.4" }) : Response.json({ busy: true }, { status: 409 });
+  assert.equal(await handoff({ fetcher: busyFetcher, wait: async () => {}, mine: "0.5.5", retry: (f, ms) => later.push(ms) }), "busy");
+  assert.deepEqual(later, [60_000]);
 });
 
 test("a rate limit is retried, then defers the slot instead of failing it", async t => {

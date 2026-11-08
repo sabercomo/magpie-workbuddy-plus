@@ -20,6 +20,21 @@
   <p id="note" class="note" role="status" hidden></p>
   <section id="board"></section>
   <section><h2>最近执行</h2><div id="jobs"></div></section>
-  <footer class="muted">余额与旅行状态由后台服务约每 10 分钟刷新；按钮会让 Magpie 重载插件后交给后台服务执行。时段、代理与完整日志在本机面板 <span id="panel">http://127.0.0.1:3439</span>。</footer>
+  <section><details id="settings"><summary>定时与设置 <span class="muted">执行时段、随机错开、时区、代理</span></summary>
+    <form id="settings-form">
+      <div class="fields">
+        <label>活跃 / 旅行 / 连登福利<input name="daily" placeholder="HH:MM, HH:MM"></label>
+        <label>成长任务<input name="tasks" placeholder="HH:MM, HH:MM"></label>
+        <label>夜猫子任务<input name="night" placeholder="HH:MM"></label>
+        <label>登录续期检查<input name="keepalive" placeholder="HH:MM"></label>
+        <label>随机错开（分钟，0 关闭）<input name="spread" type="number" min="0" max="60" step="1"></label>
+        <label>时区<input name="timezone" placeholder="Asia/Shanghai"></label>
+        <label class="wide">HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label>
+      </div>
+      <p class="muted">同类多个时段用逗号分隔，清空可关闭该类定时。保存后由 Magpie 重载插件交给后台服务，Docker 等打不开本机面板时在这里改。</p>
+      <button type="submit">保存设置</button>
+    </form>
+  </details></section>
+  <footer class="muted">余额与旅行状态由后台服务约每 10 分钟刷新；按钮会让 Magpie 重载插件后交给后台服务执行。完整日志在本机面板 <span id="panel">http://127.0.0.1:3439</span>（与 Magpie 在同一台电脑上时可打开）。</footer>
 </body>
 </html>

@@ -3,6 +3,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { calendar } from "./storage.mjs";
 import { specs, manualTasks, buildEvent, growthTasks } from "./events.mjs";
 import { UpstreamError } from "./client.mjs";
+import { webActivity } from "./webagent.mjs";
 
 export const actions = ["all", "activity", "tasks", "travel", "bonus", "night", "keepalive", "inspect"];
 
@@ -19,7 +20,7 @@ export async function perform(action, client, context) {
   const reportKey = code => `${account.id}:${code}:${today()}`;
   const daily = async (name, run) => {
     const key = `${account.id}:${name}`;
-    if (state.daily[key] === today()) { log(`${name}：今天已完成`); return { skipped: true }; }
+    if (state.daily[key] === today()) { log(`${{ activity: "连登活跃", web: "国际版网页会话" }[name] || name}：今天已完成`); return { skipped: true }; }
     const result = await run();
     state.daily[key] = today();
     checkpoint();
@@ -109,13 +110,26 @@ export async function perform(action, client, context) {
   };
 
   // WorkBuddy AI counts a chat to one of its own models.
-  const activity = () => daily("activity", async () => {
+  const report = () => daily("activity", async () => {
     await client.request("/v2/report", { body: [buildEvent(account.auth.uid, { kind: "chat", ...(intl ? { model: ["deepseek-v4.1-flash-sg", "Deepseek-V4.1-Flash"] } : {}) })] });
     const got = await client.request("/activity/growth/streak");
     if (!(got?.streak?.days > 0)) throw new Error("活跃已上报，但上游连登仍为 0，尚未确认生效");
     log(`${where}活跃已生效，连续 ${got.streak.days} 天`);
     return got.streak;
   });
+  // That lights WorkBuddy AI's streak but not its daily reward (30/50
+  // credits), which takes a finished conversation on its web app. Each step
+  // is done once a day on its own, so a failed web turn is retried alone.
+  const activity = async () => {
+    const streak = await report();
+    if (!intl || config.intlWeb === false) return streak;
+    const turn = await daily("web", async () => {
+      const got = await webActivity(client, context.web);
+      log(`国际版网页会话已跑完（${got.model}，${got.chunks} 段回复，${Math.round(got.ms / 1000)} 秒），每日活跃奖励稍后到账`);
+      return got;
+    });
+    return { ...streak, web: turn };
+  };
   const travel = async () => {
     // WorkBuddy AI has no Buddy travel: nothing is asked and nothing logged.
     if (intl) return { skipped: true, reason: "intl" };

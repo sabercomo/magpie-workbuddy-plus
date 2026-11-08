@@ -37,8 +37,12 @@ export function sourceOf(grant, logs, signed, timezone = "Asia/Shanghai") {
 
 // The board's share: the last week's grants, newest first, what each came
 // from, their total by source, and what was used meanwhile.
-export function ledger(balance, usage, logs, signed, now = Date.now(), days = 7) {
-  const entries = (balance?.grants || []).filter(g => g.at >= now - days * 86400_000).map(g => ({ ...g, source: sourceOf(g, logs, signed) }));
+// WorkBuddy AI's daily activity reward is a Bonus Pack of 30 or 50 with no
+// reason given; the web conversation that earns it lands minutes earlier.
+export const reward = (g, realm) => realm === "intl" && /^Bonus Pack$/i.test(String(g.name || "").trim()) && [30, 50].includes(g.credit);
+
+export function ledger(balance, usage, logs, signed, now = Date.now(), days = 7, realm = "cn") {
+  const entries = (balance?.grants || []).filter(g => g.at >= now - days * 86400_000).map(g => ({ ...g, source: sourceOf(g, logs, signed) || (reward(g, realm) ? "每日活跃奖励" : "") }));
   // A day's one unexplained 100-credit grant is its check-in, landed late
   // (Magpie closed at midnight, signed in at 02:14).
   const day = t => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(t), signedDays = new Set(entries.filter(e => e.source === "每日签到").map(e => day(e.at)));

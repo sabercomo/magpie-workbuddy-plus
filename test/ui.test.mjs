@@ -36,7 +36,8 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
     limits: [{ model: "kimi-k3-1", resets: Date.now() + 3600_000 }],
     ledger: { gained: 110, used: 3, sources: [["每日签到", 100], ["猫猫旅行", 10]], entries: [{ at: Date.now() - 60_000, credit: 10, name: "CodeBuddy个人版国内运营裂变包", left: 0, source: "猫猫旅行" }, { at: Date.now() - 3600_000, credit: 100, name: "CodeBuddy个人版国内运营裂变包", left: 100, ends: Date.now() + 20 * 86400_000, source: "每日签到" }] } },
     { id: "cn:e", name: "企业号", enterprise: true, expires: 0, errors: {}, checkin: { outcome: "inactive" } },
-    { id: "intl:x", name: "海外号", realm: "intl", expires: 0, errors: {}, travel: { state: "none" }, streak: { days: 2, active: false, makeupCards: 0 }, tasks: { claimed: 0, total: 1, open: [{ code: "first_chat", title: "完成一次对话", state: "manual" }] }, growth: { energy: 0, buddies: 0, draws: 0, rarity: {} } }],
+    { id: "intl:x", name: "海外号", realm: "intl", expires: 0, errors: {}, travel: { state: "none" }, streak: { days: 2, active: false, makeupCards: 0 }, tasks: { claimed: 0, total: 1, open: [{ code: "first_chat", title: "完成一次对话", state: "manual" }] }, growth: { energy: 0, buddies: 0, draws: 0, rarity: {} }, checkin: { outcome: "closed" },
+      ledger: { gained: 30, used: 0, sources: [["每日活跃奖励", 30]], entries: [{ at: Date.now() - 1000, credit: 30, name: "Bonus Pack", left: 30, source: "每日活跃奖励" }] } }],
     models: { at: Date.now(),
       cn: { account: "国内测试", plan: { name: "体验版", paid: false }, models: [
         { id: "auto", name: "Auto", desc: "自动选择", rate: null, context: 256000, isDefault: true },
@@ -59,7 +60,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const text = node => typeof node === "string" ? node : [node.textContent || "", ...node.children.map(text)].join(" ");
   assert.match(text(nodes.get("board")), /^\s*正在等待 WorkBuddy 登录[\s\S]*https:\/\/www\.workbuddy\.cn\/login\?state=s/);
   // The list view: the account row and its expanded detail, then what needs a person.
-  assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天 · 已签到 \+100[\s\S]*120 \/ 300[\s\S]*每日签到 已签到 \+100 \d\d:\d\d 由 Magpie 签到 · 连续签到 11 天[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*模型额度用完 1 个[\s\S]*需要你处理 1 件\s+120 积分（活动赠送）将作废[\s\S]*其他提醒 2 件 [\s\S]*「关注公众号」需手动完成 \+100 积分[\s\S]*「完成一次对话」需手动完成/);
+  assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天 · 已签到 \+100[\s\S]*120 \/ 300[\s\S]*每日签到 已签到 \+100 \d\d:\d\d 由 Magpie 签到 · 连续签到 11 天[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*模型额度用完 1 个[\s\S]*需要你处理 1 件\s+120 积分（活动赠送）将作废[\s\S]*其他提醒 1 件 [\s\S]*「关注公众号」需手动完成 \+100 积分/);
   // 模型限额: a spent model in the detail, and among what needs a person.
   assert.match(text(nodes.get("board")), /kimi-k3-1 额度已用完 (今天|明天) \d\d:\d\d 恢复[\s\S]*模型额度用完 1 个\s+kimi-k3-1 额度已用完（国内测试） (今天|明天) \d\d:\d\d 恢复/);
   // 积分流水: the week's totals, then each change, a gain named by what ran.
@@ -77,12 +78,16 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const notes = all(nodes.get("board"), "wb-fold wb-notes");
   assert.equal(notes.length, 1);
   assert.ok(!notes[0].open);
-  assert.ok(all(notes[0], "wb-line wb-alert plain").length === 2);
+  assert.ok(all(notes[0], "wb-line wb-alert plain").length === 1, "WorkBuddy AI client-only tasks are not reminders");
   assert.equal(all(nodes.get("board"), "wb-alerts ").length, 1, "one yellow box, the model limits");
   assert.ok(all(nodes.get("board"), "wb-fold").length >= 2 && all(nodes.get("board"), "wb-fold").every(f => !f.open));
-  const intlDetail = all(nodes.get("board"), "wb-detail-grid").find(g => /完成一次对话/.test(text(g)) && !/关注公众号/.test(text(g)));
+  const intlDetail = all(nodes.get("board"), "wb-detail-grid").find(g => /每日活跃奖励/.test(text(g)));
   assert.ok(intlDetail);
   assert.doesNotMatch(text(intlDetail), /猫猫旅行/);
+  // No campaign, no check-in block; the daily reward instead; its client-only tasks aren't listed.
+  assert.match(text(intlDetail), /每日活跃奖励 今日已领 \+30 \d\d:\d\d 到账，来自完成的网页会话[\s\S]*成长 连登 2 天/);
+  assert.doesNotMatch(text(intlDetail), /暂无签到活动|每日签到|完成一次对话/);
+  assert.doesNotMatch(text(nodes.get("board")), /「完成一次对话」/);
   button(nodes.get("board"), "圆环").onclick();
   // Two rings for WorkBuddy AI: active and tasks.
   assert.match(text(nodes.get("board")), /海外号[^海]*今日完成 1\/2/);
@@ -90,7 +95,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   button(nodes.get("board"), "国内测试").onclick();
   assert.match(text(nodes.get("board")), /今日活跃 连登 8 天[\s\S]*在咖啡馆[\s\S]*每日签到 已签到 \+100[\s\S]*待处理 关注公众号 · \+100 积分/);
   button(nodes.get("board"), "小组件").onclick();
-  assert.match(text(nodes.get("board")), /即将作废 明天 120 积分[\s\S]*今日 0\/2 完成[\s\S]*签到 1\/2[\s\S]*猫猫 1 只在咖啡馆\s+国内测试 · 约 \d\d:\d\d 归来\s+能量 30[\s\S]*成长任务 1\/3[\s\S]*关注公众号 需手动/);
+  assert.match(text(nodes.get("board")), /即将作废 明天 120 积分[\s\S]*今日 0\/2 完成[\s\S]*签到 1\/1[\s\S]*猫猫 1 只在咖啡馆\s+国内测试 · 约 \d\d:\d\d 归来\s+能量 30[\s\S]*成长任务 1\/2[\s\S]*关注公众号 需手动\s+连登 8 天/);
   button(nodes.get("board"), "模型").onclick();
   assert.match(text(nodes.get("board")), /国内版 5[\s\S]*国际版 3[\s\S]*你现在能用 全部 5 个 不开会员也能用；1 个高峰时会员优先[\s\S]*正在优惠 3 个模型 限时免费 1 · 夜间折扣 2[\s\S]*最省积分 Hy3 免费 其次 DeepSeek-V4.1-Flash ×0.11[\s\S]*全部用户可用模型：5[\s\S]*Auto 默认[\s\S]*auto[\s\S]*256K\s+随任务浮动[\s\S]*GLM-5.2 夜间折扣[\s\S]*×0.79 23:00–07:50 ×0.50[\s\S]*GLM-5.3 订阅优先[\s\S]*DeepSeek-V4.1-Flash 夜间折扣[\s\S]*×0.11\s+非高峰 约 ×0.06/);
   button(nodes.get("board"), "国际版 3").onclick();

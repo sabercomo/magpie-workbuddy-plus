@@ -57,3 +57,17 @@ test("the board view carries each account's ledger, not its raw grants", t => {
   assert.equal(row.balance.grants, undefined);
   assert.deepEqual([row.ledger.gained, row.ledger.used, row.ledger.entries.length], [10, 3, 1]);
 });
+
+// WorkBuddy AI gives its daily activity reward as a reasonless Bonus Pack of 30 or 50.
+test("a WorkBuddy AI Bonus Pack of 30 or 50 is its daily activity reward; elsewhere it stays unnamed", () => {
+  const now = Date.parse("2026-11-08T12:00:00Z");
+  const balance = { grants: [
+    { at: now - 3600_000, credit: 30, name: "Bonus Pack", left: 30 },
+    { at: now - 2 * 86400_000, credit: 50, name: "Bonus Pack", left: 50 },
+    { at: now - 3 * 86400_000, credit: 250, name: "Bonus Pack", left: 0 }
+  ] };
+  const intl = ledger(balance, null, [], 0, now, 7, "intl");
+  assert.deepEqual(intl.entries.map(e => e.source), ["每日活跃奖励", "每日活跃奖励", ""]);
+  assert.deepEqual(intl.sources, [["其他", 250], ["每日活跃奖励", 80]]);
+  assert.deepEqual(ledger(balance, null, [], 0, now).entries.map(e => e.source), ["", "", ""]);
+});

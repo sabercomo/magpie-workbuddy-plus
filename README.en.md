@@ -106,7 +106,7 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 - Growth tasks: accept, report events, check progress and claim; a task not reached is never recorded as claimed.
 - Buddy travel: send out and claim on return; handles `first_buddy` on first use.
 - Streak make-up cards, 7/14/28-day streak exchanges, growth draws, starter packs and event compensation checks. This streak is a different event from the daily check-in credits.
-- **WorkBuddy AI (international)**, on by default and turned off with 「关闭国际版任务」 on the page or panel: daily activity that lights the heatmap and builds the streak; the 14-day (+50 credits) and 28-day (+150) tiers redeemed automatically; and the daily check-in whenever WorkBuddy AI runs a campaign (Magpie checks in on China only; as of 2026-11 WorkBuddy AI answers 「签到活动未开启或已过期」, no campaign running, and the plugin starts claiming once one does). WorkBuddy AI's growth tasks (its 「养虾」 levels) count real use of its client and can't be simulated, so they're listed as 「需在国际版客户端完成」 (do in the WorkBuddy AI client); it has no Buddy travel, so none is asked for, logged or shown, and its board rings are just activity and growth tasks.
+- **WorkBuddy AI (international)**, on by default and turned off with 「关闭国际版任务」 on the page or panel: daily activity that lights the heatmap and builds the streak; the 14-day (+50 credits) and 28-day (+150) tiers redeemed automatically; and the daily check-in whenever WorkBuddy AI runs a campaign (Magpie checks in on China only; as of 2026-11 WorkBuddy AI answers 「签到活动未开启或已过期」, no campaign running, and the plugin starts claiming once one does). WorkBuddy AI's **daily activity reward** (a Bonus Pack of 30 or 50 credits) counts only a finished conversation on its web app, not the desktop activity report, so the activity slot does what workbuddy2api does: it opens a conversation through the workbuddy.ai web channel, says "Hi" (DeepSeek-V4.1-Flash), waits for it to finish and ends it, once a day, retried in the next slot if it fails. This costs the account a sliver of credit; set `"intlWeb": false` in `config.json` to stop it. The board shows 「每日活跃奖励 今日已领 +30」 or 「今日未领」 for WorkBuddy AI accounts, and the credit history names that grant 「每日活跃奖励」. WorkBuddy AI's growth tasks (its 「养虾」 levels) count real use of its client and can't be simulated, so the board and the reminders no longer list them; with no check-in campaign running, no check-in is shown; it has no Buddy travel, so none is asked for, logged or shown, and its board rings are just activity and growth tasks.
 - The night-owl task runs inside its valid window in Beijing time, at most once per account per day.
 - Login renewal checks (China and WorkBuddy AI alike, under the file locks Magpie uses, so neither overwrites the other), retries, catch-up after sleep for the day's slots, and no double runs after a restart.
 
@@ -127,8 +127,8 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 
 **Entry points**
 
-- Magpie's sidebar page: the board, recent runs, and buttons to add an account, send Buddies travelling, refresh, run everything, and pause or start schedules.
-- The local panel at http://127.0.0.1:3439: the same board, plus running selected accounts, the last 100 runs, and editing schedules and the proxy.
+- Magpie's sidebar page: the board, recent runs, and buttons to add an account, send Buddies travelling, refresh, run everything, and pause or start schedules; 「定时与设置」 at the bottom edits the schedule, the random offset, the time zone and the proxy (for setups such as Docker where the local panel can't be reached).
+- The local panel at http://127.0.0.1:3439 (local access only, so not from outside when Magpie runs in Docker): the same board, plus running selected accounts, the last 100 runs, and editing schedules and the proxy.
 - Add account (「添加账号」) runs Magpie's own `magpie plugin login workbuddy`, which opens the official browser sign-in; signing in to an account again replaces its old login. This plugin never touches login tokens and offers no account file import or export.
 
 > [!IMPORTANT]
@@ -181,7 +181,7 @@ Magpie runs plugin pages in a sandbox with no network, so the page reads `page/d
 
 | Location | Contents |
 | --- | --- |
-| `~/.config/workbuddy-plus/config.json` | Schedules, the random offset in minutes (`spread`), account switches, the WorkBuddy AI switch (`intl`) and HTTP proxy |
+| `~/.config/workbuddy-plus/config.json` | Schedules, the random offset in minutes (`spread`), account switches, the WorkBuddy AI switch (`intl`), WorkBuddy AI's daily web conversation (`intlWeb`) and HTTP proxy |
 | `~/.config/workbuddy-plus/state.json` | Run history and de-duplication state |
 | `~/.config/workbuddy-plus/service.log` | Service log |
 | `page/data.js` in the plugin folder | The board snapshot for Magpie's page, rewritten by the service |
@@ -212,7 +212,7 @@ The service listens on `127.0.0.1` only. An HTTP proxy can be set in the panel; 
 
 ## Updating and stopping
 
-Installed from Magpie: run `magpie plugin update`. If you installed a pinned version (`magpie plugin list` shows a suffix like `#v0.4.0`), remove it with `magpie plugin rm` and `magpie plugin add` the unpinned address again; plugin options such as the port need setting again. A service already running keeps the old code: end it (or log out, or restart) and Magpie starts the new version the next time it loads the plugin.
+Installed from Magpie: run `magpie plugin update`. If you installed a pinned version (`magpie plugin list` shows a suffix like `#v0.4.0`), remove it with `magpie plugin rm` and `magpie plugin add` the unpinned address again; plugin options such as the port need setting again. From 0.5.5 on, when Magpie loads the updated plugin it finds the older service, asks it to exit and starts the new version, so no restart is needed (with a job running it waits for it, asking again each minute). Coming from 0.5.4 or earlier, the old service doesn't know that request yet: end it one last time (or log out, restart, or restart the container).
 
 The macOS background install: update the source folder and install again; settings and history are kept.
 
@@ -243,7 +243,7 @@ No npm dependencies to install. Tests use mock accounts and a mock upstream, and
 npm test
 ```
 
-The tests cover China and WorkBuddy AI account selection and the WorkBuddy AI switch, WorkBuddy AI tasks and check-in, credentials kept out of status replies, run-all never calling the daily check-in, growth task progress, travel rewards, package merging and lapse dates, task categories, usage paging and deductions, model limits (reset parsing and when to ask), board snapshots without credentials, page request de-duplication, rate-limit retries, the add-account flow, login renewal races, schedule de-duplication, the panel and the local HTTP boundary, the model catalog, and the service port.
+The tests cover China and WorkBuddy AI account selection and the WorkBuddy AI switch, WorkBuddy AI tasks and check-in, credentials kept out of status replies, run-all never calling the daily check-in, growth task progress, travel rewards, package merging and lapse dates, task categories, usage paging and deductions, model limits (reset parsing and when to ask), the service handoff after an update, settings saved from Magpie's page, WorkBuddy AI's web conversation and daily reward, board snapshots without credentials, page request de-duplication, rate-limit retries, the add-account flow, login renewal races, schedule de-duplication, the panel and the local HTTP boundary, the model catalog, and the service port.
 
 The README screenshots are taken in Magpie after `docs/demo-data.mjs` writes made-up accounts.
 
