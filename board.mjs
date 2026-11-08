@@ -195,15 +195,26 @@ async function intlCheckin(client) {
   return s.today_checked_in ? { outcome: "done", credit: Number(s.today_credit) || 0, streak: Number(s.streak_days) || 0 } : { outcome: "waiting" };
 }
 
-// Each part fails alone: a refused usage query still shows the balance.
-export async function collect(account, client, config, memory) {
+// A connection dropped or timed out on the way (a proxy resetting it, a
+// network blip), as opposed to an answer WorkBuddy gave.
+export const dropped = e => !e?.status && !e?.limited && /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|socket|fetch failed|network|timed out/i.test(`${e?.code || ""} ${e?.message || ""}`);
+
+// Each part fails alone: a refused usage query still shows the balance. These
+// are all reads, so a dropped connection is tried once more before it shows.
+export async function collect(account, client, config, memory, pause = ms => new Promise(r => setTimeout(r, ms))) {
   const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {}, ...(account.intlOff ? { intlOff: true } : {}) };
   const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone) };
   if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client) }), streak: () => streak(client), tasks: () => tasks(client), growth: () => growth(client) });
   if (!account.enterprise && account.realm === "intl") parts.checkin = () => intlCheckin(client);
   for (const [name, run] of Object.entries(parts)) {
     try { row[name] = await run(); }
-    catch (e) { row.errors[name] = e.message.slice(0, 160); }
+    catch (e) {
+      if (dropped(e)) {
+        await pause(2000);
+        try { row[name] = await run(); continue; } catch (again) { e = again; }
+      }
+      row.errors[name] = e.message.slice(0, 160);
+    }
   }
   // Model limits need the usage above; without a memory (tests, one-off reads) none are asked.
   if (memory && row.usage) row.limits = await limits(client, row.usage.used, memory);

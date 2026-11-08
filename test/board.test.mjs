@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaults, initialize, readJSON, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
-import { summarize, usage, collect, taskBoard, pageBuild, allowance } from "../board.mjs";
+import { summarize, usage, collect, taskBoard, pageBuild, allowance, dropped } from "../board.mjs";
 import { Runner } from "../runner.mjs";
 
 const ok = data => Response.json({ code: 0, data });
@@ -69,6 +69,27 @@ test("usage keeps the newest charged requests as deductions, free ones only coun
     { at: Date.parse("2026-10-29T09:00:00+08:00"), credit: 0.37, model: "glm-5.2", client: "WorkBuddy" }
   ]);
   assert.ok(!JSON.stringify(got).includes("secret"));
+});
+
+// A proxy resetting a connection now and then shouldn't show as a failed read.
+test("a read whose connection drops is tried once more; WorkBuddy's own refusals are not", async () => {
+  const reset = () => Object.assign(new Error("ECONNRESET: The socket connection was closed unexpectedly."), { code: "ECONNRESET" });
+  assert.ok(dropped(reset()) && dropped(new Error("The operation timed out.")) && !dropped(Object.assign(new Error("HTTP 403，denied"), { status: 403 })) && !dropped(new Error("unexpected endpoint /x")));
+  let resets = 1, usageCalls = 0;
+  const waits = [];
+  const { account, client } = clientFor(url => {
+    if (url.pathname === "/billing/meter/get-enterprise-user-usage") { if (resets-- > 0) throw reset(); return ok({ credit: 1997, limitNum: 2000, cycleStartTime: "2026-11-01 00:00:00", cycleResetTime: "2026-12-01 00:00:00" }); }
+    if (url.pathname === "/billing/meter/get-user-request-usage") { usageCalls++; return Response.json({ code: 403, msg: "denied" }, { status: 403 }); }
+    throw reset();
+  });
+  const row = await collect({ ...account, enterprise: true }, client, defaults, undefined, async ms => { waits.push(ms); });
+  assert.equal(row.balance.balance, 3, "one reset, then read");
+  assert.equal(row.errors.balance, undefined);
+  assert.equal(usageCalls, 1, "a refusal is not asked again");
+  assert.deepEqual(waits, [2000]);
+  resets = 5;
+  const again = await collect({ ...account, enterprise: true }, client, defaults, undefined, async () => {});
+  assert.match(again.errors.balance, /ECONNRESET/, "two in a row still show");
 });
 
 test("one failing part leaves the rest of an account's board readable", async () => {
