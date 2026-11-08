@@ -150,7 +150,10 @@
 .wb-more>summary::before{content:"▸ "}.wb-more[open]>summary::before{content:"▾ "}
 .wb-fold>summary{cursor:pointer;list-style:none}
 .wb-fold>summary::-webkit-details-marker{display:none}
-.wb-fold-arrow::after{content:" ▾"}.wb-fold[open] .wb-fold-arrow::after{content:" ▴"}
+.wb-fold-arrow{display:inline-flex;align-items:center;gap:7px}
+.wb-fold-arrow::after{content:"";width:.5em;height:.5em;border:solid currentColor;border-width:0 1.6px 1.6px 0;transform:translateY(-.15em) rotate(45deg)}
+.wb-fold[open] .wb-fold-arrow::after{transform:translateY(.15em) rotate(-135deg)}
+.wb-fold>summary:hover .wb-fold-arrow{color:inherit}
 .wb-fold-body{display:flex;flex-direction:column;gap:5px;margin-top:5px}
 .wb-col-r>.wb-fold:not(:first-child){margin-top:8px}
 
