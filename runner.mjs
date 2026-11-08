@@ -156,7 +156,11 @@ export class Runner {
     const config = this.config();
     this.boarding = (async () => {
       const rows = [], list = this.list();
-      for (const account of list) rows.push({ ...await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions }), config), key: account.key });
+      // What each account's model limits were found to be, kept across refreshes and restarts.
+      const memory = this.state.limits ||= {};
+      for (const k of Object.keys(memory)) if (!list.some(a => a.id === k)) delete memory[k];
+      for (const account of list) rows.push({ ...await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions }), config, memory[account.id] ||= {}), key: account.key });
+      this.save();
       // One personal login reads China's list; an enterprise's follows its own config.
       const models = { at: Date.now() }, mine = list.find(a => !a.enterprise) || list[0], abroad = intlAccount(config);
       if (mine) {

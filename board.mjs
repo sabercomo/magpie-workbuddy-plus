@@ -1,3 +1,4 @@
+import { limits } from "./limits.mjs";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -90,7 +91,7 @@ async function balance(client, account) {
 // which client; never the request's text (input / inputTrunc).
 export async function usage(client, timezone, span = 7, now = new Date(), keep = 50) {
   const dates = Array.from({ length: span }, (_, i) => calendar(new Date(now - (span - 1 - i) * 86400_000), timezone).day);
-  const end = `${dates.at(-1)} 23:59:59`, seen = new Set(), byDay = new Map(dates.map(d => [d, { date: d, credit: 0, count: 0 }])), byModel = new Map(), charged = [];
+  const end = `${dates.at(-1)} 23:59:59`, seen = new Set(), byDay = new Map(dates.map(d => [d, { date: d, credit: 0, count: 0 }])), byModel = new Map(), charged = [], used = {};
   let free = 0;
   let start = `${dates[0]} 00:00:00`;
   for (let pass = 0; pass < 20; pass++) {
@@ -107,6 +108,8 @@ export async function usage(client, timezone, span = 7, now = new Date(), keep =
       else if (day) free++;
       model.credit += credit; model.count++;
       byModel.set(r.model, model);
+      // When each model was last used: the model limits ask only about those.
+      if (r.model && time) used[r.model] = Math.max(used[r.model] || 0, beijing(time));
       if (time > newest) newest = time;
     }
     if (page.length < 3000 || !newest) break;
@@ -116,7 +119,7 @@ export async function usage(client, timezone, span = 7, now = new Date(), keep =
   return {
     days, credit: round(days.reduce((s, d) => s + d.credit, 0)), count: days.reduce((s, d) => s + d.count, 0),
     models: [...byModel.values()].sort((a, b) => b.credit - a.credit).slice(0, 4).map(m => ({ ...m, credit: round(m.credit) })),
-    charges: charged.length, free, recent: charged.sort((x, y) => y.at - x.at).slice(0, keep)
+    charges: charged.length, free, recent: charged.sort((x, y) => y.at - x.at).slice(0, keep), used
   };
 }
 
@@ -193,7 +196,7 @@ async function intlCheckin(client) {
 }
 
 // Each part fails alone: a refused usage query still shows the balance.
-export async function collect(account, client, config) {
+export async function collect(account, client, config, memory) {
   const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {}, ...(account.intlOff ? { intlOff: true } : {}) };
   const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone) };
   if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client) }), streak: () => streak(client), tasks: () => tasks(client), growth: () => growth(client) });
@@ -202,6 +205,8 @@ export async function collect(account, client, config) {
     try { row[name] = await run(); }
     catch (e) { row.errors[name] = e.message.slice(0, 160); }
   }
+  // Model limits need the usage above; without a memory (tests, one-off reads) none are asked.
+  if (memory && row.usage) row.limits = await limits(client, row.usage.used, memory);
   return row;
 }
 

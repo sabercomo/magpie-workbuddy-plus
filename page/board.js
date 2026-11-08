@@ -197,6 +197,10 @@
     const unsigned = rows.map(a => [a, checked(a)]).filter(([, c]) => c && ["warn", "urgent"].includes(c.tone));
     if (unsigned.some(([a]) => a.checkin.outcome === "off")) items.push({ tone: "soon", text: "Magpie 的 WorkBuddy 每日签到没有开启", aside: "设置 › 用量 › 插件", order: 1 });
     for (const [a, c] of unsigned.filter(([a]) => a.checkin.outcome !== "off")) items.push({ tone: c.tone === "urgent" ? "urgent" : "soon", text: `${a.name}：${c.label}`, aside: c.note, order: 1 });
+    // 模型限额: one line per spent model, naming the accounts it is spent on.
+    const spent = new Map();
+    for (const a of rows) for (const l of a.limits || []) { const s = spent.get(l.model); if (s) { s.names.push(a.name); s.resets = Math.min(s.resets, l.resets); s.last = Math.max(s.last, l.resets); } else spent.set(l.model, { names: [a.name], resets: l.resets, last: l.resets }); }
+    for (const [model, s] of spent) items.push({ tone: "soon", text: `${model} 额度已用完（${s.names.join("、")}）`, aside: s.last > s.resets ? `${left(s.resets, now)} 起陆续恢复` : `${left(s.resets, now)} 恢复`, title: "这个模型在该账号上的 24 小时额度用完了，到点前可以换别的模型", order: 2 });
     // One line per package: a package lapsing in daily grants sums what lapses within 10 days.
     const soon = new Map();
     for (const e of lapsing(rows).filter(g => g.expires - now <= 10 * DAY)) { const s = soon.get(e.name); if (s) { s.balance += e.balance; s.days++; } else soon.set(e.name, { ...e, first: e.balance, days: 1 }); }
@@ -295,6 +299,12 @@
     if (u) {
       left_.append(bars(u));
       if (u.models.length) left_.append(el("div", "wb-sub", u.models.map(m => `${m.model} ${num(m.credit)}`).join(" · ")));
+    }
+    // A model whose own 24-hour allowance is spent, and when it comes back.
+    for (const l of a.limits || []) {
+      const row = line(el("span", "wb-name", `${l.model} 额度已用完`), el("span", "wb-when soon", `${left(l.resets, now)} 恢复`));
+      row.title = `${when(l.resets)} 恢复；在那之前可以换别的模型`;
+      left_.append(row);
     }
     left_.append(...history(a.ledger, now));
     grid.append(left_);
