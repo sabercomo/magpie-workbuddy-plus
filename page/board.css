@@ -148,6 +148,11 @@
 .wb-more>summary{cursor:pointer;margin-top:4px;list-style:none}
 .wb-more>summary::-webkit-details-marker{display:none}
 .wb-more>summary::before{content:"▸ "}.wb-more[open]>summary::before{content:"▾ "}
+.wb-fold>summary{cursor:pointer;list-style:none}
+.wb-fold>summary::-webkit-details-marker{display:none}
+.wb-fold-arrow::after{content:" ▾"}.wb-fold[open] .wb-fold-arrow::after{content:" ▴"}
+.wb-fold-body{display:flex;flex-direction:column;gap:5px;margin-top:5px}
+.wb-col-r>.wb-fold:not(:first-child){margin-top:8px}
 
 /* Models: one row per model, its id copied by a click; a plan's locked models dimmed below. */
 .wb-realms{margin-left:auto}

@@ -26,10 +26,10 @@
   const views = [["list", "列表"], ["rings", "圆环"], ["widgets", "小组件"], ["models", "模型"]];
   let seeded = false, mode = views.some(([k]) => k === saved.get()) ? saved.get() : "list", focus = "all", last = null, switched = false;
 
-  // WorkBuddy AI has no Buddy travel yet: nothing to do there counts as done.
+  // WorkBuddy AI has no Buddy travel, so its accounts show none at all.
   function trip(t, now, a) {
-    if (!t) return null;
-    if (t.state === "none") return a?.realm === "intl" ? { label: "暂无猫猫旅行", note: "WorkBuddy AI 还没有开放猫猫旅行", tone: "", done: 1 } : { label: "还没有猫", note: "执行成长任务时会领养首只猫", tone: "", done: 0 };
+    if (!t || a?.realm === "intl") return null;
+    if (t.state === "none") return { label: "还没有猫", note: "执行成长任务时会领养首只猫", tone: "", done: 0 };
     if (t.state === "arrived" || (t.state === "traveling" && t.arriveAt && now >= t.arriveAt)) return { label: "已归来，待领奖", note: `${t.location || "旅行"}结束，下一次「猫猫旅行」会领取${t.reward ? ` ${t.reward} 积分` : "奖励"}`, tone: "warn", done: 1 };
     if (t.state === "traveling") {
       const span = t.arriveAt - t.departAt, done = span > 0 ? Math.min(1, Math.max(0, (now - t.departAt) / span)) : 0;
@@ -64,14 +64,17 @@
 
   // Today's three rings, outside in: active, trip, growth tasks. The task ring
   // counts only what the scheduler can finish; manual ones are listed above.
+  // WorkBuddy AI has no trip, so its trip is null and it gets two rings.
   const doable = t => t ? t.total - t.open.filter(o => o.state === "manual" || o.state === "locked").length : 0;
-  const today = (a, now) => a.enterprise ? null : { active: a.streak?.active ? 1 : 0, trip: trip(a.travel, now, a)?.done || 0, tasks: doable(a.tasks) ? Math.min(1, a.tasks.claimed / doable(a.tasks)) : 1 };
-  const closed = r => r && r.active >= 1 && r.trip >= 1 && r.tasks >= 1;
+  const today = (a, now) => a.enterprise ? null : { active: a.streak?.active ? 1 : 0, trip: a.realm === "intl" ? null : trip(a.travel, now, a)?.done || 0, tasks: doable(a.tasks) ? Math.min(1, a.tasks.claimed / doable(a.tasks)) : 1 };
+  const goals = r => [r.active, r.trip, r.tasks].filter(v => v !== null);
+  const closed = r => r && goals(r).every(v => v >= 1);
 
   function rings(r, big) {
     const [box, radii] = big ? [132, [58, 43, 28]] : [32, [13.5, 9, 4.5]], c = box / 2;
     const s = svg("svg", { viewBox: `0 0 ${box} ${box}`, class: big ? "wb-rings wb-rings-big" : "wb-rings", "aria-hidden": "true" });
-    for (const [radius, value, k] of [[radii[0], r.active, "a"], [radii[1], r.trip, "b"], [radii[2], r.tasks, "c"]]) {
+    const shown = [[r.active, "a"], [r.trip, "b"], [r.tasks, "c"]].filter(([v]) => v !== null);
+    for (const [[value, k], radius] of shown.map((x, i) => [x, radii[i]])) {
       s.append(svg("circle", { cx: c, cy: c, r: radius, class: "wb-ring-track" }));
       if (value > 0) s.append(svg("circle", { cx: c, cy: c, r: radius, class: `wb-ring wb-ring-${k}`, pathLength: 100, "stroke-dasharray": `${Math.round(value * 100)} 100`, transform: `rotate(-90 ${c} ${c})` }));
     }
@@ -249,7 +252,7 @@
   // which model, from which client. A request often costs a fraction of a
   // credit, so these keep two decimals. Ten show; the rest open below.
   const fine = n => Number(n).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
-  const unfolded = new Set();
+  const unfolded = new Set(), grown = new Set();
   function spending(u, id) {
     if (!u?.recent) return [];
     const head = line(el("span", "wb-label", "扣分明细 · 近 7 天"), el("span", "wb-sub", `${num(u.charges)} 次扣分${u.free ? ` · 另有 ${num(u.free)} 次免费` : ""}`));
@@ -293,28 +296,37 @@
       left_.append(bars(u));
       if (u.models.length) left_.append(el("div", "wb-sub", u.models.map(m => `${m.model} ${num(m.credit)}`).join(" · ")));
     }
-    left_.append(...history(a.ledger, now), ...spending(u, a.id));
+    left_.append(...history(a.ledger, now));
     grid.append(left_);
-    if (a.enterprise) return grid;
+    // Deductions sit at the bottom of the right column, beside the credit history.
+    const spent = spending(u, a.id);
+    if (a.enterprise) { right.append(...spent); grid.append(right); return grid; }
 
     const g = a.growth, s = a.streak, t = a.tasks, top = g && ["UR", "SSR", "SR"].find(r => g.rarity[r]);
     const ci = checked(a);
     if (ci) right.append(line(el("span", "wb-label", "每日签到"), el("span", `wb-pill ${ci.tone}`, ci.label)), ...(ci.note ? [el("div", "wb-sub", ci.note)] : []));
-    right.append(line(el("span", "wb-label", "成长"), el("span", "wb-sub", t ? `任务 ${t.claimed}/${t.total}` : "")));
-    right.append(el("div", "wb-stats", [g && `能量 ${num(g.energy)}`, g && `Buddy ${g.buddies}${top ? `（含 ${top}）` : ""}`, g && `抽奖 ${g.draws}`, s && `补签卡 ${s.makeupCards}`].filter(Boolean).join(" · ")));
-    if (s?.nextTier) right.append(el("div", "wb-sub", `再连登 ${s.nextTier.remaining} 天到 ${s.nextTier.days} 天档：${[s.nextTier.credit && `+${s.nextTier.credit} 积分`, s.nextTier.energy && `+${s.nextTier.energy} 能量`].filter(Boolean).join(" · ") || "奖励"}`));
+    // 成长 folds away by default; an opened one stays open across redraws.
+    const fold = el("details", "wb-fold"), head = el("summary", "wb-line"), body = el("div", "wb-fold-body");
+    head.append(el("span", "wb-label", "成长"), el("span", "wb-sub wb-fold-arrow", t ? `任务 ${t.claimed}/${t.total}` : ""));
+    fold.open = grown.has(a.id);
+    fold.ontoggle = () => { if (fold.open) grown.add(a.id); else grown.delete(a.id); };
+    fold.append(head, body);
+    right.append(fold);
+    body.append(el("div", "wb-stats", [g && `能量 ${num(g.energy)}`, g && `Buddy ${g.buddies}${top ? `（含 ${top}）` : ""}`, g && `抽奖 ${g.draws}`, s && `补签卡 ${s.makeupCards}`].filter(Boolean).join(" · ")));
+    if (s?.nextTier) body.append(el("div", "wb-sub", `再连登 ${s.nextTier.remaining} 天到 ${s.nextTier.days} 天档：${[s.nextTier.credit && `+${s.nextTier.credit} 积分`, s.nextTier.energy && `+${s.nextTier.energy} 能量`].filter(Boolean).join(" · ") || "奖励"}`));
     const states = { claimable: ["可领奖", "ok"], auto: ["定时会完成", "go"], manual: ["需手动", "warn"], locked: ["未解锁", ""] };
     for (const task of t?.open || []) {
       const [label, cls] = states[task.state] || [task.state, ""];
       const row = line(el("span", "wb-name", task.title), el("span", `wb-pill ${cls}`, label));
       row.title = [task.target ? `${task.current}/${task.target}` : "", task.credit ? `+${task.credit} 积分` : "", task.ends ? `${date(task.ends)} 截止` : "", task.note].filter(Boolean).join(" · ");
-      right.append(row);
+      body.append(row);
     }
     const tr = trip(a.travel, now, a);
     if (tr) {
       right.append(line(el("span", "wb-label", "猫猫旅行"), el("span", `wb-pill ${tr.tone}`, a.travel?.name ? `${a.travel.name} · ${tr.label}` : tr.label)), el("div", "wb-sub", tr.note));
       if (tr.progress !== undefined) { const b = el("div", "wb-bar"), f = el("span"); f.style.width = `${Math.max(2, tr.progress * 100)}%`; b.append(f); right.append(b); }
     }
+    right.append(...spent);
     grid.append(right);
     return grid;
   }
@@ -335,7 +347,7 @@
     if (a.balance?.size) { const n = line(el("strong", undefined, num(a.balance.balance)), el("span", "wb-sub", `/ ${num(a.balance.size)}`)); n.className = "wb-line wb-amount"; money.append(n, meter(a.balance, now)); }
     else money.append(el("span", "wb-sub", a.errors.balance ? "积分读取失败" : a.enterprise ? "没有企业额度" : "没有积分包"));
     const glance = el("span", "wb-glance"), r = today(a, now);
-    if (r) { const holder = el("span", "wb-rings-box"); holder.title = `今日活跃${r.active ? "✓" : "✗"} · 猫猫旅行 ${Math.round(r.trip * 100)}% · 成长任务 ${a.tasks ? `${a.tasks.claimed}/${a.tasks.total}` : "—"}`; holder.append(rings(r)); glance.append(holder); }
+    if (r) { const holder = el("span", "wb-rings-box"); holder.title = `今日活跃${r.active ? "✓" : "✗"}${r.trip === null ? "" : ` · 猫猫旅行 ${Math.round(r.trip * 100)}%`} · 成长任务 ${a.tasks ? `${a.tasks.claimed}/${a.tasks.total}` : "—"}`; holder.append(rings(r)); glance.append(holder); }
     else glance.append(el("span", "wb-rings-box"));
     glance.append(spark(a.usage));
     row.append(el("span", "wb-avatar", Array.from(a.name || "?")[0]), who, money, glance, el("span", "wb-chevron", "›"));
@@ -395,10 +407,10 @@
       for (const a of rows) {
         const card = el("button", "wb-ringcard"), r = today(a, now);
         card.type = "button";
-        const done = r ? [r.active, r.trip, r.tasks].filter(v => v >= 1).length : 0;
+        const done = r ? goals(r).filter(v => v >= 1).length : 0, all = r ? goals(r).length : 0;
         card.append(r ? rings(r, true) : el("div", "wb-ring-none", "企业账号"), el("strong", undefined, a.name),
           el("span", "wb-sub", a.balance?.size ? `${num(a.balance.balance)} 积分${a.enterprise ? ` / 每月 ${num(a.balance.size)}` : ""}` : a.enterprise ? "没有企业额度" : "没有积分包"),
-          el("span", "wb-sub", r ? (done === 3 ? "今日全部完成" : `今日完成 ${done}/3`) : `近 7 天 ${num(a.usage?.credit)} 积分`));
+          el("span", "wb-sub", r ? (done === all ? "今日全部完成" : `今日完成 ${done}/${all}`) : `近 7 天 ${num(a.usage?.credit)} 积分`));
         card.onclick = () => { focus = a.id; again(); };
         grid.append(card);
       }
@@ -408,7 +420,7 @@
     const a = rows.find(x => x.id === focus), r = today(a, now), top = el("div", r ? "wb-b-top" : "wb-b-top solo");
     if (r) {
       const card = el("div", "wb-card wb-b-rings"), legend = el("div", "wb-keys"), tr = trip(a.travel, now, a);
-      for (const [k, label, value] of [["a", "今日活跃", a.streak ? (a.streak.active ? `连登 ${a.streak.days} 天` : "今天还没活跃") : "—"], ["b", "猫猫旅行", tr ? tr.label : "—"], ["c", "成长任务", a.tasks ? `${a.tasks.claimed}/${a.tasks.total}` : "—"]]) {
+      for (const [k, label, value] of [["a", "今日活跃", a.streak ? (a.streak.active ? `连登 ${a.streak.days} 天` : "今天还没活跃") : "—"], ...(r.trip === null ? [] : [["b", "猫猫旅行", tr ? tr.label : "—"]]), ["c", "成长任务", a.tasks ? `${a.tasks.claimed}/${a.tasks.total}` : "—"]]) {
         const name = el("span", "wb-key"); name.append(el("i", `wb-dot wb-dot-${k}`), label);
         legend.append(line(name, el("span", "wb-sub", value)));
       }
@@ -456,7 +468,7 @@
     const signed = personal.filter(a => checked(a)?.tone === "ok").length;
     if (personal.some(a => a.checkin)) rings_.append(el("span", "wb-w-foot", `签到 ${signed}/${personal.length}`));
     rings_.title = "外环活跃 · 中环旅行 · 内环任务";
-    const trips = personal.map(a => ({ a, t: trip(a.travel, now, a) })).filter(x => x.t && !(x.a.realm === "intl" && x.a.travel?.state === "none")), out = trips.filter(x => x.t.progress !== undefined);
+    const trips = personal.map(a => ({ a, t: trip(a.travel, now, a) })).filter(x => x.t), out = trips.filter(x => x.t.progress !== undefined);
     const labels = [...new Set(trips.map(x => x.t.label))];
     const cats = widget("s", "", "猫猫", el("strong", "wb-w-mid", !trips.length ? "—" : labels.length === 1 ? `${trips.length} 只${labels[0]}` : out.length ? `${out.length} 只在旅行` : `${trips.length} 只猫`));
     const notes = el("div", "wb-w-foot");

@@ -196,7 +196,7 @@ async function intlCheckin(client) {
 export async function collect(account, client, config) {
   const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {}, ...(account.intlOff ? { intlOff: true } : {}) };
   const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone) };
-  if (!account.enterprise) Object.assign(parts, { travel: () => travel(client), streak: () => streak(client), tasks: () => tasks(client), growth: () => growth(client) });
+  if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client) }), streak: () => streak(client), tasks: () => tasks(client), growth: () => growth(client) });
   if (!account.enterprise && account.realm === "intl") parts.checkin = () => intlCheckin(client);
   for (const [name, run] of Object.entries(parts)) {
     try { row[name] = await run(); }

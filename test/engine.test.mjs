@@ -158,7 +158,6 @@ test("a WorkBuddy AI account runs on its own site and claims its check-in only w
   const p = fixture(t, (path, request, seen) => {
     if (path === "/v2/report") return ok({});
     if (path === "/activity/growth/streak") return ok({ streak: { days: 1 } });
-    if (path === "/activity/growth/buddy/travel/status") return ok({});
     if (path === "/v2/billing/meter/checkin-activity-status") return ok({ active: campaign, today_checked_in: false, daily_credit: 100 });
     if (path === "/v2/billing/meter/daily-checkin") return ok({ credit: 100 });
     if (path === "/activity/growth/heatmap") return ok({ cells: [] });
@@ -170,7 +169,11 @@ test("a WorkBuddy AI account runs on its own site and claims its check-in only w
   assert.equal(p.seen[0].body[0].requestModelId, "deepseek-v4.1-flash-sg");
   assert.equal(p.seen[0].headers.Origin, "https://www.workbuddy.ai");
   assert.match(p.logs.at(-1), /国际版活跃已生效/);
-  assert.deepEqual(await p.run("travel"), { skipped: true });
+  // No Buddy travel there: nothing is asked and nothing logged.
+  const before = p.logs.length;
+  assert.deepEqual(await p.run("travel"), { skipped: true, reason: "intl" });
+  assert.equal(p.logs.length, before);
+  assert.ok(!p.seen.some(s => s.path.includes("/buddy/travel")));
   await p.run("bonus");
   assert.ok(!p.seen.some(s => s.path === "/v2/billing/meter/daily-checkin"), "no claim without a campaign");
   assert.ok(!p.seen.some(s => /claim-gift|claim-compensation/.test(s.path)), "China's billing gifts are not asked of WorkBuddy AI");

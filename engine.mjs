@@ -117,10 +117,11 @@ export async function perform(action, client, context) {
     return got.streak;
   });
   const travel = async () => {
+    // WorkBuddy AI has no Buddy travel: nothing is asked and nothing logged.
+    if (intl) return { skipped: true, reason: "intl" };
     const base = "/activity/growth/buddy/travel";
     let status = await client.request(base + "/status");
-    // WorkBuddy AI answers an empty status: no Buddy, no destinations yet.
-    if (!status?.state) { log(`${where}还没有可旅行的猫猫，跳过`); return { skipped: true }; }
+    if (!status?.state) { log("还没有可旅行的猫猫，跳过"); return { skipped: true }; }
     if (status.state === "arrived") {
       const reward = await client.request(base + "/claim", { body: {} });
       log(`猫猫归来：已领取 ${reward?.reward_credit ?? 0} 积分`);
@@ -198,11 +199,12 @@ export async function perform(action, client, context) {
     return { days: streak.streak?.days, draws: lottery.chances };
   };
   if (action === "inspect") return {
-    tasks: await tasks(), travel: await client.request("/activity/growth/buddy/travel/status"),
+    tasks: await tasks(), ...(intl ? {} : { travel: await client.request("/activity/growth/buddy/travel/status") }),
     streak: await client.request("/activity/growth/streak"), energy: await client.request("/v2/activity/growth/energy")
   };
   const handlers = { activity, tasks: () => runTasks(false), travel, bonus, night: () => runTasks(true) };
   if (action !== "all") return handlers[action]();
+  if (intl) delete handlers.travel;
   const results = {}, failures = [], errors = [];
   for (const [name, run] of Object.entries(handlers)) {
     if (name === "night") continue;
