@@ -59,9 +59,9 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const text = node => typeof node === "string" ? node : [node.textContent || "", ...node.children.map(text)].join(" ");
   assert.match(text(nodes.get("board")), /^\s*正在等待 WorkBuddy 登录[\s\S]*https:\/\/www\.workbuddy\.cn\/login\?state=s/);
   // The list view: the account row and its expanded detail, then what needs a person.
-  assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天 · 已签到 \+100[\s\S]*120 \/ 300[\s\S]*每日签到 已签到 \+100 \d\d:\d\d 由 Magpie 签到 · 连续签到 11 天[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*需要你留意 4 件[\s\S]*120 积分（活动赠送）将作废[\s\S]*「关注公众号」需手动完成 \+100 积分/);
+  assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天 · 已签到 \+100[\s\S]*120 \/ 300[\s\S]*每日签到 已签到 \+100 \d\d:\d\d 由 Magpie 签到 · 连续签到 11 天[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*模型额度用完 1 个[\s\S]*需要你处理 1 件\s+120 积分（活动赠送）将作废[\s\S]*其他提醒 2 件 [\s\S]*「关注公众号」需手动完成 \+100 积分[\s\S]*「完成一次对话」需手动完成/);
   // 模型限额: a spent model in the detail, and among what needs a person.
-  assert.match(text(nodes.get("board")), /kimi-k3-1 额度已用完 (今天|明天) \d\d:\d\d 恢复[\s\S]*需要你留意[\s\S]*kimi-k3-1 额度已用完（国内测试） (今天|明天) \d\d:\d\d 恢复/);
+  assert.match(text(nodes.get("board")), /kimi-k3-1 额度已用完 (今天|明天) \d\d:\d\d 恢复[\s\S]*模型额度用完 1 个\s+kimi-k3-1 额度已用完（国内测试） (今天|明天) \d\d:\d\d 恢复/);
   // 积分流水: the week's totals, then each change, a gain named by what ran.
   assert.match(text(nodes.get("board")), /积分流水 · 近 7 天 获得 \+110 · 用掉 3[\s\S]*每日签到 \+100 · 猫猫旅行 \+10[\s\S]*\+10 猫猫旅行 已用完[\s\S]*\+100 每日签到 余 100 · \d\d\/\d\d 作废/);
   // 扣分明细: each charged request with two decimals, ten shown, the rest folded.
@@ -73,6 +73,12 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const button = (node, label) => typeof node === "string" ? undefined : node.textContent === label && node.onclick ? node : node.children.map(c => button(c, label)).find(Boolean);
   // 成长 starts folded. WorkBuddy AI has no Buddy travel, so its detail shows none.
   const all = (node, cls) => typeof node === "string" ? [] : [...(node.className === cls ? [node] : []), ...node.children.flatMap(c => all(c, cls))];
+  // Only the spent model is yellow; what can wait is a plain list, folded.
+  const notes = all(nodes.get("board"), "wb-fold wb-notes");
+  assert.equal(notes.length, 1);
+  assert.ok(!notes[0].open);
+  assert.ok(all(notes[0], "wb-line wb-alert plain").length === 2);
+  assert.equal(all(nodes.get("board"), "wb-alerts ").length, 1, "one yellow box, the model limits");
   assert.ok(all(nodes.get("board"), "wb-fold").length >= 2 && all(nodes.get("board"), "wb-fold").every(f => !f.open));
   const intlDetail = all(nodes.get("board"), "wb-detail-grid").find(g => /完成一次对话/.test(text(g)) && !/关注公众号/.test(text(g)));
   assert.ok(intlDetail);
@@ -93,7 +99,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   button(nodes.get("board"), "列表").onclick();
   // The enterprise login has no daily credits: no check-in shown, nothing to flag.
   assert.doesNotMatch(text(nodes.get("board")), /企业号：|没签上/);
-  assert.match(text(nodes.get("board")), /今日定时 · 每天 3 次 下一次 21:00 活跃 · 旅行 · 福利[\s\S]*09:00 完成[\s\S]*09:10 失败 2\/3 成长任务[\s\S]*21:00 下一次[\s\S]*需要你留意/);
+  assert.match(text(nodes.get("board")), /今日定时 · 每天 3 次 下一次 21:00 活跃 · 旅行 · 福利[\s\S]*09:00 完成[\s\S]*09:10 失败 2\/3 成长任务[\s\S]*21:00 下一次[\s\S]*模型额度用完/);
   assert.equal(nodes.get("accounts").children.length, 2);
   const checkbox = nodes.get("accounts").children[1].children[0]; checkbox.checked = true; checkbox.onchange();
   await buttons.find(b => b.dataset.action === "activity").onclick();

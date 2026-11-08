@@ -8,7 +8,8 @@
 .wb-alerts{--tone:var(--wb-warn);border:1px solid color-mix(in srgb,var(--tone) 35%,transparent);background:color-mix(in srgb,var(--tone) 9%,var(--wb-card));border-radius:12px;padding:10px 14px;margin-top:12px;display:flex;flex-direction:column;gap:4px}
 .wb-alerts.urgent{--tone:var(--wb-urgent)}
 .wb-alerts-head{font-weight:600;color:var(--tone)}
-.wb-alert{font-size:12.5px;color:var(--wb-warn)}.wb-alert.urgent{color:var(--wb-urgent)}
+.wb-alert{font-size:12.5px;color:var(--wb-warn)}.wb-alert.urgent{color:var(--wb-urgent)}.wb-alert.plain{color:inherit}.wb-alert.plain .wb-alert-aside{color:var(--wb-muted);opacity:1}
+.wb-notes{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:10px 14px;margin-top:12px}
 .wb-alert-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wb-alert-aside{flex:none;font-variant-numeric:tabular-nums;opacity:.9}
 

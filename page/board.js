@@ -200,7 +200,7 @@
     // 模型限额: one line per spent model, naming the accounts it is spent on.
     const spent = new Map();
     for (const a of rows) for (const l of a.limits || []) { const s = spent.get(l.model); if (s) { s.names.push(a.name); s.resets = Math.min(s.resets, l.resets); s.last = Math.max(s.last, l.resets); } else spent.set(l.model, { names: [a.name], resets: l.resets, last: l.resets }); }
-    for (const [model, s] of spent) items.push({ tone: "soon", text: `${model} 额度已用完（${s.names.join("、")}）`, aside: s.last > s.resets ? `${left(s.resets, now)} 起陆续恢复` : `${left(s.resets, now)} 恢复`, title: "这个模型在该账号上的 24 小时额度用完了，到点前可以换别的模型", order: 2 });
+    for (const [model, s] of spent) items.push({ kind: "limit", tone: "soon", text: `${model} 额度已用完（${s.names.join("、")}）`, aside: s.last > s.resets ? `${left(s.resets, now)} 起陆续恢复` : `${left(s.resets, now)} 恢复`, title: "这个模型在该账号上的 24 小时额度用完了，到点前可以换别的模型", order: 2 });
     // One line per package: a package lapsing in daily grants sums what lapses within 10 days.
     const soon = new Map();
     for (const e of lapsing(rows).filter(g => g.expires - now <= 10 * DAY)) { const s = soon.get(e.name); if (s) { s.balance += e.balance; s.days++; } else soon.set(e.name, { ...e, first: e.balance, days: 1 }); }
@@ -209,13 +209,29 @@
     return items.sort((x, y) => x.order - y.order);
   }
 
+  // Only a spent model gets the yellow box, and what can't wait (a login about
+  // to expire, a failed read, credit lapsing within two days) a red one. The
+  // rest is a plain list, folded until opened; opened, it stays open.
+  let noting = false;
   function alerts(items) {
     if (!items.length) return el("div", "wb-calm", "没有需要你处理的事");
-    const box = el("section", `wb-alerts ${items.some(i => i.tone === "urgent") ? "urgent" : ""}`);
-    box.setAttribute("aria-label", "需要你留意");
-    box.append(el("div", "wb-alerts-head", `需要你留意 ${items.length} 件`));
-    for (const i of items) { const row = line(el("span", "wb-alert-text", i.text), el("span", "wb-alert-aside", i.aside)); row.className = `wb-line wb-alert ${i.tone}`; if (i.title) row.title = i.title; box.append(row); }
-    return box;
+    const group = el("div", "wb-alert-group");
+    const row = (i, plain) => { const r = line(el("span", "wb-alert-text", i.text), el("span", "wb-alert-aside", i.aside)); r.className = `wb-line wb-alert ${plain ? "plain" : i.tone}`; if (i.title) r.title = i.title; return r; };
+    const box = (list, head, cls) => { const b = el("section", `wb-alerts ${cls}`); b.setAttribute("aria-label", head); b.append(el("div", "wb-alerts-head", `${head} ${list.length} ${cls ? "件" : "个"}`), ...list.map(i => row(i))); return b; };
+    const limited = items.filter(i => i.kind === "limit"), urgent = items.filter(i => i.kind !== "limit" && i.tone === "urgent"), rest = items.filter(i => i.kind !== "limit" && i.tone !== "urgent");
+    if (limited.length) group.append(box(limited, "模型额度用完", ""));
+    if (urgent.length) group.append(box(urgent, "需要你处理", "urgent"));
+    if (rest.length) {
+      const fold = el("details", "wb-fold wb-notes"), head = el("summary", "wb-line");
+      head.append(el("span", "wb-label", "其他提醒"), el("span", "wb-sub wb-fold-arrow", `${rest.length} 件`));
+      fold.open = noting;
+      fold.ontoggle = () => { noting = fold.open; };
+      const body = el("div", "wb-fold-body");
+      body.append(...rest.map(i => row(i, true)));
+      fold.append(head, body);
+      group.append(fold);
+    }
+    return group;
   }
 
   function kpis(rows, now) {
