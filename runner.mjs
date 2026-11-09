@@ -9,7 +9,7 @@ import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
 import { checkin, collect, writePage } from "./board.mjs";
 import { ledger } from "./history.mjs";
-import { chinaModels, intlModels } from "./models.mjs";
+import { chinaModels, enterpriseModels, intlModels } from "./models.mjs";
 
 // A LaunchAgent's PATH is only the system's, so the usual install places
 // (Magpie's own ~/.local/bin link, Homebrew, the app) are looked in too. On
@@ -165,8 +165,12 @@ export class Runner {
       for (const k of Object.keys(memory)) if (!list.some(a => a.id === k)) delete memory[k];
       for (const account of list) rows.push({ ...await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions }), config, memory[account.id] ||= {}), key: account.key });
       this.save();
-      // One personal login reads China's list; an enterprise's follows its own config.
-      const models = { at: Date.now() }, mine = list.find(a => !a.enterprise) || list[0], abroad = intlAccount(config);
+      // One personal login reads China's list; an enterprise login reads its enterprise's own.
+      const models = { at: Date.now() }, china = list.filter(a => a.realm !== "intl"), mine = china.find(a => !a.enterprise), firm = china.find(a => a.enterprise), abroad = intlAccount(config);
+      if (firm) {
+        try { models.ent = await enterpriseModels(new WorkBuddyClient(firm, config, { gap: 300, ...this.clientOptions })); }
+        catch (e) { models.ent = { error: e.message.slice(0, 160) }; }
+      }
       if (mine) {
         try { models.cn = await chinaModels(new WorkBuddyClient(mine, config, { gap: 300, ...this.clientOptions })); }
         catch (e) { models.cn = { error: e.message.slice(0, 160) }; }

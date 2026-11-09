@@ -13,6 +13,7 @@
   const date = ms => { const d = new Date(ms); return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`; };
   const clock = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
   const days = (ms, now) => Math.round((new Date(ms).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / DAY);
+  const queueNote = q => `${when(q.at)} 查到这个模型算力不足在排队：第 ${q.position} 位${q.size ? `（队列 ${q.size}）` : ""}，预计 ${when(q.until)} 排到。企业账号也一样，可以先换别的模型`;
   const left = (ms, now) => { const d = days(ms, now); return d <= 0 ? `今天 ${clock(ms)}` : d === 1 ? `明天 ${clock(ms)}` : `${d} 天后`; };
   const tone = (ms, now) => { if (!ms) return "long"; const d = (ms - now) / DAY; return d <= 2 ? "urgent" : d <= 10 ? "soon" : ""; };
   // "CodeBuddy个人版国内运营裂变包" says nothing the card doesn't already.
@@ -209,8 +210,12 @@
     for (const [a, c] of unsigned.filter(([a]) => a.checkin.outcome !== "off")) items.push({ tone: c.tone === "urgent" ? "urgent" : "soon", text: `${a.name}：${c.label}`, aside: c.note, order: 1 });
     // 模型限额: one line per spent model, naming the accounts it is spent on.
     const spent = new Map();
-    for (const a of rows) for (const l of a.limits || []) { const s = spent.get(l.model); if (s) { s.names.push(a.name); s.resets = Math.min(s.resets, l.resets); s.last = Math.max(s.last, l.resets); } else spent.set(l.model, { names: [a.name], resets: l.resets, last: l.resets }); }
+    for (const a of rows) for (const l of (a.limits || []).filter(l => !l.queued)) { const s = spent.get(l.model); if (s) { s.names.push(a.name); s.resets = Math.min(s.resets, l.resets); s.last = Math.max(s.last, l.resets); } else spent.set(l.model, { names: [a.name], resets: l.resets, last: l.resets }); }
     for (const [model, s] of spent) items.push({ kind: "limit", tone: "soon", text: `${model} 额度已用完（${s.names.join("、")}）`, aside: s.last > s.resets ? `${left(s.resets, now)} 起陆续恢复` : `${left(s.resets, now)} 恢复`, title: "这个模型在该账号上的 24 小时额度用完了，到点前可以换别的模型", order: 2 });
+    // A model short of capacity queues every account, enterprise ones too.
+    const queued = new Map();
+    for (const a of rows) for (const l of (a.limits || []).filter(l => l.queued)) { const q = queued.get(l.model); if (q) { q.names.push(a.name); if (l.queued.at > q.at) Object.assign(q, l.queued); } else queued.set(l.model, { names: [a.name], ...l.queued }); }
+    for (const [model, q] of queued) items.push({ kind: "limit", queued: true, tone: "soon", text: `${model} 排队中（${q.names.join("、")}）`, aside: `预计 ${left(q.until, now)} 排到`, title: queueNote(q), order: 2.5 });
     // One line per package: a package lapsing in daily grants sums what lapses within 10 days.
     const soon = new Map();
     for (const e of lapsing(rows).filter(g => g.expires - now <= 10 * DAY)) { const s = soon.get(e.name); if (s) { s.balance += e.balance; s.days++; } else soon.set(e.name, { ...e, first: e.balance, days: 1 }); }
@@ -219,7 +224,7 @@
     return items.sort((x, y) => x.order - y.order);
   }
 
-  // Only a spent model gets the yellow box, and what can't wait (a login about
+  // Only a spent or queued model gets the yellow box, and what can't wait (a login about
   // to expire, a failed read, credit lapsing within two days) a red one. The
   // rest is a plain list, folded until opened; opened, it stays open.
   let noting = false;
@@ -227,10 +232,13 @@
     if (!items.length) return el("div", "wb-calm", "没有需要你处理的事");
     const group = el("div", "wb-alert-group");
     const row = (i, plain) => { const r = line(el("span", "wb-alert-text", i.text), el("span", "wb-alert-aside", i.aside)); r.className = `wb-line wb-alert ${plain ? "plain" : i.tone}`; if (i.title) r.title = i.title; return r; };
-    const box = (list, head, cls) => { const b = el("section", `wb-alerts ${cls}`); b.setAttribute("aria-label", head); b.append(el("div", "wb-alerts-head", `${head} ${list.length} ${cls ? "件" : "个"}`), ...list.map(i => row(i))); return b; };
+    const box = (list, head, cls) => { const b = el("section", `wb-alerts ${cls}`); b.setAttribute("aria-label", head); b.append(el("div", "wb-alerts-head", head), ...list.map(i => row(i))); return b; };
     const limited = items.filter(i => i.kind === "limit"), urgent = items.filter(i => i.kind !== "limit" && i.tone === "urgent"), rest = items.filter(i => i.kind !== "limit" && i.tone !== "urgent");
-    if (limited.length) group.append(box(limited, "模型额度用完", ""));
-    if (urgent.length) group.append(box(urgent, "需要你处理", "urgent"));
+    if (limited.length) {
+      const spent = limited.filter(i => !i.queued).length, queued = limited.length - spent;
+      group.append(box(limited, [spent && `模型额度用完 ${spent} 个`, queued && `排队中 ${queued} 个`].filter(Boolean).join(" · "), ""));
+    }
+    if (urgent.length) group.append(box(urgent, `需要你处理 ${urgent.length} 件`, "urgent"));
     if (rest.length) {
       const fold = el("details", "wb-fold wb-notes"), head = el("summary", "wb-line");
       head.append(el("span", "wb-label", "其他提醒"), el("span", "wb-sub wb-fold-arrow", `${rest.length} 件`));
@@ -329,9 +337,12 @@
       if (u.models.length) left_.append(el("div", "wb-sub", u.models.map(m => `${m.model} ${num(m.credit)}`).join(" · ")));
     }
     // A model whose own 24-hour allowance is spent, and when it comes back.
+    // A model queued for capacity, where it stood when last asked.
     for (const l of a.limits || []) {
-      const row = line(el("span", "wb-name", `${l.model} 额度已用完`), el("span", "wb-when soon", `${left(l.resets, now)} 恢复`));
-      row.title = `${when(l.resets)} 恢复；在那之前可以换别的模型`;
+      const row = l.queued
+        ? line(el("span", "wb-name", `${l.model} 排队中`), el("span", "wb-when soon", `第 ${l.queued.position} 位 · 预计 ${left(l.queued.until, now)}`))
+        : line(el("span", "wb-name", `${l.model} 额度已用完`), el("span", "wb-when soon", `${left(l.resets, now)} 恢复`));
+      row.title = l.queued ? queueNote(l.queued) : `${when(l.resets)} 恢复；在那之前可以换别的模型`;
       left_.append(row);
     }
     left_.append(...history(a.ledger, now));
@@ -560,9 +571,21 @@
 
   // Model lists as WorkBuddy's own client shows them, one build at a time:
   // what the account's plan can use first, then what it shuts the plan out of.
-  const realms = [["cn", "国内版"], ["intl", "国际版"]];
+  // An enterprise's own list shows first, and only when an enterprise login was added.
+  const realms = [["ent", "企业"], ["cn", "国内版"], ["intl", "国际版"]], realmName = { ent: "企业", cn: "国内版", intl: "国际版" };
   const remembered = { get() { try { return localStorage.getItem("wb-realm"); } catch { return null; } }, set(v) { try { localStorage.setItem("wb-realm", v); } catch {} } };
-  let realm = remembered.get() === "intl" ? "intl" : "cn", byRate = false, lockedOpen = true;
+  let realm = ["intl", "ent"].includes(remembered.get()) ? remembered.get() : "cn", byRate = false, lockedOpen = true;
+  // A model's own reasoning levels: the one it starts on marked, 「可关」 when thinking can be off.
+  function levels(r) {
+    const cell = el("div", "wb-mreason");
+    if (!r) { cell.append(el("span", "wb-sub", "—")); cell.title = "官方配置没有列出推理档位"; return cell; }
+    const list = el("span", "wb-levels");
+    r.levels.forEach((l, i) => { if (i) list.append(" "); list.append(el(l === r.default && !r.fixed ? "strong" : "span", undefined, l)); });
+    cell.append(list);
+    if (r.fixed || r.off) cell.append(el("span", "wb-sub", r.fixed ? "固定" : "可关"));
+    cell.title = r.fixed ? `只有 ${r.levels[0]} 一档` : `可选 ${r.levels.join(" / ")}${r.default ? `，默认 ${r.default}` : ""}${r.off ? "；可以关闭思考" : "；思考不能关闭"}`;
+    return cell;
+  }
   const ctx = n => !n ? "—" : n >= 1e6 ? `${+(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M` : `${Math.round(n / 1000)}K`;
   const times = r => `×${r.toFixed(2)}`;
   const icon = (path, size = 13) => { const s = svg("svg", { width: size, height: size, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": 1.5, "aria-hidden": "true" }); s.innerHTML = path; return s; };
@@ -606,23 +629,27 @@
       off.title = m.promo.note;
       rate.append(off);
     }
-    row.append(name, copier(m.id), el("span", "wb-num wb-mctx", ctx(m.context)), rate);
+    row.append(name, copier(m.id), levels(m.reasoning), el("span", "wb-num wb-mctx", ctx(m.context)), rate);
     return row;
   }
 
   function modelHead(label) {
     const head = el("div", "wb-mrow wb-mhead");
-    head.append(el("span", undefined, label), el("span", undefined, "模型 ID"), el("span", "wb-num wb-mctx", "上下文"), el("span", "wb-num", "倍率"));
+    const reason = el("span", "wb-mreason", "推理档位");
+    reason.title = "官方配置里的原生推理档位，加粗的是默认档";
+    head.append(el("span", undefined, label), el("span", undefined, "模型 ID"), reason, el("span", "wb-num wb-mctx", "上下文"), el("span", "wb-num", "倍率"));
     return head;
   }
 
   // The build switch sits in the view bar, beside the view it belongs to.
   function modelsView(view, bar) {
-    const box = el("div", "wb-view-models"), all = view?.models || {}, pick = segs(realms.map(([k, t]) => [k, all[k]?.models ? `${t} ${all[k].models.length}` : t]), realm, v => { realm = v; remembered.set(v); again(); }, "选择版本");
+    const box = el("div", "wb-view-models"), all = view?.models || {}, shown = realms.filter(([k]) => k !== "ent" || all.ent);
+    if (!shown.some(([k]) => k === realm)) realm = "cn";
+    const pick = segs(shown.map(([k, t]) => [k, all[k]?.models ? `${t} ${all[k].models.length}` : t]), realm, v => { realm = v; remembered.set(v); again(); }, "选择版本");
     pick.className += " wb-realms";
     bar.append(pick);
-    const r = all[realm], where = realm === "intl" ? "国际版" : "国内版";
-    if (!r) { box.append(el("p", "wb-calm", realm === "intl" ? "Magpie 里没有登录 WorkBuddy 国际版（workbuddy-ai）。登录后这里会显示国际版模型和你的计划。" : "还没有读到国内版模型，看板刷新后显示。")); return box; }
+    const r = all[realm], where = realmName[realm];
+    if (!r) { box.append(el("p", "wb-calm", realm === "intl" ? "Magpie 里没有登录 WorkBuddy 国际版（workbuddy-ai）。登录后这里会显示国际版模型和你的计划。" : all.ent ? "没有国内个人账号，国内版列表要用个人账号读取。" : "还没有读到国内版模型，看板刷新后显示。")); return box; }
     if (r.error) { box.append(el("p", "wb-calm", `${where}模型读取失败：${r.error}`)); return box; }
     const plan = r.plan || { name: "Free", paid: false }, locked = plan.paid ? [] : r.models.filter(m => m.tier?.exclusive), open = r.models.filter(m => !locked.includes(m));
     const sort = list => byRate ? [...list].sort((a, b) => (a.rate ?? Infinity) - (b.rate ?? Infinity)) : list;
@@ -635,17 +662,18 @@
         locked.length ? `共 ${r.models.length} 个，另外 ${locked.length} 个是 Pro-only` : queued.length ? `不开会员也能用；${queued.length} 个高峰时会员优先` : "当前计划全部可用"],
       realm === "intl"
         ? [`${where}账号`, `${plan.name} 计划`, `${r.account || ""}${locked.length ? " · 升级 Pro 才能用全部" : ""}`]
+        : realm === "ent" ? ["企业账号", r.account || "企业", "模型由企业配置决定，按企业额度扣"]
         : ["正在优惠", promos.length ? `${promos.length} 个模型` : "没有", [...kinds].map(([k, n]) => `${k} ${n}`).join(" · ") || "官方没有进行中的优惠"],
       ["最省积分", best ? `${best.name} ${best.rate === 0 ? "免费" : times(best.rate)}` : "—", next ? `其次 ${next.name} ${next.rate === 0 ? "免费" : times(next.rate)}` : ""]
     ];
     const strip = el("div", "wb-kpis wb-kpis-3");
     for (const [k, v, sub] of cells) { const t = el("div", "wb-kpi"); t.append(el("span", "wb-sub", k), el("strong", undefined, v), el("span", "wb-sub", sub)); strip.append(t); }
     const hint = el("div", "wb-models-hint");
-    hint.append(el("span", "wb-sub", realm === "intl" ? "倍率是每次请求按基准扣积分的倍数：×0.5 扣一半，×2 扣两倍。点模型 ID 复制。" : "个人账号读到的列表；企业账号的模型由企业配置决定，可能不同。点模型 ID 复制。"),
+    hint.append(el("span", "wb-sub", realm === "intl" ? "倍率是每次请求按基准扣积分的倍数：×0.5 扣一半，×2 扣两倍。点模型 ID 复制。" : realm === "ent" ? "企业账号读到的列表，只能用这里的模型。点模型 ID 复制。" : all.ent ? "个人账号读到的列表；企业账号的模型看「企业」。点模型 ID 复制。" : "个人账号读到的列表；企业账号的模型由企业配置决定，可能不同。点模型 ID 复制。"),
       segs([["official", "官方顺序"], ["rate", "倍率从低到高"]], byRate ? "rate" : "official", v => { byRate = v === "rate"; again(); }, "排序"));
     const table = el("section", "wb-mtable");
     table.setAttribute("aria-label", `${where}可用模型`);
-    table.append(modelHead(`${locked.length ? `${plan.name} 用户可用模型` : "全部用户可用模型"}：${open.length}`), ...sort(open).map(m => modelRow(m, false, plan.name)));
+    table.append(modelHead(`${realm === "ent" ? "企业可用模型" : locked.length ? `${plan.name} 用户可用模型` : "全部用户可用模型"}：${open.length}`), ...sort(open).map(m => modelRow(m, false, plan.name)));
     box.append(strip, hint, table);
     if (locked.length) {
       const shut = el("section", "wb-mtable wb-locked"), toggle = el("button", "wb-disclosure"), rows = el("div");

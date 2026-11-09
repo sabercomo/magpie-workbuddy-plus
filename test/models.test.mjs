@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { catalog, creditsOf, intlModels } from "../models.mjs";
+import { catalog, creditsOf, enterpriseModels, intlModels, reasoningOf } from "../models.mjs";
 
 const now = Date.parse("2026-11-02T15:00:00+08:00");
 const config = {
@@ -60,3 +60,23 @@ test("the international list reads with the plan, and an expired login is report
   await assert.rejects(intlModels({ ...account, auth: { ...account.auth, expires: now - 1 } }, { fetcher, now }), /国际版登录已过期/);
   assert.equal(seen.length, 2);
 });
+
+test("each model's own reasoning levels read as its config lists them", () => {
+  assert.deepEqual(reasoningOf({ reasoning: { canDisableThinking: false, defaultEffort: "high", supportedEfforts: ["low", "high", "max"] }, onlyReasoning: true }), { levels: ["low", "high", "max"], default: "high", off: false });
+  assert.deepEqual(reasoningOf({ reasoning: { canDisableThinking: true, defaultEffort: "high", supportedEfforts: ["high", "xhigh"] } }), { levels: ["high", "xhigh"], default: "high", off: true });
+  // A model that may answer without reasoning can have it off even unsaid.
+  assert.deepEqual(reasoningOf({ reasoning: { defaultEffort: "high", supportedEfforts: ["low", "high"] }, onlyReasoning: false }), { levels: ["low", "high"], default: "high", off: true });
+  // One effort alone is the only level it runs at; none listed, none shown.
+  assert.deepEqual(reasoningOf({ reasoning: { effort: "medium", summary: "auto" } }), { levels: ["medium"], default: "medium", fixed: true, off: false });
+  assert.equal(reasoningOf({ id: "default-model" }), null);
+  const list = catalog({ agents: [{ name: "cli", models: ["a", "b"] }], models: [{ id: "a", reasoning: { defaultEffort: "max", supportedEfforts: ["low", "max"] } }, { id: "b" }] }, now);
+  assert.deepEqual(list.map(m => m.reasoning), [{ levels: ["low", "max"], default: "max", off: false }, null]);
+});
+
+test("an enterprise's list is read with its own login, no plan in the way", async () => {
+  const asked = [];
+  const client = { account: { name: "企业号" }, request: async path => { asked.push(path); return config; } };
+  const got = await enterpriseModels(client, now);
+  assert.deepEqual([got.account, got.plan, got.models.length, asked], ["企业号", { name: "企业", paid: true }, 7, ["/v3/config"]]);
+});
+

@@ -21,13 +21,24 @@ const live = (p, now) => p && p.enabled !== false && !(Date.parse(p.schedule?.va
 // free plans; China's 「订阅优先」 only queues free plans behind members.
 const exclusive = t => /only|专属|仅限/i.test(`${t.badge?.label || ""} ${t.badge?.labelEn || ""}`);
 
+// A model's own reasoning levels, as its config lists them: the levels it
+// takes and the one it starts on, whether thinking can be switched off; a
+// model naming one effort alone runs at that level only.
+export function reasoningOf(d) {
+  const r = d?.reasoning;
+  if (!r) return null;
+  const levels = Array.isArray(r.supportedEfforts) ? r.supportedEfforts.filter(e => typeof e === "string") : [];
+  if (levels.length) return { levels, ...(r.defaultEffort ? { default: r.defaultEffort } : {}), off: r.canDisableThinking === true || d.onlyReasoning === false };
+  return r.effort ? { levels: [r.effort], default: r.effort, fixed: true, off: false } : null;
+}
+
 export function catalog(cfg, now = Date.now()) {
   const ids = (cfg?.agents || []).find(a => a.name === "cli")?.models || [];
   const tiers = (cfg?.modelTiers || []).filter(t => t.enabled !== false);
   const promos = (cfg?.modelPromotions || []).filter(p => p.kind === "discount" && live(p, now));
   const list = ids.map(id => {
     const d = (cfg.models || []).find(m => m.id === id) || {}, rate = creditsOf(d.credits);
-    const row = { id, name: d.name || id, desc: d.descriptionZh || d.descriptionEn || "", rate, context: Number(d.maxInputTokens) || 0, isDefault: d.isDefault === true };
+    const row = { id, name: d.name || id, desc: d.descriptionZh || d.descriptionEn || "", rate, context: Number(d.maxInputTokens) || 0, isDefault: d.isDefault === true, reasoning: reasoningOf(d) };
     const tier = tiers.find(t => t.modelIds?.includes(id));
     if (tier) row.tier = { label: tier.badge?.label || tier.badge?.labelEn || "", note: tier.hover?.textZh || tier.hover?.textEn || "", exclusive: exclusive(tier) };
     // A model may carry a badge-only promotion beside the one that prices it
@@ -68,6 +79,12 @@ export async function chinaModels(client, now = Date.now()) {
   const models = catalog(await client.request("/v3/config", { base: china }), now);
   const plan = planOf(await client.request("/billing/meter/get-user-resource-summary", { body: {}, base: china }));
   return { models, plan, account: client.account.name };
+}
+
+// An enterprise: its own list, set by the enterprise and read with its login;
+// its allowance, not a plan, decides what it may spend.
+export async function enterpriseModels(client, now = Date.now()) {
+  return { models: catalog(await client.request("/v3/config"), now), plan: { name: "企业", paid: true }, account: client.account.name };
 }
 
 // International: its login is Magpie's to renew, so an expired one is reported,

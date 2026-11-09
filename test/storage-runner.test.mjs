@@ -277,7 +277,25 @@ test("a board refresh reads both builds' model lists, each failing alone", async
   const { models } = runner.boardView();
   assert.deepEqual([models.cn.account, models.cn.plan.name, models.cn.models.map(m => m.id)], ["fixture@example.test", "体验版", ["hy3"]]);
   assert.match(models.intl.error, /billing down/);
+  assert.equal(models.ent, undefined, "no enterprise login, no enterprise list");
   assert.ok(!JSON.stringify(runner.boardView()).includes("intl-access"));
+
+  // An enterprise login reads its enterprise's own list with its own token.
+  auths["workbuddy#e1"] = { type: "oauth", uid: "e1", accountId: "firm", access: "ent-access", enterpriseId: "corp", expires: Date.now() + 86400_000 };
+  writeJSON(authFile, auths);
+  const firmCfg = { agents: [{ name: "cli", models: ["kimi-k3.1-pro"] }], models: [{ id: "kimi-k3.1-pro", name: "Kimi-K3.1-Pro", credits: "x0.97", reasoning: { defaultEffort: "high", supportedEfforts: ["low", "high", "max"] } }] };
+  const tokens = [];
+  const both = new Runner(p.dir, { gap: 0, fetcher: async (url, init) => {
+    const { host, pathname } = new URL(url);
+    if (pathname === "/v3/config") { tokens.push(init.headers.Authorization); return Response.json({ code: 0, data: init.headers.Authorization === "Bearer ent-access" ? firmCfg : cfg }); }
+    if (pathname === "/billing/meter/get-user-resource-summary") return Response.json({ code: 0, data: { SubscriptionPackageName: "体验版", IsPaidUser: false } });
+    return Response.json({ code: 0, data: {} });
+  } });
+  await both.refreshBoard();
+  const firm = both.boardView().models.ent;
+  assert.deepEqual([firm.account, firm.plan.name, firm.models.map(m => [m.id, m.reasoning.levels.join("/")])], ["firm", "企业", [["kimi-k3.1-pro", "low/high/max"]]]);
+  assert.deepEqual(both.boardView().models.cn.models.map(m => m.id), ["hy3"], "China's list still comes from the personal login");
+  assert.ok(tokens.includes("Bearer ent-access"));
 });
 
 test("a login added in Magpie itself refreshes the board at the next beat, not when it is next due", async t => {

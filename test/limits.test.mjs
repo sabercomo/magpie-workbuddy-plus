@@ -31,6 +31,11 @@ test("a probe is one minimal chat request: a spent model answers 6004 with its r
   assert.deepEqual(await probe(client, "deepseek-v4.1-flash"), { limited: false });
   reply = () => Response.json({ code: 11, msg: "model not found" }, { status: 400 });
   await assert.rejects(probe(client, "nope"), /HTTP 400，model not found/);
+  // Short of capacity, a model queues every account: 6020 with the queue, its wait in seconds.
+  reply = () => Response.json({ code: 6020, msg: "queue.waiting.title", data: { queue_position: 907, queue_size: 908, retry_after: 40, estimated_wait: 4535, client_user_type: "ultimate" } }, { status: 429 });
+  assert.deepEqual(await probe(client, "kimi-k3.1-pro"), { limited: false, queued: { position: 907, size: 908, wait: 4535_000 } });
+  reply = () => Response.json({ code: 6020, msg: "queue.waiting.title", data: { queue_position: 5443, queue_size: "999+", retry_after: 40, estimated_wait: 27215 } }, { status: 429 });
+  assert.deepEqual(await probe(client, "kimi-k3.1-pro"), { limited: false, queued: { position: 5443, size: "999+", wait: 27215_000 } });
   // A plain 429 without 6004 or a reset time is a rate limit on the request, not a spent model.
   reply = () => Response.json({ code: 1, msg: "slow down" }, { status: 429 });
   await assert.rejects(probe(client, "deepseek-v4.1-flash"), /HTTP 429/);
@@ -69,4 +74,28 @@ test("a model is asked only when used within the day and since it was last asked
   // A model unused for a week is forgotten.
   await limits(null, { "kimi-k3-1": now + 7.5 * 24 * HOUR }, memory, now + 8 * 24 * HOUR, ask);
   assert.deepEqual(Object.keys(memory), ["kimi-k3-1"]);
+});
+
+test("a queued model is listed after the spent ones until its told wait is up, and asked again after the hour", async () => {
+  const now = Date.parse("2026-11-09T06:15:00Z"), asked = [];
+  let answer = { limited: false, queued: { position: 907, size: 908, wait: 75 * 60_000 } };
+  const ask = async (_, model) => { asked.push(model); return model === "kimi-k3-1" ? { limited: true, resets: now + 5 * HOUR } : answer; };
+  const memory = {}, used = { "kimi-k3.1-pro": now - 60_000, "kimi-k3-1": now - 60_000 };
+  assert.deepEqual(await limits(null, used, memory, now, ask), [
+    { model: "kimi-k3-1", resets: now + 5 * HOUR },
+    { model: "kimi-k3.1-pro", queued: { position: 907, size: 908, at: now, until: now + 75 * 60_000 } }
+  ]);
+  // Past its wait it drops off without asking; within the hour nothing is asked.
+  asked.length = 0;
+  assert.deepEqual(await limits(null, used, memory, now + 50 * 60_000, ask), [{ model: "kimi-k3-1", resets: now + 5 * HOUR }, { model: "kimi-k3.1-pro", queued: { position: 907, size: 908, at: now, until: now + 75 * 60_000 } }]);
+  assert.deepEqual(asked, []);
+  // After the hour it is asked again even if not used since; a short wait still shows for 10 minutes.
+  answer = { limited: false, queued: { position: 3, size: 40, wait: 30_000 } };
+  const later = now + 61 * 60_000;
+  assert.deepEqual((await limits(null, used, memory, later, ask)).at(-1), { model: "kimi-k3.1-pro", queued: { position: 3, size: 40, at: later, until: later + 10 * 60_000 } });
+  assert.deepEqual(asked, ["kimi-k3.1-pro"]);
+  // Through the queue: a reply clears it.
+  answer = { limited: false };
+  await limits(null, used, memory, later + 2 * HOUR, ask);
+  assert.deepEqual(memory["kimi-k3.1-pro"], { checked: later + 2 * HOUR });
 });
