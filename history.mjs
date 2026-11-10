@@ -35,17 +35,20 @@ export function sourceOf(grant, logs, signed, timezone = "Asia/Shanghai") {
   return hour === 0 && grant.credit === 100 ? "每日签到" : "";
 }
 
-// The board's share: the last week's grants, newest first, what each came
-// from, their total by source, and what was used meanwhile.
+// The board's share: the grants of the last seven calendar days (Beijing's,
+// today included: the same days the usage total covers), newest first, what
+// each came from, their total by source, and what was used meanwhile.
 // WorkBuddy AI's daily activity reward is a Bonus Pack of 30 or 50 with no
-// reason given; the web conversation that earns it lands minutes earlier.
+// reason given; it lands the night after the day it is for (02:00 to 07:00
+// in Beijing), not minutes after that day's web conversation.
 export const reward = (g, realm) => realm === "intl" && /^Bonus Pack$/i.test(String(g.name || "").trim()) && [30, 50].includes(g.credit);
 
 export function ledger(balance, usage, logs, signed, now = Date.now(), days = 7, realm = "cn") {
-  const entries = (balance?.grants || []).filter(g => g.at >= now - days * 86400_000).map(g => ({ ...g, source: sourceOf(g, logs, signed) || (reward(g, realm) ? "每日活跃奖励" : "") }));
+  const day = t => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(t), since = Date.parse(`${day(now - (days - 1) * 86400_000)}T00:00:00+08:00`);
+  const entries = (balance?.grants || []).filter(g => g.at >= since).map(g => ({ ...g, source: sourceOf(g, logs, signed) || (reward(g, realm) ? "每日活跃奖励" : "") }));
   // A day's one unexplained 100-credit grant is its check-in, landed late
   // (Magpie closed at midnight, signed in at 02:14).
-  const day = t => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(t), signedDays = new Set(entries.filter(e => e.source === "每日签到").map(e => day(e.at)));
+  const signedDays = new Set(entries.filter(e => e.source === "每日签到").map(e => day(e.at)));
   for (const e of [...entries].reverse()) if (!e.source && e.credit === 100 && !signedDays.has(day(e.at))) { e.source = "每日签到"; signedDays.add(day(e.at)); }
   const bySource = new Map();
   for (const e of entries) bySource.set(e.source || "其他", round((bySource.get(e.source || "其他") || 0) + e.credit));

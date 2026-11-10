@@ -4,7 +4,7 @@ const scheduleNames = { daily:"活跃 / 旅行 / 连登福利",tasks:"成长任�
 const intlNames = { daily:"连登活跃 / 签到 / 连登福利",tasks:"成长任务",web:"网页会话（每日活跃奖励）",keepalive:"登录续期检查" };
 
 const statuses = { running:"执行中",queued:"排队中",succeeded:"已完成",failed:"有失败项目",deferred:"稍后重试",interrupted:"重启中断",cancelled:"已停止" };
-let current, filled = false;
+let current, filled = false, modelField = null;
 const selected = new Set(), opened = new Set();
 function element(tag, text, className) { const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node; }
 async function api(path, body) {
@@ -42,12 +42,15 @@ async function refresh() {
   if(!filled){
     for(const [key,times] of Object.keys(scheduleNames).map(k=>[k,current.config.schedules[k]||[]])){const label=element("label",scheduleNames[key]);const input=element("input");input.name=`schedule-${key}`;input.value=times.join(", ");input.placeholder="HH:MM, HH:MM";label.append(input);$("schedule-fields").append(label);}
     for(const [key,times] of Object.keys(intlNames).map(k=>[k,current.intlSchedules[k]||[]])){const label=element("label",intlNames[key]);const input=element("input");input.name=`intl-${key}`;input.value=times.join(", ");input.placeholder="HH:MM, HH:MM";label.append(input);$("intl-schedule-fields").append(label);}
-    const model=element("label","网页会话用的模型"),pick=element("select"),wanted=current.config.intlWebModel||"auto";pick.name="intl-model";
-    for(const id of ["auto",...new Set([...(current.intlModels||[]),...(wanted==="auto"?[]:[wanted])])]){const o=element("option",id==="auto"?"自动：优先当前免费的模型":id);o.value=id;pick.append(o);}
-    pick.value=wanted;model.append(pick);$("intl-schedule-fields").append(model);
+    const model=element("div",undefined,"field"),pick=element("input"),wanted=current.config.intlWebModel||"auto";pick.type="hidden";pick.name="intl-model";pick.value=wanted;
+    model.append(pick,element("span","网页会话用的模型"),WBBoard.picker(pick,WBBoard.modelChoices(current.intlModels,wanted)));$("intl-schedule-fields").append(model);modelField={host:model,pick,count:(current.intlModels||[]).length};
     for(const key of ["timezone","proxy"])$("config-form").elements[key].value=current.config[key];
     $("config-form").elements.spread.value=Number.isInteger(current.config.spread)?current.config.spread:10;
     filled=true;
+  }
+  // WorkBuddy AI's models arrive with the board, often after the form is filled: the menu catches up unless it is open.
+  if(modelField&&(current.intlModels||[]).length!==modelField.count&&!modelField.host.lastChild.open){
+    modelField.count=(current.intlModels||[]).length;modelField.host.lastChild.remove();modelField.host.append(WBBoard.picker(modelField.pick,WBBoard.modelChoices(current.intlModels,modelField.pick.value)));
   }
   $("updated").textContent=`更新于 ${new Date().toLocaleTimeString()}`;
 }

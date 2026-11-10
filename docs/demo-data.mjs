@@ -181,7 +181,7 @@ writePage(join(process.argv[2], "data.js"), {
   settings: { timezone: "Asia/Shanghai", spread: 0, proxy: "", intlWebModel: "auto" },
   accounts, models, today: { timezone: "Asia/Shanghai", slots, next: slots.find(s => s.status === "upcoming") || null },
   jobs: [
-    job(["web"], 70, "海外号：国际版网页会话已跑完（hy3，当前免费，11 秒），每日活跃奖励稍后到账"),
+    job(["web"], 70, "海外号：国际版网页会话已跑完（hy3，当前免费，11 秒），每日活跃奖励通常次日凌晨到账"),
     job(["tasks"], 95, "主力号：成长任务完成 2 项，领取 80 积分"),
     job(["travel"], 130, "备用号：芝麻出发去大理"),
     job(["activity", "travel", "bonus"], 140, "2 个账号已活跃；主力号：团子出发去敦煌"),

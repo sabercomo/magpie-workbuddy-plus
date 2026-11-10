@@ -71,3 +71,10 @@ test("a WorkBuddy AI Bonus Pack of 30 or 50 is its daily activity reward; elsewh
   assert.deepEqual(intl.sources, [["其他", 250], ["每日活跃奖励", 80]]);
   assert.deepEqual(ledger(balance, null, [], 0, now).entries.map(e => e.source), ["", "", ""]);
 });
+
+// 获得 and 用掉 sit side by side, so both cover the same seven calendar days.
+test("the ledger's week is seven calendar days in Beijing, the days its usage total covers", () => {
+  const now = at("2026-11-10T22:00:00"), grant = time => ({ at: at(time), credit: 5, name: "x", left: 5 });
+  const got = ledger({ grants: [grant("2026-11-10T20:56:00"), grant("2026-11-04T00:00:30"), grant("2026-11-03T23:30:00")] }, { credit: 1 }, [], 0, now);
+  assert.deepEqual([got.entries.length, got.gained], [2, 10], "11-03 23:30 is inside the last 168 hours but before the week's first day");
+});

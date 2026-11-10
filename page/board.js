@@ -64,12 +64,14 @@
     }[c.outcome] || { label: "签到失败", tone: "urgent", note: c.message || "在 Magpie 设置 › 用量 › 插件 查看原因" };
   }
 
-  // WorkBuddy AI's daily activity reward (a 30/50 Bonus Pack): earned today or not.
+  // WorkBuddy AI's daily activity reward (a 30/50 Bonus Pack): landed today or
+  // not. It is paid the night after the day it is for, so what the row can
+  // say for sure is when the last one arrived, not which run earned it.
   function earned(a, now) {
     const got = (a.ledger?.entries || []).filter(e => e.source === "每日活跃奖励").sort((x, y) => y.at - x.at)[0];
-    if (got && days(got.at, now) === 0) return { label: `今日已领 +${num(got.credit)}`, tone: "ok", note: `${clock(got.at)} 到账，来自完成的网页会话` };
-    const why = last?.[1]?.intlEnabled === false ? "国际版定时已暂停" : last?.[1]?.intl?.web === false ? "网页会话已关闭，需要在 workbuddy.ai 网页端自己完成一次对话" : "下一次国际版「网页会话」定时会在网页端跑一次会话来领取";
-    return { label: "今日未领", tone: "", note: `${why}${got ? `；上次 ${when(got.at)} +${num(got.credit)}` : ""}` };
+    if (got && days(got.at, now) === 0) return { label: `今日到账 +${num(got.credit)}`, tone: "ok", note: `${clock(got.at)} 到账；奖励在活跃后的次日凌晨发放` };
+    const why = last?.[1]?.intlEnabled === false ? "国际版定时已暂停" : last?.[1]?.intl?.web === false ? "网页会话已关闭，需要在 workbuddy.ai 网页端自己完成一次对话" : "奖励在活跃后的次日凌晨发放，通常 02:00 到 07:00 到账";
+    return { label: "今日未到账", tone: "", note: `${why}${got ? `；上次 ${when(got.at)} +${num(got.credit)}` : ""}` };
   }
 
   // Today's three rings, outside in: active, trip, growth tasks. The task ring
@@ -740,5 +742,52 @@
     host.append(...[signin(view, now), bar, body].filter(Boolean));
   }
 
-  globalThis.WBBoard = { render, when };
+  // A menu in place of a native <select>, drawn like the page's other menus.
+  // The value stays in a hidden input, so the form reads it as before. An
+  // item is { id, label, note, tag, free, rule }: rule draws a line under it.
+  let openPick = null, listening = false;
+  function picker(input, items, onPick) {
+    const root = el("details", "wb-pick wb-board"), summary = el("summary"), shown = el("span", "wb-pick-value"), menu = el("div", "wb-pick-menu");
+    const rows = items.map(it => typeof it === "string" ? { id: it, label: it } : it), buttons = [];
+    menu.setAttribute("role", "listbox");
+    const paint = () => {
+      const now = rows.find(r => r.id === input.value) || { label: input.value };
+      shown.textContent = now.shown || now.label;
+      for (const [b, r] of buttons) b.setAttribute("aria-selected", String(r.id === input.value));
+    };
+    for (const r of rows) {
+      const b = el("button"), name = el("span", "wb-pick-name", r.label);
+      b.type = "button"; b.setAttribute("role", "option");
+      if (r.note) name.append(el("small", "", r.note));
+      b.append(el("span", "wb-pick-check", "✓"), name);
+      if (r.tag) b.append(el("span", r.free ? "wb-pick-tag wb-pick-free" : "wb-pick-tag", r.tag));
+      b.onclick = () => { input.value = r.id; paint(); root.open = false; if (onPick) onPick(r.id); };
+      buttons.push([b, r]);
+      menu.append(b);
+      if (r.rule) menu.append(el("hr"));
+    }
+    summary.append(shown, el("span", "wb-pick-chev"));
+    root.append(summary, menu);
+    root.ontoggle = () => { if (root.open) openPick = root; };
+    root.sync = paint;
+    if (!listening && document.addEventListener) {
+      listening = true;
+      document.addEventListener("click", event => { if (openPick?.open && !openPick.contains(event.target)) openPick.open = false; });
+      document.addEventListener("keydown", event => { if (event.key === "Escape" && openPick?.open) { openPick.open = false; openPick.firstChild?.focus?.(); } });
+    }
+    paint();
+    return root;
+  }
+  // The web conversation's model choices: automatic first, then WorkBuddy AI's
+  // own models (ids alone when that is all there is), each with what it costs.
+  function modelChoices(models, wanted) {
+    const rows = (models || []).map(m => typeof m === "string" ? { id: m, label: m } : {
+      id: m.id, label: m.name || m.id, ...(m.name && m.name !== m.id ? { note: m.id } : {}),
+      ...(m.tier?.exclusive ? { tag: "Pro" } : m.rate === 0 || m.promo?.rate === 0 ? { tag: "免费", free: true } : typeof m.rate === "number" ? { tag: `×${m.rate}` } : {})
+    });
+    if (wanted && wanted !== "auto" && !rows.some(r => r.id === wanted)) rows.push({ id: wanted, label: wanted });
+    return [{ id: "auto", label: "自动", note: "优先当前免费的模型", shown: "自动 · 优先当前免费的模型", rule: rows.length > 0 }, ...rows];
+  }
+
+  globalThis.WBBoard = { render, when, picker, modelChoices };
 })();

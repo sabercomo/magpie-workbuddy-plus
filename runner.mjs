@@ -67,7 +67,7 @@ export class Runner {
   list() { return accounts(this.config(), this.dir); }
   status() {
     const config = this.config();
-    return { version, config, intlSchedules: intlSchedules(config), intlModels: (this.board.models?.intl?.models || []).map(m => m.id), accounts: this.list().map(publicAccount), jobs: this.state.jobs, daily: this.state.daily, slots: this.state.slots };
+    return { version, config, intlSchedules: intlSchedules(config), intlModels: (this.board.models?.intl?.models || []).map(({ id, name, rate, promo, tier }) => ({ id, name, rate, promo, tier })), accounts: this.list().map(publicAccount), jobs: this.state.jobs, daily: this.state.daily, slots: this.state.slots };
   }
   // A job queued or running: the service must not be swapped out under it.
   working() { return this.controllers.size > 0 || this.state.jobs.some(j => ["running", "queued"].includes(j.status)); }

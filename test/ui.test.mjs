@@ -94,7 +94,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   assert.ok(intlDetail);
   assert.doesNotMatch(text(intlDetail), /猫猫旅行/);
   // No campaign, no check-in block; the daily reward instead; its client-only tasks aren't listed.
-  assert.match(text(intlDetail), /每日活跃奖励 今日已领 \+30 \d\d:\d\d 到账，来自完成的网页会话[\s\S]*成长 连登 2 天/);
+  assert.match(text(intlDetail), /每日活跃奖励 今日到账 \+30 \d\d:\d\d 到账；奖励在活跃后的次日凌晨发放[\s\S]*成长 连登 2 天/);
   assert.doesNotMatch(text(intlDetail), /暂无签到活动|每日签到|完成一次对话/);
   assert.doesNotMatch(text(nodes.get("board")), /「完成一次对话」/);
   button(nodes.get("board"), "圆环").onclick();
@@ -133,6 +133,12 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   assert.equal(calls.filter(c => c.path === "/api/config").at(-1).body.intlEnabled, true, "the WorkBuddy AI switch flips its own schedule only");
   form.elements["schedule-daily"].value = "21:00, 09:00, 09:00";
   form.elements["intl-web"].value = "11:00，10:30";
+  // The model menu: automatic first, then each model with what it costs; a saved model no longer listed stays pickable.
+  assert.equal(context.WBBoard.modelChoices([{ id: "hy3", name: "Hy3", rate: 0 }, { id: "gpt-6-luna", name: "GPT-6-Luna", rate: 0.07, tier: { exclusive: true } }, { id: "glm-5.3", name: "glm-5.3", rate: 0.69 }], "gone").map(r => [r.id, r.tag || "", r.note || ""].join("|")).join(" "),
+    "auto||优先当前免费的模型 hy3|免费|hy3 gpt-6-luna|Pro|gpt-6-luna glm-5.3|×0.69| gone||");
+  const menu = all(nodes.get("intl-schedule-fields"), "wb-pick-menu")[0], option = menu?.children.find(b => text(b).includes("kimi-k3"));
+  option.onclick();
+  assert.equal(form.elements["intl-model"].value, "kimi-k3", "picking from the menu sets the form's value");
   form.elements["intl-model"].value = "hy3";
   await form.onsubmit({ preventDefault() {}, currentTarget: form });
   const saved = calls.filter(c => c.path === "/api/config").at(-1).body;

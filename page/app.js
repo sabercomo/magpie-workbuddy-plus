@@ -48,10 +48,12 @@ function fill(view) {
   for (const k of kinds) form.elements[k].value = (view.schedules?.[k] || []).join(", ");
   for (const k of intlKinds) form.elements[`intl-${k}`].value = (view.intlSchedules?.[k] || []).join(", ");
   // The web conversation's model: automatic, or one of WorkBuddy AI's own.
-  const pick = form.elements["intl-model"], wanted = view.settings.intlWebModel || "auto";
-  const ids = [...new Set([...(view.models?.intl?.models || []).map(m => m.id), ...(wanted === "auto" ? [] : [wanted])])];
-  pick.replaceChildren(pick.options[0], ...ids.map(id => { const o = document.createElement("option"); o.value = o.textContent = id; return o; }));
-  pick.value = wanted;
+  // An open menu is left alone: the page redraws every 15 seconds.
+  const pick = form.elements["intl-model"], wanted = view.settings.intlWebModel || "auto", host = $("intl-model-pick");
+  if (!host.firstChild?.open) {
+    pick.value = wanted;
+    host.replaceChildren(WBBoard.picker(pick, WBBoard.modelChoices(view.models?.intl?.models, wanted), () => { edited = true; }));
+  }
   form.elements.spread.value = view.settings.spread;
   form.elements.timezone.value = view.settings.timezone || "";
   form.elements.proxy.value = view.settings.proxy || "";

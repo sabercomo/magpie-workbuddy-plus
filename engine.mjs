@@ -136,7 +136,7 @@ export async function perform(action, client, context) {
         got = await webActivity(client, { ...context.web, model: fallback });
       }
       const why = got.model === chosen.id ? chosen.why : "备用";
-      log(`国际版网页会话已跑完（${got.model}${why ? `，${why}` : ""}，${Math.round(got.ms / 1000)} 秒），每日活跃奖励稍后到账`);
+      log(`国际版网页会话已跑完（${got.model}${why ? `，${why}` : ""}，${Math.round(got.ms / 1000)} 秒），每日活跃奖励通常次日凌晨到账`);
       return got;
     });
   };
