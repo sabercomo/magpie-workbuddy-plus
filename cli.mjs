@@ -5,6 +5,6 @@ const [command, argument] = process.argv.slice(2);
 if (["status", "board", "run", "pause", "resume"].includes(command)) {
   const { WorkBuddyPlusPlugin } = await import("./index.mjs");
   const { tool } = await WorkBuddyPlusPlugin();
-  const result = command === "status" ? await tool.status.execute({}) : command === "board" ? await tool.board.execute({}) : command === "run" ? await tool.run.execute({ action: argument || "all" }) : await tool.schedules.execute({ enabled: command === "resume" });
+  const result = command === "status" ? await tool.status.execute({}) : command === "board" ? await tool.board.execute({}) : command === "run" ? await tool.run.execute({ action: argument || "all" }) : await tool.schedules.execute({ enabled: command === "resume", intlEnabled: command === "resume" });
   console.log(JSON.stringify(result, null, 2));
-} else throw new Error("用法：bun cli.mjs status | board | run [all|activity|tasks|travel|bonus|night|keepalive|inspect] | pause | resume");
+} else throw new Error("用法：bun cli.mjs status | board | run [all|activity|tasks|travel|bonus|night|keepalive|web|inspect] | pause | resume（同时暂停或开启国内版与国际版的定时）");

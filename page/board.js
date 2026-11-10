@@ -51,7 +51,7 @@
     if (a.realm === "intl" && c.outcome === "closed") return null;
     if (a.realm === "intl") return {
       done: { label: `已签到${c.credit ? ` +${num(c.credit)}` : ""}`, tone: "ok", note: streak || "由 WorkBuddy Plus 签到" },
-      waiting: { label: "未签到", tone: "", note: a.intlOff ? "国际版自动任务已关闭" : "下一次「活跃 · 旅行 · 福利」定时会签到" }
+      waiting: { label: "未签到", tone: "", note: last?.[1]?.intlEnabled === false ? "国际版定时已暂停" : "下一次国际版「活跃 · 福利」定时会签到" }
     }[c.outcome] || { label: "签到读取失败", tone: "warn", note: c.message || "" };
     return {
       claimed: { label: `已签到${c.credit ? ` +${num(c.credit)}` : ""}`, tone: "ok", note: [c.at && `${clock(c.at)} 由 Magpie 签到`, streak].filter(Boolean).join(" · ") },
@@ -68,7 +68,7 @@
   function earned(a, now) {
     const got = (a.ledger?.entries || []).filter(e => e.source === "每日活跃奖励").sort((x, y) => y.at - x.at)[0];
     if (got && days(got.at, now) === 0) return { label: `今日已领 +${num(got.credit)}`, tone: "ok", note: `${clock(got.at)} 到账，来自完成的网页会话` };
-    const why = a.intlOff ? "国际版自动任务已关闭" : last?.[1]?.intl?.web === false ? "网页会话已关闭，需要在 workbuddy.ai 网页端自己完成一次对话" : "下一次「活跃 · 旅行 · 福利」定时会在网页端跑一次会话来领取";
+    const why = last?.[1]?.intlEnabled === false ? "国际版定时已暂停" : last?.[1]?.intl?.web === false ? "网页会话已关闭，需要在 workbuddy.ai 网页端自己完成一次对话" : "下一次国际版「网页会话」定时会在网页端跑一次会话来领取";
     return { label: "今日未领", tone: "", note: `${why}${got ? `；上次 ${when(got.at)} +${num(got.credit)}` : ""}` };
   }
 
@@ -132,28 +132,58 @@
     return box;
   }
 
-  const kinds = { daily: "活跃 · 旅行 · 福利", tasks: "成长任务", night: "夜猫子", keepalive: "登录续期" };
+  const kinds = { daily: "活跃 · 旅行 · 福利", tasks: "成长任务", night: "夜猫子", keepalive: "登录续期", "intl-daily": "活跃 · 签到 · 福利", "intl-tasks": "成长任务", "intl-web": "网页会话", "intl-keepalive": "登录续期" };
   const slotStates = { succeeded: ["完成", "ok"], failed: ["失败", "urgent"], deferred: ["稍后重试", "warn"], running: ["执行中", "go"], queued: ["排队中", "go"], interrupted: ["中断", "warn"], cancelled: ["已停止", ""], upcoming: ["待执行", ""], pending: ["等待补跑", "warn"], missed: ["已错过", ""] };
+
+  // What the page around the board does when a schedule switch is flipped.
+  let hooks = {};
+  // A switch answers the click at once; the saved state follows when it arrives.
+  function scheduleSwitch(name, intl, on) {
+    const b = el("button", "wb-switch"), state = el("span", "wb-switch-state", on ? "运行中" : "已暂停");
+    b.type = "button";
+    b.setAttribute("role", "switch");
+    b.setAttribute("aria-checked", String(on));
+    b.setAttribute("aria-label", `${name}定时`);
+    b.title = on ? `暂停${name}的定时，手动执行不受影响` : `开启${name}的定时`;
+    b.append(state, el("span", "wb-knob"));
+    b.onclick = () => {
+      const next = b.getAttribute("aria-checked") !== "true";
+      b.setAttribute("aria-checked", String(next));
+      state.textContent = next ? "运行中" : "已暂停";
+      hooks.onSchedule(intl, next);
+    };
+    return b;
+  }
 
   // Today's slots: what each does and how it went, the next one marked.
   function schedule(view) {
     const t = view?.today;
     if (!t?.slots) return null;
     const box = el("section", "wb-sched"), next = t.next;
+    // With WorkBuddy AI's slots too, each build gets its own row, China's first.
+    const abroad = s => s.kind.startsWith("intl-"), groups = [["国内版", t.slots.filter(s => !abroad(s))], ["国际版", t.slots.filter(abroad)]].filter(([, list]) => list.length);
+    const kind = k => `${groups.length > 1 ? `${k.startsWith("intl-") ? "国际版" : "国内版"} ` : ""}${kinds[k] || k}`;
     box.setAttribute("aria-label", "今日定时");
-    box.append(line(el("span", "wb-label", `今日定时 · 每天 ${t.slots.length} 次`), el("span", "wb-sub", !view.enabled ? "定时已暂停" : next ? `下一次 ${next.runAt || next.at} ${kinds[next.kind] || next.kind}` : "今天的时段都已过")));
-    const row = el("div", "wb-slots");
-    for (const s of t.slots) {
-      let [label, cls] = slotStates[s.status] || [s.status, ""];
-      if (s.status === "pending" && !view.enabled) [label, cls] = ["已暂停", ""];
-      if (s.status === "failed" && s.attempts) label = `失败 ${s.attempts}/3`;
-      const isNext = next && next.at === s.at && next.kind === s.kind, chip = el("div", isNext ? "wb-slot next" : "wb-slot");
-      // The moment it runs today, set ±spread minutes around its set time.
-      if (s.runAt && s.runAt !== s.at) chip.title = `设定 ${s.at}，今天 ${s.runAt} 执行`;
-      chip.append(line(el("strong", undefined, s.runAt || s.at), el("span", `wb-pill ${cls}`, isNext ? "下一次" : label)), el("span", "wb-sub", kinds[s.kind] || s.kind));
-      row.append(chip);
+    box.append(line(el("span", "wb-label", `今日定时 · 每天 ${t.slots.length} 次`), el("span", "wb-sub", t.slots.length && t.slots.every(s => s.paused) ? "定时已暂停" : next ? `下一次 ${next.runAt || next.at} ${kind(next.kind)}` : "今天的时段都已过")));
+    for (const [name, list] of groups) {
+      // Each build's schedule switch sits on its own row, beside the slots it runs.
+      const intl = name === "国际版", on = intl ? view.intlEnabled !== false : view.enabled !== false;
+      if (groups.length > 1 || hooks.onSchedule) box.append(line(el("span", "wb-sched-realm", name), hooks.onSchedule ? scheduleSwitch(name, intl, on) : el("span", "wb-sub", on ? "" : "定时已暂停")));
+      const row = el("div", on ? "wb-slots" : "wb-slots wb-paused");
+      for (const s of list) {
+        let [label, cls] = slotStates[s.status] || [s.status, ""];
+        // A paused build's slots wait without running.
+        if (s.paused && ["pending", "upcoming"].includes(s.status)) [label, cls] = ["已暂停", ""];
+        if (s.status === "failed" && s.attempts) label = `失败 ${s.attempts}/3`;
+        const isNext = next && next.at === s.at && next.kind === s.kind, chip = el("div", isNext ? "wb-slot next" : "wb-slot");
+        // The moment it runs today, set ±spread minutes around its set time.
+        if (s.runAt && s.runAt !== s.at) chip.title = `设定 ${s.at}，今天 ${s.runAt} 执行`;
+        chip.append(line(el("strong", undefined, s.runAt || s.at), el("span", `wb-pill ${cls}`, isNext ? "下一次" : label)), el("span", "wb-sub", kinds[s.kind] || s.kind));
+        row.append(chip);
+      }
+      box.append(row);
     }
-    box.append(row, el("div", "wb-sub", `时段在「定时与设置」里调整，每类最多 24 个；${t.spread ? `每个时段在设定时间前后 ${t.spread} 分钟内随机执行，每天不同；` : ""}电脑睡眠时不执行，唤醒后补跑当天已到点的时段。`));
+    box.append(el("div", "wb-sub", `时段在「定时与设置」里调整，每类最多 24 个；${t.spread ? `每个时段在设定时间前后 ${t.spread} 分钟内随机执行，每天不同；` : ""}电脑睡眠时不执行，唤醒后补跑当天已到点的时段。`));
     return box;
   }
 
@@ -164,7 +194,7 @@
     if (!s || (s.status !== "waiting" && now - Date.parse(s.finished) > 10 * 60_000)) return null;
     const box = el("div", `wb-signin ${s.status}`);
     if (s.status === "waiting") {
-      box.append(el("div", undefined, "正在等待 WorkBuddy 登录：请在打开的浏览器页面里完成登录，10 分钟内有效。"));
+      box.append(el("div", undefined, `正在等待${s.realm === "intl" ? "国际版 WorkBuddy AI" : "国内版 WorkBuddy"} 登录：请在打开的浏览器页面里完成登录，10 分钟内有效。登录由 Magpie 的 WorkBuddy 插件完成并保存。`));
       if (s.url) { const link = el("div", "wb-sub wb-url", `没有自动打开的话，把这个地址复制到浏览器：${s.url}`); box.append(link); }
     } else box.append(el("div", undefined, s.status === "done" ? "登录完成，账号会在看板刷新后出现；同一账号重新登录会替换原来的登录。" : `登录没有完成：${s.message || "未知原因"}`));
     return box;
@@ -693,7 +723,10 @@
     return box;
   }
 
-  function render(host, view, now = Date.now()) {
+  // options.onSchedule(intl, on): turns a build's schedule on or off; without
+  // it, the rows only say whether each is paused.
+  function render(host, view, now = Date.now(), options) {
+    if (options) hooks = options;
     last = [host, view];
     host.replaceChildren();
     const rows = view?.accounts || [];

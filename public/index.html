@@ -3,17 +3,17 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WorkBuddy Plus</title><link rel="stylesheet" href="/board.css"><link rel="stylesheet" href="/style.css"><script src="/board.js" defer></script><script src="/app.js" defer></script></head>
 <body>
 <main>
-  <header><div><p class="eyebrow">MAGPIE · COMPANION</p><h1>WorkBuddy Plus</h1><p class="muted">国内版与国际版账号的旅行、成长任务与连登福利。国内版每日签到由 Magpie 的 WorkBuddy 插件负责，国际版由本插件签到。</p></div><div class="scheduler"><span id="schedule-state"></span><button id="toggle-schedule">加载中</button></div></header>
+  <header><div><p class="eyebrow">MAGPIE · COMPANION</p><h1>WorkBuddy Plus</h1><p class="muted">国内版与国际版账号的旅行、成长任务与连登福利。国内版每日签到由 Magpie 的 WorkBuddy 插件负责，国际版由本插件签到。</p></div></header>
   <p id="error" role="alert" hidden></p>
-  <section aria-labelledby="board-title"><div class="section-head"><h2 id="board-title">余额、用量与旅行</h2><span class="muted"><span id="board-state"></span> <button id="board-login">添加账号</button> <button id="board-refresh">刷新</button></span></div><div id="board" class="wb-board"></div></section>
-  <section aria-labelledby="accounts-title"><div class="section-head"><h2 id="accounts-title">账号</h2><span class="muted">勾选账号后执行；空选使用全部已启用账号 <button id="toggle-intl" hidden>关闭国际版任务</button></span></div><div id="accounts" class="accounts"></div></section>
+  <section aria-labelledby="board-title"><div class="section-head"><h2 id="board-title">余额、用量与旅行</h2><span class="muted"><span id="board-state"></span> <details class="add-menu" id="add-menu"><summary>添加账号 ▾</summary><div class="menu" role="menu"><button role="menuitem" data-login="cn">国内版<small>WorkBuddy · 在浏览器里登录</small></button><button role="menuitem" data-login="intl">国际版<small>WorkBuddy AI · 在浏览器里登录</small></button><p class="menu-note">登录由 Magpie 的 WorkBuddy 插件完成并保存，本插件只是打开它的登录页。</p></div></details> <button id="board-refresh">刷新</button></span></div><div id="board" class="wb-board"></div></section>
+  <section aria-labelledby="accounts-title"><div class="section-head"><h2 id="accounts-title">账号</h2><span class="muted">勾选账号后执行；空选使用全部已启用账号</span></div><div id="accounts" class="accounts"></div></section>
   <section aria-label="手动操作"><div class="section-head"><h2>手动执行</h2><span class="muted">长任务会在后台运行，执行记录随时可查</span></div><div class="actions">
-    <button class="primary" data-action="all">一键全部执行</button><button data-action="activity">连登活跃</button><button data-action="tasks">一键成长任务</button><button data-action="travel">猫猫旅行</button><button data-action="bonus">连登福利</button><button data-action="night">夜猫子任务</button><button data-action="keepalive">检查登录续期</button><button data-action="inspect">查询上游状态</button>
+    <button class="primary" data-action="all">一键全部执行</button><button data-action="activity">连登活跃</button><button data-action="tasks">一键成长任务</button><button data-action="travel">猫猫旅行</button><button data-action="bonus">连登福利</button><button data-action="night">夜猫子任务</button><button data-action="keepalive">检查登录续期</button><button data-action="web">国际版网页会话</button><button data-action="inspect">查询上游状态</button>
   </div></section>
-  <section><details id="settings"><summary>定时与设置 <span class="muted">时区、执行时段、代理设置</span></summary>
-    <form id="config-form"><div id="schedule-fields" class="fields"></div><div class="fields">
+  <section><details id="settings"><summary>定时与设置 <span class="muted">国内版与国际版各自的时段、时区、代理</span></summary>
+    <form id="config-form"><div class="realms"><fieldset><legend>国内版 <span class="muted" id="cn-state"></span></legend><div id="schedule-fields" class="fields"></div></fieldset><fieldset id="intl-fields"><legend>国际版 <span class="muted" id="intl-state"></span></legend><div id="intl-schedule-fields" class="fields"></div></fieldset></div><div class="fields">
       <label>时区<input name="timezone" required></label><label>HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label><label>随机错开（分钟，0 关闭）<input name="spread" type="number" min="0" max="60" step="1"></label>
-    </div><p class="muted">同类多个时段用逗号分隔，清空可关闭该类定时。每个时段在设定时间前后「随机错开」分钟内执行，每天不同，多个账号之间也会间隔几十秒，避免整点统一请求。连登活跃每天成功后不重复执行，任务与旅行会核对上游状态。每日签到请在 Magpie 开启。</p><button type="submit">保存设置</button><span id="saved" role="status"></span></form>
+    </div><p class="muted">国内版和国际版的定时各用「今日定时」里那一排右边的开关暂停或开启，暂停只停定时，手动执行照样能用。同类多个时段用逗号分隔，清空可关闭该类定时。每个时段在设定时间前后「随机错开」分钟内执行，每天不同，多个账号之间也会间隔几十秒，避免整点统一请求。连登活跃和国际版网页会话每天成功后不重复执行，任务与旅行会核对上游状态。网页会话自动选模型时用当前免费的模型，没有免费的或它跑不了时用 DeepSeek-V4.1-Flash。每日签到请在 Magpie 开启。</p><button type="submit">保存设置</button><span id="saved" role="status"></span></form>
   </details></section>
   <section><div class="section-head"><h2>执行记录</h2><span id="updated" class="muted"></span></div><div id="jobs"></div></section>
   <footer>仅本机访问 · 独立定时服务 · Magpie 关闭后仍可执行 · 日志时间按本机显示</footer>

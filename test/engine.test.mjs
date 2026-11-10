@@ -26,8 +26,8 @@ function fixture(t, serve, realm = "cn") {
 }
 
 // WorkBuddy AI's web app and an agent sandbox, as webActivity sees them.
-const webApp = (status = () => "completed") => (path, request) => {
-  if (path === "/console/as/conversations/" && request.body) return ok({ id: "c1", status: "CREATING" });
+const webApp = (status = () => "completed", refuse = new Set()) => (path, request) => {
+  if (path === "/console/as/conversations/" && request.body) return refuse.has(request.body.model) ? Response.json({ code: 6004, msg: "额度已用完" }) : ok({ id: "c1", status: "CREATING" });
   if (path === "/console/as/conversations/c1/session") return ok({ link: "https://sandbox.test/acp", token: "sandbox-token", sessionId: "c1", cwd: "/workspace" });
   if (path === "/console/as/conversations/c1") return ok({ status: status() });
   if (/^\/console\/as\/conversations\/c1\/(stop|delete)$/.test(path)) return ok({ id: "c1" });
@@ -181,7 +181,8 @@ test("a WorkBuddy AI account runs on its own site and claims its check-in only w
   await p.run("activity");
   assert.equal(p.seen[0].body[0].requestModelId, "deepseek-v4.1-flash-sg");
   assert.equal(p.seen[0].headers.Origin, "https://www.workbuddy.ai");
-  assert.match(p.logs.join("\n"), /国际版活跃已生效[\s\S]*国际版网页会话已跑完/);
+  assert.match(p.logs.join("\n"), /国际版活跃已生效/);
+  assert.ok(!p.seen.some(s => s.path.startsWith("/console")), "the web conversation has its own slot");
   // No Buddy travel there: nothing is asked and nothing logged.
   const before = p.logs.length;
   assert.deepEqual(await p.run("travel"), { skipped: true, reason: "intl" });
@@ -217,9 +218,9 @@ test("keepalive renews a WorkBuddy AI login on www.workbuddy.ai", async t => {
 });
 
 // The daily reward takes a finished web conversation, run the way the web app does.
-test("a WorkBuddy AI account's daily activity runs one web conversation through its sandbox and frees it", async t => {
+test("a WorkBuddy AI account's web conversation runs once a day through its sandbox, on a free model when there is one", async t => {
   let status = "working";
-  const web = webApp(() => status);
+  const refuse = new Set(), web = webApp(() => status, refuse);
   const p = fixture(t, (path, request) => {
     const w = web(path, request);
     if (w) return w;
@@ -227,33 +228,48 @@ test("a WorkBuddy AI account's daily activity runs one web conversation through 
     if (path === "/activity/growth/streak") return ok({ streak: { days: 2 } });
     throw new Error("unexpected endpoint " + path);
   }, "intl");
-  // The turn never finishing: it fails, the conversation is stopped and deleted, the streak report stands.
+  // The daily activity only reports; the conversation is its own action.
+  await p.run("activity");
+  assert.ok(!p.seen.some(s => s.path.startsWith("/console")));
+  // No model list yet: DeepSeek-V4.1-Flash. The turn never finishing fails; the conversation is stopped and deleted.
   p.context.web.wait = 1;
-  await assert.rejects(p.run("activity"), /没有跑完/);
+  await assert.rejects(p.run("web"), /没有跑完/);
   assert.deepEqual(p.seen.filter(s => /\/c1\/(stop|delete)$/.test(s.path)).map(s => s.path.split("/").pop()), ["stop", "delete"]);
-  assert.equal(p.seen.filter(s => s.path === "/v2/report").length, 1);
 
-  // Retried: only the web turn runs again, and this time finishes.
+  // Retried with the list read: Hy3 is free, so it runs there, asked for one word.
   p.seen.length = 0; status = "completed"; p.context.web.wait = 60_000;
-  const got = await p.run("activity");
-  assert.equal(p.seen.filter(s => s.path === "/v2/report").length, 0, "the streak report isn't repeated");
-  assert.equal(got.web.conversation, "c1");
+  p.context.models = { plan: { paid: false }, models: [{ id: "gpt-6-luna", rate: 0, tier: { exclusive: true } }, { id: "glm-5.2", rate: 0.79, promo: { rate: 0, hours: "23:00–07:50" } }, { id: "hy4free", rate: 0 }, { id: "hy3", rate: 0 }] };
+  const got = await p.run("web");
+  assert.equal(got.conversation, "c1");
   const create = p.seen.find(s => s.path === "/console/as/conversations/" && s.body);
-  assert.deepEqual(create.body, { prompt: "Hi", model: "deepseek-v4.1-flash", conversationOrigin: "workbuddy-app", plugins: [{ name: "weixinpay", marketplace: "codebuddy-builtin" }] });
+  assert.deepEqual(create.body, { prompt: "只回复一个字：好", model: "hy3", conversationOrigin: "workbuddy-app", plugins: [{ name: "weixinpay", marketplace: "codebuddy-builtin" }] });
   assert.equal(create.headers.Authorization, "Bearer secret-token");
   assert.equal(create.headers["X-IDE-Type"], undefined, "the web app sends no desktop fingerprint");
   const calls = p.seen.filter(s => s.path === "/acp" && s.body).map(s => s.body.method);
   assert.deepEqual(calls, ["initialize", "session/load", "session/set_model", "session/prompt"]);
+  assert.equal(p.seen.find(s => s.body?.method === "session/set_model").body.params.modelId, "hy3");
   assert.ok(p.seen.filter(s => s.path === "/acp" && s.body).every(s => s.headers["Acp-Connection-Id"] === "acp-1" && s.headers.Authorization === "Bearer sandbox-token"));
   assert.deepEqual(p.seen.filter(s => /\/c1\/(stop|delete)$/.test(s.path)).map(s => s.path.split("/").pop()), ["stop"], "a finished one is kept, only stopped");
-  assert.match(p.logs.at(-1), /国际版网页会话已跑完（deepseek-v4.1-flash，1 段回复/);
+  assert.match(p.logs.at(-1), /国际版网页会话已跑完（hy3，当前免费，\d+ 秒）/);
 
-  // Done for the day; and switched off, no web turn at all.
+  // Done for the day.
   p.seen.length = 0;
-  await p.run("activity");
+  await p.run("web");
   assert.ok(!p.seen.some(s => s.path.startsWith("/console")));
-  assert.deepEqual(p.logs.slice(-2), ["连登活跃：今天已完成", "国际版网页会话：今天已完成"]);
-  delete p.state.daily["intl:u1:web"]; p.context.config.intlWeb = false;
-  await p.run("activity");
+  assert.equal(p.logs.at(-1), "国际版网页会话：今天已完成");
+
+  // The free model turning it down: DeepSeek-V4.1-Flash runs it the same day.
+  delete p.state.daily["intl:u1:web"]; refuse.add("hy3"); p.seen.length = 0;
+  await p.run("web");
+  assert.deepEqual(p.seen.filter(s => s.path === "/console/as/conversations/" && s.body).map(s => s.body.model), ["hy3", "deepseek-v4.1-flash"]);
+  assert.match(p.logs.join("\n"), /用 hy3 没跑完（网页会话：HTTP 200，额度已用完），改用 deepseek-v4.1-flash[\s\S]*已跑完（deepseek-v4.1-flash，备用/);
+
+  // A model set in the settings is used as it is; switched off, no web turn at all.
+  delete p.state.daily["intl:u1:web"]; refuse.clear(); p.seen.length = 0; p.context.config.intlWebModel = "kimi-k3";
+  await p.run("web");
+  assert.equal(p.seen.find(s => s.path === "/console/as/conversations/" && s.body).body.model, "kimi-k3");
+  assert.match(p.logs.at(-1), /kimi-k3，设置指定/);
+  delete p.state.daily["intl:u1:web"]; p.context.config.intlWeb = false; p.seen.length = 0;
+  assert.deepEqual(await p.run("web"), { skipped: true, reason: "off" });
   assert.ok(!p.seen.some(s => s.path.startsWith("/console")), "intlWeb: false skips the web turn");
 });

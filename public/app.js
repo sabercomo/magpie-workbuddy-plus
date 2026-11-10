@@ -1,6 +1,8 @@
 const $ = id => document.getElementById(id);
-const names = { all:"全部执行",checkin:"签到（旧版记录）",activity:"连登活跃",tasks:"成长任务",travel:"猫猫旅行",bonus:"连登福利",night:"夜猫子",keepalive:"登录续期",inspect:"查询状态" };
+const names = { all:"全部执行",checkin:"签到（旧版记录）",activity:"连登活跃",tasks:"成长任务",travel:"猫猫旅行",bonus:"连登福利",night:"夜猫子",keepalive:"登录续期",web:"国际版网页会话",inspect:"查询状态" };
 const scheduleNames = { daily:"活跃 / 旅行 / 连登福利",tasks:"成长任务",night:"夜猫子任务",keepalive:"登录续期检查" };
+const intlNames = { daily:"连登活跃 / 签到 / 连登福利",tasks:"成长任务",web:"网页会话（每日活跃奖励）",keepalive:"登录续期检查" };
+
 const statuses = { running:"执行中",queued:"排队中",succeeded:"已完成",failed:"有失败项目",deferred:"稍后重试",interrupted:"重启中断",cancelled:"已停止" };
 let current, filled = false;
 const selected = new Set(), opened = new Set();
@@ -13,19 +15,17 @@ function failure(error) { $("error").textContent=error.message;$("error").hidden
 async function save(config) { await api("/api/config",config);await refresh(); }
 async function refresh() {
   current=await api("/api/status");
-  $("schedule-state").textContent=current.config.enabled?"定时运行中":"定时已暂停";
-  $("toggle-schedule").textContent=current.config.enabled?"暂停定时":"开启定时";
-  // WorkBuddy AI logins run their tasks unless this turns them off as a whole.
-  $("toggle-intl").hidden=!current.accounts.some(a=>a.realm==="intl");$("toggle-intl").textContent=current.config.intl===false?"开启国际版任务":"关闭国际版任务";
+  $("intl-fields").hidden=!current.accounts.some(a=>a.realm==="intl");
+  $("cn-state").textContent=`· 定时${current.config.enabled?"已开启":"已暂停"}`;$("intl-state").textContent=`· 定时${current.config.intlEnabled?"已开启":"已暂停"}`;
   $("accounts").replaceChildren();
   for(const account of current.accounts){
     const row=element("div",undefined,"account"), checkbox=element("input");checkbox.type="checkbox";checkbox.checked=selected.has(account.id);checkbox.disabled=!account.enabled;checkbox.setAttribute("aria-label",`选择 ${account.name}`);
     checkbox.onchange=()=>checkbox.checked?selected.add(account.id):selected.delete(account.id);
     const info=element("div",undefined,"account-info"),title=element("div",account.name,"account-name"),meta=element("div");
-    meta.append(element("span",account.realm==="intl"?"国际版":account.enterprise?"企业":"个人","tag"),element("span",account.intlOff?"国际版自动任务已关闭":account.enterprise?"无个人成长奖励":"复用 Magpie 登录","muted"));
+    meta.append(element("span",account.realm==="intl"?"国际版":account.enterprise?"企业":"个人","tag"),element("span",account.enterprise?"无个人成长奖励":"复用 Magpie 登录","muted"));
     info.append(title,meta);
     const toggle=element("button",account.enabled?"停用":"启用");toggle.onclick=async()=>{try{const config={...current.config,disabledAccounts:account.enabled?[...current.config.disabledAccounts,account.id]:current.config.disabledAccounts.filter(id=>id!==account.id)};selected.delete(account.id);await save(config);}catch(e){failure(e);}};
-    row.append(checkbox,info);if(!account.intlOff)row.append(toggle);$("accounts").append(row);
+    row.append(checkbox,info,toggle);$("accounts").append(row);
   }
   $("jobs").replaceChildren();
   for(const job of current.jobs){
@@ -40,7 +40,11 @@ async function refresh() {
   }
   if(!current.jobs.length)$("jobs").append(element("p","还没有执行记录。可以先选择一个账号试运行。","empty"));
   if(!filled){
-    for(const [key,times] of Object.entries(current.config.schedules)){const label=element("label",scheduleNames[key]);const input=element("input");input.name=`schedule-${key}`;input.value=times.join(", ");input.placeholder="HH:MM, HH:MM";label.append(input);$("schedule-fields").append(label);}
+    for(const [key,times] of Object.keys(scheduleNames).map(k=>[k,current.config.schedules[k]||[]])){const label=element("label",scheduleNames[key]);const input=element("input");input.name=`schedule-${key}`;input.value=times.join(", ");input.placeholder="HH:MM, HH:MM";label.append(input);$("schedule-fields").append(label);}
+    for(const [key,times] of Object.keys(intlNames).map(k=>[k,current.intlSchedules[k]||[]])){const label=element("label",intlNames[key]);const input=element("input");input.name=`intl-${key}`;input.value=times.join(", ");input.placeholder="HH:MM, HH:MM";label.append(input);$("intl-schedule-fields").append(label);}
+    const model=element("label","网页会话用的模型"),pick=element("select"),wanted=current.config.intlWebModel||"auto";pick.name="intl-model";
+    for(const id of ["auto",...new Set([...(current.intlModels||[]),...(wanted==="auto"?[]:[wanted])])]){const o=element("option",id==="auto"?"自动：优先当前免费的模型":id);o.value=id;pick.append(o);}
+    pick.value=wanted;model.append(pick);$("intl-schedule-fields").append(model);
     for(const key of ["timezone","proxy"])$("config-form").elements[key].value=current.config[key];
     $("config-form").elements.spread.value=Number.isInteger(current.config.spread)?current.config.spread:10;
     filled=true;
@@ -48,21 +52,25 @@ async function refresh() {
   $("updated").textContent=`更新于 ${new Date().toLocaleTimeString()}`;
 }
 async function board(view) {
-  view=view||await api("/api/board");WBBoard.render($("board"),view);
+  // Each build's schedule switch lives on its row in 今日定时.
+  view=view||await api("/api/board");WBBoard.render($("board"),view,Date.now(),{onSchedule:(intl,on)=>save({...current.config,[intl?"intlEnabled":"enabled"]:on}).then(()=>board()).catch(failure)});
   $("board-state").textContent=view.refreshing?"正在读取…":view.at?`更新于 ${new Date(view.at).toLocaleTimeString()}`:"";
 }
 $("board-refresh").onclick=()=>api("/api/board",{}).then(board).catch(failure);
-// Opens Magpie's own WorkBuddy sign-in in the browser; the board shows how it went.
-$("board-login").onclick=()=>api("/api/login",{}).then(()=>board()).catch(failure);
-$("toggle-schedule").onclick=()=>save({...current.config,enabled:!current.config.enabled}).catch(failure);
-$("toggle-intl").onclick=()=>save({...current.config,intl:current.config.intl===false}).catch(failure);
+// Opens Magpie's own WorkBuddy sign-in, China's or WorkBuddy AI's, in the browser; the board shows how it went.
+for(const item of document.querySelectorAll("[data-login]"))item.onclick=()=>{$("add-menu").open=false;api("/api/login",{realm:item.dataset.login}).then(()=>board()).catch(failure);};
+document.addEventListener("click",event=>{if(!$("add-menu").contains(event.target))$("add-menu").open=false;});
+document.addEventListener("keydown",event=>{if(event.key==="Escape"&&$("add-menu").open){$("add-menu").open=false;$("add-menu").querySelector("summary").focus();}});
 for(const button of document.querySelectorAll("[data-action]"))button.onclick=async()=>{
   button.disabled=true;$("error").hidden=true;
   try{await api("/api/run",{action:button.dataset.action,accounts:[...selected]});await refresh();}catch(e){failure(e);}finally{button.disabled=false;}
 };
 $("config-form").onsubmit=async event=>{
   event.preventDefault();const form=event.currentTarget, config={...current.config,schedules:{}};
-  for(const key of Object.keys(scheduleNames))config.schedules[key]=[...new Set(form.elements[`schedule-${key}`].value.split(",").map(s=>s.trim()).filter(Boolean))].sort();
+  const times=v=>[...new Set(v.split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean))].sort();
+  for(const key of Object.keys(scheduleNames))config.schedules[key]=times(form.elements[`schedule-${key}`].value);
+  config.intlSchedules={};for(const key of Object.keys(intlNames))config.intlSchedules[key]=times(form.elements[`intl-${key}`].value);
+  config.intlWebModel=form.elements["intl-model"].value||"auto";
   for(const key of ["timezone","proxy"])config[key]=form.elements[key].value.trim();
   config.spread=Number(form.elements.spread.value||0);
   try{await save(config);$("saved").textContent="已保存";}catch(e){failure(e);}

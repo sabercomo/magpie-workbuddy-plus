@@ -3,9 +3,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import { calendar } from "./storage.mjs";
 import { specs, manualTasks, buildEvent, growthTasks } from "./events.mjs";
 import { UpstreamError } from "./client.mjs";
-import { webActivity } from "./webagent.mjs";
+import { fallback, pickModel, webActivity } from "./webagent.mjs";
 
-export const actions = ["all", "activity", "tasks", "travel", "bonus", "night", "keepalive", "inspect"];
+export const actions = ["all", "activity", "tasks", "travel", "bonus", "night", "keepalive", "web", "inspect"];
 
 // A round whose every failure was a rate limit is deferred, not failed.
 function roundError(message, errors) {
@@ -117,18 +117,28 @@ export async function perform(action, client, context) {
     log(`${where}活跃已生效，连续 ${got.streak.days} 天`);
     return got.streak;
   });
+  const activity = report;
   // That lights WorkBuddy AI's streak but not its daily reward (30/50
-  // credits), which takes a finished conversation on its web app. Each step
-  // is done once a day on its own, so a failed web turn is retried alone.
-  const activity = async () => {
-    const streak = await report();
-    if (!intl || config.intlWeb === false) return streak;
-    const turn = await daily("web", async () => {
-      const got = await webActivity(client, context.web);
-      log(`国际版网页会话已跑完（${got.model}，${got.chunks} 段回复，${Math.round(got.ms / 1000)} 秒），每日活跃奖励稍后到账`);
+  // credits), which takes a finished conversation on its web app: one a day,
+  // in its own slot, on a model free right now when there is one. If that
+  // model turns it down (its free allowance spent, say), DeepSeek-V4.1-Flash
+  // runs it instead.
+  const web = async () => {
+    if (!intl) return { skipped: true, reason: "cn" };
+    if (config.intlWeb === false) { log("国际版网页会话已关闭"); return { skipped: true, reason: "off" }; }
+    return daily("web", async () => {
+      const chosen = pickModel(context.models, config.intlWebModel);
+      let got;
+      try { got = await webActivity(client, { ...context.web, model: chosen.id }); }
+      catch (e) {
+        if (chosen.id === fallback) throw e;
+        log(`国际版网页会话用 ${chosen.id} 没跑完（${e.message}），改用 ${fallback}`);
+        got = await webActivity(client, { ...context.web, model: fallback });
+      }
+      const why = got.model === chosen.id ? chosen.why : "备用";
+      log(`国际版网页会话已跑完（${got.model}${why ? `，${why}` : ""}，${Math.round(got.ms / 1000)} 秒），每日活跃奖励稍后到账`);
       return got;
     });
-    return { ...streak, web: turn };
   };
   const travel = async () => {
     // WorkBuddy AI has no Buddy travel: nothing is asked and nothing logged.
@@ -216,9 +226,10 @@ export async function perform(action, client, context) {
     tasks: await tasks(), ...(intl ? {} : { travel: await client.request("/activity/growth/buddy/travel/status") }),
     streak: await client.request("/activity/growth/streak"), energy: await client.request("/v2/activity/growth/energy")
   };
-  const handlers = { activity, tasks: () => runTasks(false), travel, bonus, night: () => runTasks(true) };
+  const handlers = { activity, tasks: () => runTasks(false), travel, bonus, night: () => runTasks(true), web };
   if (action !== "all") return handlers[action]();
   if (intl) delete handlers.travel;
+  else delete handlers.web;
   const results = {}, failures = [], errors = [];
   for (const [name, run] of Object.entries(handlers)) {
     if (name === "night") continue;

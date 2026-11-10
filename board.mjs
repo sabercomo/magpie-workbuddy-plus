@@ -202,7 +202,7 @@ export const dropped = e => !e?.status && !e?.limited && /ECONNRESET|ECONNREFUSE
 // Each part fails alone: a refused usage query still shows the balance. These
 // are all reads, so a dropped connection is tried once more before it shows.
 export async function collect(account, client, config, memory, pause = ms => new Promise(r => setTimeout(r, ms))) {
-  const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {}, ...(account.intlOff ? { intlOff: true } : {}) };
+  const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {} };
   const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone) };
   if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client) }), streak: () => streak(client), tasks: () => tasks(client), growth: () => growth(client) });
   if (!account.enterprise && account.realm === "intl") parts.checkin = () => intlCheckin(client);

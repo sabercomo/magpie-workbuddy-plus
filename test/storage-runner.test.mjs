@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { defaults, accounts, calendar, initialize, readJSON, writeJSON } from "../storage.mjs";
+import { defaults, accounts, calendar, initialize, intlSchedules, plan, readJSON, settle, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
 import { EventEmitter } from "node:events";
 import { Runner, magpieBin, shifted } from "../runner.mjs";
@@ -23,7 +23,7 @@ function fixture(t) {
   const magpieDir = join(dir, "magpie");
   writeJSON(join(magpieDir, "plugin-auth.json"), { "workbuddy#u1": auth, other: { type: "api", key: "unrelated-secret" } });
   // Slots fire on their set minute here; the ±spread moment has its own test.
-  writeJSON(join(dir, "config.json"), { ...defaults, spread: 0, magpieDir, schedules: Object.fromEntries(Object.keys(defaults.schedules).map(key => [key, []])) });
+  writeJSON(join(dir, "config.json"), { ...defaults, spread: 0, magpieDir, schedules: Object.fromEntries(Object.keys(defaults.schedules).map(key => [key, []])), intlSchedules: Object.fromEntries(Object.keys(defaults.intlSchedules).map(key => [key, []])) });
   return { dir, auth, magpieDir, config: () => readJSON(join(dir, "config.json")) };
 }
 async function settled(runner) {
@@ -34,7 +34,7 @@ async function settled(runner) {
   throw new Error("fixture job did not settle");
 }
 
-test("China and WorkBuddy AI logins are read, the latter switchable as a whole; status never reveals credentials", t => {
+test("China and WorkBuddy AI logins are read, each build's schedule on its own switch; status never reveals credentials", t => {
   const p = fixture(t);
   const authFile = join(p.magpieDir, "plugin-auth.json");
   const auths = readJSON(authFile);
@@ -42,8 +42,11 @@ test("China and WorkBuddy AI logins are read, the latter switchable as a whole; 
   writeJSON(authFile, auths);
   assert.deepEqual(accounts(p.config()).map(a => [a.id, a.realm, a.enabled]), [["cn:u1", "cn", true], ["intl:u2", "intl", true]]);
   assert.equal(accounts(p.config(), p.dir)[0].auth.access, "private-access");
-  // Off, its accounts stop but still show.
-  assert.deepEqual(accounts({ ...p.config(), intl: false }).map(a => [a.id, a.enabled, !!a.intlOff]), [["cn:u1", true, false], ["intl:u2", false, true]]);
+  // The old whole-build switch only pauses WorkBuddy AI's schedule now; its accounts stay usable by hand.
+  assert.deepEqual(accounts({ ...p.config(), intl: false }).map(a => [a.id, a.enabled]), [["cn:u1", true], ["intl:u2", true]]);
+  const { intlEnabled: _, ...before } = { ...p.config(), enabled: true };
+  assert.deepEqual([settle(before).intlEnabled, settle({ ...before, intl: false }).intlEnabled, settle({ ...before, enabled: false }).intlEnabled, "intl" in settle({ ...before, intl: false })], [true, false, false, false]);
+  assert.deepEqual(plan({ ...before, intlEnabled: false }).map(s => s.on), [true, true, true, true, false, false, false, false]);
   const runner = new Runner(p.dir);
   const status = JSON.stringify(runner.status());
   assert.ok(!/private-access|private-refresh|unrelated-secret|private-international/.test(status));
@@ -84,6 +87,40 @@ test("timer slots survive restart and do not run twice at the same minute", asyn
   assert.equal(runner.state.jobs[0].status, "succeeded");
   new Runner(p.dir).tick(new Date("2026-10-29T01:00:30Z"));
   assert.equal(readJSON(join(p.dir, "state.json")).jobs.length, 1);
+});
+
+test("each build runs its own slots; settings from before the split carry on from China's", async t => {
+  const p = fixture(t), authFile = join(p.magpieDir, "plugin-auth.json"), auths = readJSON(authFile);
+  auths["workbuddy-ai"] = { type: "oauth", uid: "u9", accountId: "abroad", access: "intl-access", expires: Date.now() + 86400_000 };
+  writeJSON(authFile, auths);
+  // Saved by 0.5.6: no intlSchedules. WorkBuddy AI takes China's times, its web conversation at 10:30.
+  const { intlSchedules: _, intlEnabled: __, ...old } = { ...p.config(), enabled: true, schedules: { daily: ["09:00"], tasks: [], night: [], keepalive: ["22:00"] } };
+  writeJSON(join(p.dir, "config.json"), old);
+  assert.deepEqual(intlSchedules(old), { daily: ["09:00"], tasks: [], web: ["10:30"], keepalive: ["22:00"] });
+  assert.deepEqual(plan(old).map(s => `${s.kind}:${s.actions.join("+")}`), ["daily:activity+travel+bonus", "tasks:tasks", "night:night", "keepalive:keepalive", "intl-daily:activity+bonus", "intl-tasks:tasks", "intl-web:web", "intl-keepalive:keepalive"]);
+  assert.equal(intlSchedules({ schedules: { ...old.schedules, daily: [] } }).web.length, 0, "activity off before, no web conversation now");
+  assert.ok(!plan({ ...old, intlWeb: false }).some(s => s.kind === "intl-web"));
+
+  const runner = new Runner(p.dir, { gap: 0, fetcher: async () => Response.json({ code: 0, data: {} }) }, { pace: () => 0 });
+  runner.tick(new Date("2026-10-29T01:00:00Z")); await settled(runner);
+  runner.tick(new Date("2026-10-29T01:00:30Z")); await settled(runner);
+  const jobs = () => runner.state.jobs.map(j => `${j.trigger}=${j.accounts.join(",")}:${j.actions.join("+")}`).sort();
+  assert.deepEqual(jobs(), ["schedule:daily:09:00=cn:u1:activity+travel+bonus", "schedule:intl-daily:09:00=intl:u9:activity+bonus"]);
+  runner.tick(new Date("2026-10-29T02:30:00Z")); await settled(runner);
+  assert.ok(jobs().includes("schedule:intl-web:10:30=intl:u9:web"));
+  assert.equal(runner.state.jobs.length, 3);
+  assert.deepEqual(runner.today(runner.config(), new Date("2026-10-29T03:00:00Z")).slots.map(s => s.kind), ["daily", "intl-daily", "intl-web", "intl-keepalive", "keepalive"]);
+
+  // WorkBuddy AI paused from the page: its slots wait as paused, China's run on.
+  runner.pageRequest({ id: "p1", action: "intl-off", at: Date.now() });
+  assert.deepEqual([runner.config().enabled, runner.config().intlEnabled], [true, false]);
+  const today = runner.today(runner.config(), new Date("2026-10-29T03:00:00Z"));
+  assert.deepEqual(today.slots.filter(s => s.paused).map(s => s.kind), ["intl-daily", "intl-web", "intl-keepalive"]);
+  assert.equal(today.next.kind, "keepalive", "the next slot is one that runs");
+  runner.tick(new Date("2026-10-29T14:00:00Z")); await settled(runner);
+  assert.ok(!jobs().some(j => j.startsWith("schedule:intl-keepalive")));
+  assert.ok(jobs().includes("schedule:keepalive:22:00=cn:u1:keepalive"));
+  assert.equal(runner.boardView().intlEnabled, false);
 });
 
 test("paused schedules and disabled accounts make no jobs", t => {
@@ -230,6 +267,13 @@ test("add account runs Magpie's own browser sign-in once and reports how it went
   const page = new Runner(p.dir, {}, { spawner, magpie: () => "/fake/magpie" });
   assert.equal(page.pageRequest({ id: "l1", action: "login", at: Date.now() }).ok, true);
   assert.equal(spawned.length, 3);
+
+  // 国际版 points to the same plugin's WorkBuddy AI sign-in.
+  const abroad = new Runner(p.dir, {}, { spawner, magpie: () => "/fake/magpie" });
+  assert.equal(abroad.pageRequest({ id: "l2", action: "login-intl", at: Date.now() }).ok, true);
+  assert.deepEqual(spawned[3].args, ["plugin", "login", "workbuddy-ai", "1"]);
+  assert.equal(abroad.boardView().signin.realm, "intl");
+  assert.throws(() => new Runner(p.dir, {}, { spawner, magpie: () => "/fake/magpie" }).login("moon"), /未知的登录版本/);
 });
 
 test("the magpie command is found outside a LaunchAgent's bare PATH", t => {

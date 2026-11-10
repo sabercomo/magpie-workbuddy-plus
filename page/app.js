@@ -2,26 +2,26 @@
 // background service rewrites, and asks for work by saving a request into
 // the plugin's options (see index.mjs).
 const $ = id => document.getElementById(id);
-const names = { all: "全部执行", activity: "连登活跃", tasks: "成长任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", keepalive: "登录续期", inspect: "查询状态", refresh: "刷新", login: "添加账号", pause: "暂停定时", resume: "开启定时", "intl-on": "开启国际版任务", "intl-off": "关闭国际版任务", config: "保存设置" };
+const names = { all: "全部跑一遍", activity: "连登活跃", tasks: "成长任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", keepalive: "登录续期", inspect: "查询状态", web: "国际版网页会话", refresh: "刷新余额", login: "添加国内版账号", "login-intl": "添加国际版账号", pause: "暂停国内版定时", resume: "开启国内版定时", "intl-on": "开启国际版定时", "intl-off": "暂停国际版定时", config: "保存设置" };
 const statuses = { running: "执行中", queued: "排队中", succeeded: "已完成", failed: "有失败", deferred: "稍后重试", interrupted: "中断", cancelled: "已停止" };
 let pending = null;
 const build = globalThis.WBPLUS?.build;
 
 function note(text, bad) { $("note").textContent = text; $("note").className = bad ? "note bad" : "note"; $("note").hidden = !text; }
 
+
 function paint() {
   const view = globalThis.WBPLUS;
   const offline = !view || Date.now() - Date.parse(view.generated) > 25 * 60_000;
   $("state").textContent = !view ? "后台服务还没有写出数据：Magpie 加载本插件时会启动它。一直这样的话，看 ~/.config/workbuddy-plus/service.log；Windows 上常见原因是端口被系统保留，见 README 的「端口」一节。"
-    : `${view.refreshing ? "正在刷新…" : `余额更新于 ${WBBoard.when(view.at)}`} · ${view.enabled ? "定时运行中" : "定时已暂停"}${offline ? " · 后台服务可能未运行" : ""}`;
+    : `${view.refreshing ? "正在刷新…" : `余额更新于 ${WBBoard.when(view.at)}`}${offline ? " · 后台服务可能未运行" : ""}`;
   if (view?.panel) $("panel").textContent = view.panel;
-  $("schedule").dataset.action = view?.enabled ? "pause" : "resume";
-  $("schedule").textContent = view?.enabled ? "暂停定时" : "开启定时";
-  // Shown once a WorkBuddy AI login is on the board; its tasks run unless turned off here.
-  $("intl").hidden = !view?.intl?.accounts;
-  $("intl").dataset.action = view?.intl?.enabled === false ? "intl-on" : "intl-off";
-  $("intl").textContent = view?.intl?.enabled === false ? "开启国际版任务" : "关闭国际版任务";
-  WBBoard.render($("board"), view);
+  // WorkBuddy AI's settings show once one of its logins is on the board.
+  $("intl-fields").hidden = !view?.intl?.accounts;
+  $("cn-state").textContent = view ? `· 定时${view.enabled ? "已开启" : "已暂停"}` : "";
+  $("intl-state").textContent = view ? `· 定时${view.intlEnabled ? "已开启" : "已暂停"}` : "";
+  // Each build's schedule switch lives on its row in 今日定时.
+  WBBoard.render($("board"), view, Date.now(), { onSchedule: (intl, on) => ask(intl ? (on ? "intl-on" : "intl-off") : (on ? "resume" : "pause")).catch(e => note(`提交失败：${e.message}`, true)) });
   fill(view);
   $("jobs").replaceChildren();
   if (view && !view.jobs?.length) $("jobs").append(Object.assign(document.createElement("p"), { className: "muted", textContent: "还没有执行记录" }));
@@ -40,12 +40,18 @@ function paint() {
 
 // The settings form follows the saved settings until it's edited; an edit is
 // kept through the redraws until it's saved.
-const kinds = ["daily", "tasks", "night", "keepalive"];
+const kinds = ["daily", "tasks", "night", "keepalive"], intlKinds = ["daily", "tasks", "web", "keepalive"];
 let edited = false;
 function fill(view) {
   const form = $("settings-form");
   if (!view?.settings || edited) return;
   for (const k of kinds) form.elements[k].value = (view.schedules?.[k] || []).join(", ");
+  for (const k of intlKinds) form.elements[`intl-${k}`].value = (view.intlSchedules?.[k] || []).join(", ");
+  // The web conversation's model: automatic, or one of WorkBuddy AI's own.
+  const pick = form.elements["intl-model"], wanted = view.settings.intlWebModel || "auto";
+  const ids = [...new Set([...(view.models?.intl?.models || []).map(m => m.id), ...(wanted === "auto" ? [] : [wanted])])];
+  pick.replaceChildren(pick.options[0], ...ids.map(id => { const o = document.createElement("option"); o.value = o.textContent = id; return o; }));
+  pick.value = wanted;
   form.elements.spread.value = view.settings.spread;
   form.elements.timezone.value = view.settings.timezone || "";
   form.elements.proxy.value = view.settings.proxy || "";
@@ -65,8 +71,8 @@ $("settings-form").onsubmit = async event => {
   event.preventDefault();
   const form = event.target, button = form.querySelector("button");
   const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
-  const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
-  const bad = kinds.flatMap(k => config.schedules[k]).find(t => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t));
+  const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), intlSchedules: Object.fromEntries(intlKinds.map(k => [k, times(form.elements[`intl-${k}`].value)])), intlWebModel: form.elements["intl-model"].value || "auto", spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
+  const bad = [...Object.values(config.schedules), ...Object.values(config.intlSchedules)].flat().find(t => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t));
   if (bad) return note(`时间「${bad}」不对，应为 HH:MM，例如 09:00`, true);
   button.disabled = true;
   try { await ask("config", { config }); edited = false; }
@@ -87,8 +93,14 @@ function reload() {
   document.head.append(script);
 }
 
+// A menu closes once something is picked, on a click outside it, or on Escape.
+const menus = [...document.querySelectorAll("details.run-menu")];
+document.addEventListener("click", event => { for (const m of menus) if (!m.contains(event.target)) m.open = false; });
+document.addEventListener("keydown", event => { if (event.key !== "Escape") return; for (const m of menus) if (m.open) { m.open = false; m.querySelector("summary").focus(); } });
+
 for (const button of document.querySelectorAll("[data-action]")) button.onclick = async () => {
   const action = button.dataset.action;
+  for (const m of menus) m.open = false;
   button.disabled = true;
   try { await ask(action); } catch (e) { note(`提交失败：${e.message}`, true); }
   finally { setTimeout(() => { button.disabled = false; }, 3000); }

@@ -1,9 +1,8 @@
-// Writes a board snapshot with made-up accounts, for the README screenshots:
-//   bun docs/demo-data.mjs ~/Applications/Magpie-WorkBuddy-Plus/page [15:00]
+// Writes a board snapshot with made-up accounts, for the README screenshots.
+// docs/screenshots.sh runs it and photographs the page; by hand:
+//   bun docs/demo-data.mjs <folder with the page's files> [15:00]
 // The optional time sets the board's clock to that time today; the page must
 // then be shown at the same time for travel and expiry to read right.
-// then open WorkBuddy Plus in Magpie. The service puts the real snapshot back
-// on its next refresh (within about 10 minutes, or after any run).
 import { writePage } from "../board.mjs";
 import { join } from "node:path";
 
@@ -17,7 +16,8 @@ const days = (base, credit) => Array.from({ length: 7 }, (_, i) => {
 const usage = credit => {
   const list = days(now, credit), total = credit.reduce((s, c) => s + c, 0);
   return { days: list, credit: total, count: list.reduce((s, d) => s + d.count, 0),
-    models: [["claude-sonnet", .55], ["deepseek-v3", .25], ["hunyuan-turbos", .12], ["glm-4.6", .08]].map(([model, k]) => ({ model, credit: Math.round(total * k * 100) / 100, count: Math.round(total * k / 3) })) };
+    models: [["kimi-k3.1-pro", .55], ["deepseek-v4.1-flash", .25], ["glm-5.3", .12], ["hy3", .08]].map(([model, k]) => ({ model, credit: Math.round(total * k * 100) / 100, count: Math.round(total * k / 3) })),
+    charges: 48, free: 6, recent: [[18, 2.41, "kimi-k3.1-pro"], [41, 0.37, "deepseek-v4.1-flash"], [66, 1.92, "kimi-k3.1-pro"], [130, 0.08, "glm-5.3-flash"], [190, 0.52, "glm-5.3"]].map(([m, credit, model]) => ({ at: now - m * 60_000, credit, model, client: "WorkBuddy" })) };
 };
 const task = (title, state, current, target, credit, energy = 0, note = "") => ({ title, state, note, current, target, credit, energy, ends: at(12, 23, 59) });
 
@@ -39,7 +39,14 @@ const accounts = [
       task("邀请好友体验", "locked", 0, 1, 30)
     ] },
     growth: { energy: 340, earned: 1280, spent: 940, draws: 2, buddies: 7, rarity: { R: 4, SR: 2, UR: 1 }, current: ["团子"] },
-    checkin: { outcome: "claimed", credit: 100, streak: 12, at: at(0, 0, 0) }
+    checkin: { outcome: "claimed", credit: 100, streak: 12, at: at(0, 0, 0) },
+    // Its own 24-hour allowance on one model spent, back late tonight.
+    limits: [{ model: "kimi-k3-1", resets: at(0, 23, 40) }],
+    ledger: { gained: 430, used: 788, sources: [["每日签到", 300], ["成长任务", 100], ["猫猫旅行", 30]], entries: [
+      { at: at(0, 0, 0), credit: 100, name: "每日签到奖励", left: 100, ends: at(30, 23, 59), source: "每日签到" },
+      { at: at(-1, 12, 40), credit: 30, name: "猫猫旅行奖励", left: 30, ends: at(29, 23, 59), source: "猫猫旅行" },
+      { at: at(-1, 9, 10), credit: 100, name: "成长任务奖励", left: 77, ends: at(8, 23, 59), source: "成长任务" }
+    ] }
   },
   {
     id: "demo-2", name: "备用号", enterprise: false, expires: now + 14 * H, errors: {},
@@ -61,13 +68,46 @@ const accounts = [
     id: "demo-3", name: "公司账号", enterprise: true, expires: now + 20 * D, errors: {},
     balance: { balance: 597.21, size: 2000, used: 1402.79, resets: at(2, 0), packages: [{ name: "企业月度额度", balance: 597.21, size: 2000, expires: at(2, 0), resets: true }] },
     usage: usage([210, 260, 190, 240, 305, 120, 77]),
-    checkin: { outcome: "inactive" }
+    checkin: { outcome: "inactive" },
+    // Short of capacity, a model queues enterprise accounts too.
+    limits: [{ model: "kimi-k3.1-pro", queued: { position: 257, size: "999+", at: now - 8 * 60_000, until: now + 52 * 60_000 } }]
+  },
+  {
+    id: "intl:demo-4", name: "海外号", realm: "intl", enterprise: false, expires: now + 300 * D, errors: {},
+    balance: { balance: 530, size: 800, packages: [
+      { name: "Bonus Pack", balance: 30, size: 30, expires: at(30, 23, 59) },
+      { name: "Free plan credits", balance: 500, size: 770, expires: at(18, 23, 59) }
+    ] },
+    usage: usage([6, 0, 3, 1, 4, 2, 1]),
+    streak: { days: 9, makeupCards: 0, active: true },
+    tasks: { total: 5, claimed: 1, credit: 0, open: [] },
+    growth: { energy: 40, earned: 60, spent: 20, draws: 0, buddies: 0, rarity: {} },
+    checkin: { outcome: "closed" },
+    ledger: { gained: 30, used: 12, sources: [["每日活跃奖励", 30]], entries: [{ at: at(0, 10, 41), credit: 30, name: "Bonus Pack", left: 30, ends: at(30, 23, 59), source: "每日活跃奖励" }] }
   }
 ];
 
 // Both builds' model lists as their configs read on 2026-11-02 (public
 // catalog data); only the account names are made up.
-const model = ([id, name, rate, context, desc, extra = {}]) => ({ id, name, desc, rate, context, isDefault: !!extra.def, ...extra.tier ? { tier: extra.tier } : {}, ...extra.promo ? { promo: extra.promo } : {} });
+// Native reasoning levels as the configs list them: [levels, default, can be off].
+const levels = {
+  auto: [["high"]], "default-model": null, "hy4-preview": [["high"]], "mimo-v2.6-pro": [["high"]], "kimi-k3": [["medium"]], "kimi-k2.5": [["medium"]],
+  hy3: [["low", "high"], "high"], "hy3-x": [["low", "high"], "high"], "glm-5.2": [["high", "xhigh"], "high", true],
+  "kimi-k3-1": [["low", "high", "xhigh"], "high", true], "kimi-k2.8-preview": [["low", "high", "max"], "high", true],
+  "deepseek-v4-pro": [["high", "xhigh"], "high", true], "deepseek-v4.1-flash": [["low", "high", "max"], "high", true],
+  "step-5-preview": [["low", "medium", "high"], "high"], "gemini-3.8-flash": [["low", "medium", "high"], "medium"],
+  "space-bunny": [["low", "medium", "high", "xhigh", "max"], "max"], "minimax-m3.1-flash": [["low", "medium", "high", "xhigh", "max"], "max"],
+  "gpt-6-astra": [["low", "medium", "high", "xhigh", "max"], "high", true], "gpt-5.6-sol": [["low", "medium", "high", "xhigh", "max"], "high", true],
+  "gpt-5.6-terra": [["low", "medium", "high", "xhigh", "max"], "high", true], "gpt-5.6-luna": [["low", "medium", "high", "xhigh", "max"], "high", true],
+  "gpt-6.1-sol": [["low", "medium", "high", "xhigh"], "high"], "gpt-6-sol": [["low", "medium", "high", "xhigh"], "high"],
+  "gpt-6-luna": [["low", "medium", "high", "xhigh"], "high"], "grok-4.7": [["low", "medium", "high", "xhigh"], "high"]
+};
+const reasoningOf = id => {
+  const l = id in levels ? levels[id] : [["low", "high", "max"], "high"];
+  if (!l) return null;
+  return l[0].length === 1 ? { levels: l[0], default: l[0][0], fixed: true, off: false } : { levels: l[0], default: l[1], off: !!l[2] };
+};
+const model = ([id, name, rate, context, desc, extra = {}]) => ({ id, name, desc, rate, context, isDefault: !!extra.def, reasoning: reasoningOf(id), ...extra.tier ? { tier: extra.tier } : {}, ...extra.promo ? { promo: extra.promo } : {} });
 const proOnly = { label: "Pro Only", note: "模型仅面向 Pro 用户开放。", exclusive: true };
 const queued = { label: "订阅优先", note: "资源紧张，旗舰版及高级版会员享优先调度。", exclusive: false };
 const models = {
@@ -90,11 +130,20 @@ const models = {
     ["step-5-preview", "Step-5-Preview", 0.33, 1000000, "阶跃 StepFun 面向真实任务的新一代旗舰基模"],
     ["mimo-v2.6-pro", "Xiaomi MiMo-V2.6-Pro", 0.13, 1000000, "旗舰推理模型，面向专业、长程、复杂工作流"]
   ].map(model) },
+  ent: { account: "公司账号", plan: { name: "企业", paid: true }, models: [
+    ["auto", "Auto", null, 256000, "平衡效果与速度。自动为每个任务匹配最优模型，积分倍率随之浮动", { def: true }],
+    ["hy3", "Hy3", 0, 192000, "混元思考模型，具有增强的推理能力"],
+    ["deepseek-v4.1-flash", "DeepSeek-V4.1-Flash", 0.11, 1000000, "支持 1M 上下文窗口，原生多模态"],
+    ["glm-5.3-flash", "GLM-5.3-Flash", 0.08, 1000000, "原生多模态模型，擅长视觉理解与专业任务"],
+    ["glm-5.3-flashx", "GLM-5.3-FlashX", 0.19, 1000000, "原生多模态模型，擅长视觉理解与专业任务"],
+    ["kimi-k2.5", "Kimi-K2.5", 0.45, 256000, "擅长处理复杂的长程自主任务"],
+    ["kimi-k3.1-pro", "Kimi-K3.1-Pro", 0.97, 1000000, "Kimi 全新旗舰模型，3万亿级参数"],
+    ["kimi-k3.1-pro-highspeed", "Kimi-K3.1-Pro-Highspeed", 1.56, 1000000, "K3.1 Pro 高速版本"],
+    ["minimax-m3.1-flash", "MiniMax-M3.1-Flash", 0.08, 1000000, "原生多模态，擅长 office、agentic、编程任务"],
+    ["mimo-v2.6-pro", "Xiaomi MiMo-V2.6-Pro", 0.13, 1000000, "旗舰推理模型，面向专业、长程、复杂工作流"]
+  ].map(model) },
   intl: { account: "海外号", plan: { name: "Free", paid: false }, models: [
     ["default-model", "Auto", null, 176000, "优秀的编码模型，适合日常使用", { def: true }],
-    ["fast-model", "Fast", 0.34, 200000, "响应快，适合简单任务"],
-    ["balanced-model", "Balanced", 0.59, 256000, "速度与质量兼顾，日常工作首选"],
-    ["primary-model", "Primary", 3.31, 272000, "高质量输出，胜任复杂任务"],
     ["hy4-preview", "Hy4 Preview", 0.29, 1000000, "混元思考模型，具有增强的推理能力"],
     ["hy3", "Hy3", 0, 192000, "混元思考模型，具有增强的推理能力"],
     ["deepseek-v4.1-flash-sg", "Deepseek-V4.1-Flash", 0.03, 1000000, "DeepSeek 旗舰模型，支持 1M 上下文窗口，原生多模态"],
@@ -117,17 +166,22 @@ const models = {
 };
 
 const hhmm = t => `${String(new Date(t).getHours()).padStart(2, "0")}:${String(new Date(t).getMinutes()).padStart(2, "0")}`;
-const slots = [["night", "01:00"], ["daily", "09:00"], ["tasks", "09:10"], ["daily", "21:00"], ["tasks", "21:10"], ["keepalive", "22:00"]].map(([kind, time]) => {
+const slots = [["night", "01:00"], ["daily", "09:00"], ["tasks", "09:10"], ["daily", "21:00"], ["tasks", "21:10"], ["keepalive", "22:00"],
+  ["intl-daily", "09:00"], ["intl-tasks", "09:10"], ["intl-web", "10:30"], ["intl-daily", "21:00"], ["intl-keepalive", "22:00"]].map(([kind, time]) => {
   const [h, m] = time.split(":").map(Number), due = at(0, h, m) <= now;
   return { kind, at: time, status: due ? "succeeded" : "upcoming", attempts: due ? 1 : 0 };
 });
 const job = (actions, minutes, last) => ({ id: `demo-${minutes}`, actions, status: "succeeded", trigger: "manual", created: new Date(now - minutes * 60_000).toISOString(), finished: new Date(now - minutes * 60_000 + 40_000).toISOString(), last });
 
 writePage(join(process.argv[2], "data.js"), {
-  generated: new Date(now).toISOString(), at: now - 4 * 60_000, refreshing: false, enabled: true,
+  generated: new Date(now).toISOString(), at: now - 4 * 60_000, refreshing: false, enabled: true, intlEnabled: true,
   schedules: { daily: ["09:00", "21:00"], tasks: ["09:10", "21:10"], night: ["01:00"], keepalive: ["22:00"] },
+  intlSchedules: { daily: ["09:00", "21:00"], tasks: ["09:10"], web: ["10:30"], keepalive: ["22:00"] },
+  intl: { enabled: true, web: true, accounts: 1 },
+  settings: { timezone: "Asia/Shanghai", spread: 0, proxy: "", intlWebModel: "auto" },
   accounts, models, today: { timezone: "Asia/Shanghai", slots, next: slots.find(s => s.status === "upcoming") || null },
   jobs: [
+    job(["web"], 70, "海外号：国际版网页会话已跑完（hy3，当前免费，11 秒），每日活跃奖励稍后到账"),
     job(["tasks"], 95, "主力号：成长任务完成 2 项，领取 80 积分"),
     job(["travel"], 130, "备用号：芝麻出发去大理"),
     job(["activity", "travel", "bonus"], 140, "2 个账号已活跃；主力号：团子出发去敦煌"),

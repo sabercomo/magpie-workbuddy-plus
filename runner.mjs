@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { accounts, calendar, checkins, initialize, intlAccount, maskProxy, publicAccount, readJSON, validateConfig, version, writeJSON } from "./storage.mjs";
+import { accounts, calendar, checkins, initialize, intlAccount, intlSchedules, maskProxy, plan, publicAccount, readJSON, settle, validateConfig, version, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
 import { checkin, collect, writePage } from "./board.mjs";
@@ -58,7 +58,7 @@ export class Runner {
     }
     this.save();
   }
-  config() { return readJSON(join(this.dir, "config.json")); }
+  config() { return settle(readJSON(join(this.dir, "config.json"))); }
   // Minutes a slot may move either way; settings from before it have 10.
   spread(config = this.config()) { return Number.isInteger(config.spread) ? config.spread : 10; }
   // The install's own seed for its slot moments, kept with its state.
@@ -66,7 +66,8 @@ export class Runner {
   save() { writeJSON(join(this.dir, "state.json"), this.state); }
   list() { return accounts(this.config(), this.dir); }
   status() {
-    return { version, config: this.config(), accounts: this.list().map(publicAccount), jobs: this.state.jobs, daily: this.state.daily, slots: this.state.slots };
+    const config = this.config();
+    return { version, config, intlSchedules: intlSchedules(config), intlModels: (this.board.models?.intl?.models || []).map(m => m.id), accounts: this.list().map(publicAccount), jobs: this.state.jobs, daily: this.state.daily, slots: this.state.slots };
   }
   // A job queued or running: the service must not be swapped out under it.
   working() { return this.controllers.size > 0 || this.state.jobs.some(j => ["running", "queued"].includes(j.status)); }
@@ -75,11 +76,11 @@ export class Runner {
   boardView() {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
     return {
-      generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, schedules: config.schedules,
+      generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
-      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy) },
+      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto" },
       accounts: this.board.accounts.map(({ key, ...a }) => this.withLedger(a, key, found, day)), models: this.board.models || null,
-      intl: { enabled: config.intl !== false, web: config.intlWeb !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
+      intl: { enabled: config.intlEnabled, web: config.intlWeb !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
       jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
     };
   }
@@ -101,13 +102,16 @@ export class Runner {
   // or replaces it when that account is already signed in. No token passes
   // through here. One sign-in at a time; the command itself gives up after 10
   // minutes.
-  login() {
+  // 添加账号 only points to Magpie's own WorkBuddy plugin: its browser sign-in
+  // for China (workbuddy) or WorkBuddy AI (workbuddy-ai). Magpie keeps the login.
+  login(realm = "cn") {
     if (this.signin?.status === "waiting") return this.signin;
+    if (!["cn", "intl"].includes(realm)) throw new Error("未知的登录版本");
     const bin = this.magpie();
     if (!bin) throw new Error("找不到 magpie 命令，请在 Magpie 的供应商页登录 WorkBuddy");
     const started = new Date().toISOString();
     let out = "";
-    const child = this.spawner(bin, ["plugin", "login", "workbuddy", "1"], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    const child = this.spawner(bin, ["plugin", "login", realm === "intl" ? "workbuddy-ai" : "workbuddy", "1"], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     const keep = data => {
       out = (out + data).replace(/\x1b\[[0-9;]*m/g, "").slice(-4000);
       const url = out.match(/https:\/\/\S+/)?.[0];
@@ -117,13 +121,13 @@ export class Runner {
     child.stderr?.on("data", keep);
     const end = (ok, message) => {
       if (this.signin?.started !== started || this.signin.status !== "waiting") return;
-      this.signin = { status: ok ? "done" : "failed", started, finished: new Date().toISOString(), ...(message ? { message } : {}) };
+      this.signin = { status: ok ? "done" : "failed", realm, started, finished: new Date().toISOString(), ...(message ? { message } : {}) };
       if (ok) { this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
       this.publish();
     };
     child.on("error", e => end(false, e.message));
     child.on("exit", code => end(code === 0, code === 0 ? "" : out.trim().split("\n").filter(Boolean).at(-1) || `magpie 退出码 ${code}`));
-    this.signin = { status: "waiting", started };
+    this.signin = { status: "waiting", realm, started };
     this.publish();
     return this.signin;
   }
@@ -132,13 +136,13 @@ export class Runner {
   // and runAt, the moment it runs today.
   today(config = this.config(), now = new Date()) {
     const { day, time } = calendar(now, config.timezone);
-    const slots = Object.entries(config.schedules).flatMap(([kind, times]) => times.map(at => {
+    const slots = plan(config).flatMap(({ kind, times, on }) => times.map(at => {
       const record = this.state.slots[`${day}:${kind}:${at}`], job = record && this.state.jobs.find(j => j.id === record.job), runAt = shifted(day, kind, at, this.spread(config), this.salt());
       // The night task only counts 23:00–08:00; past that window a missed slot is gone.
       const status = job ? job.status : runAt > time ? "upcoming" : kind === "night" && time >= "08:00" ? "missed" : "pending";
-      return { kind, at, runAt, status, attempts: record?.attempts || 0 };
+      return { kind, at, runAt, status, attempts: record?.attempts || 0, ...(on ? {} : { paused: true }) };
     })).sort((a, b) => a.at.localeCompare(b.at) || a.kind.localeCompare(b.kind));
-    return { timezone: config.timezone, spread: this.spread(config), slots, next: config.enabled ? slots.find(s => s.status === "upcoming") || null : null };
+    return { timezone: config.timezone, spread: this.spread(config), slots, next: slots.find(s => s.status === "upcoming" && !s.paused) || null };
   }
   publish() {
     const view = this.boardView(), targets = this.state.pageTargets || [];
@@ -202,17 +206,17 @@ export class Runner {
     try {
       if (!(Date.now() - Number(request.at) < 10 * 60_000)) throw new Error("页面请求已过期，请重新点击");
       if (request.action === "refresh") { this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
-      else if (request.action === "login") this.login();
+      else if (["login", "login-intl"].includes(request.action)) this.login(request.action === "login-intl" ? "intl" : "cn");
       else if (["pause", "resume"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), enabled: request.action === "resume" });
       else if (request.action === "config") {
         // Settings saved from Magpie's page: times, spread, time zone, proxy. A
         // proxy shown masked and sent back unchanged keeps the saved one.
         const current = this.config(), given = request.config || {};
-        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
+        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
           ...(given.proxy !== undefined && given.proxy !== maskProxy(current.proxy) ? { proxy: given.proxy } : {}) };
         writeJSON(join(this.dir, "config.json"), validateConfig(next));
       }
-      else if (["intl-on", "intl-off"].includes(request.action)) { writeJSON(join(this.dir, "config.json"), { ...this.config(), intl: request.action === "intl-on" }); this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
+      else if (["intl-on", "intl-off"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), intlEnabled: request.action === "intl-on" });
       else note.job = this.submit([request.action], undefined, "page").id;
       note.ok = true;
     } catch (e) { note.error = e.message; }
@@ -262,7 +266,8 @@ export class Runner {
         job.logs = job.logs.slice(-500);
         this.save();
       };
-      const context = { account, config, state: this.state, log, checkpoint: () => this.save(), signal: controller.signal };
+      // WorkBuddy AI's model list picks the web conversation's model.
+      const context = { account, config, state: this.state, log, checkpoint: () => this.save(), signal: controller.signal, ...(account.realm === "intl" ? { models: this.board.models?.intl } : {}) };
       for (const action of job.actions) {
         if (controller.signal.aborted) break;
         const result = { account: account.id, action, ok: false };
@@ -290,17 +295,11 @@ export class Runner {
   }
   tick(now = new Date()) {
     const config = this.config();
-    if (!config.enabled) return;
     const { day, time } = calendar(now, config.timezone);
-    const groups = {
-      daily: { actions: ["activity", "travel", "bonus"] },
-      tasks: { actions: ["tasks"] },
-      night: { realm: "cn", actions: ["night"] },
-      keepalive: { actions: ["keepalive"] }
-    };
-    for (const [kind, times] of Object.entries(config.schedules)) {
-      const group = groups[kind];
-      const ids = this.list().filter(a => a.enabled && (!group.realm || a.realm === group.realm) && (kind === "keepalive" || !a.enterprise)).map(a => a.id);
+    // Each build keeps its own slots; enterprise logins only renew theirs.
+    for (const { kind, times, realm, actions: group, on } of plan(config)) {
+      if (!on) continue;
+      const ids = this.list().filter(a => a.enabled && a.realm === realm && (group.includes("keepalive") || !a.enterprise)).map(a => a.id);
       if (!ids.length || this.busy(ids)) continue;
       for (const slot of times) {
         if (shifted(day, kind, slot, this.spread(config), this.salt()) > time) continue;
@@ -313,7 +312,7 @@ export class Runner {
           if (old && !["failed", "deferred", "interrupted"].includes(old.status)) continue;
           if (previous.attempts >= 3 || (old && now - new Date(old.finished) < 15 * 60_000)) continue;
         }
-        const job = this.submit(group.actions, ids, `schedule:${kind}:${slot}`);
+        const job = this.submit(group, ids, `schedule:${kind}:${slot}`);
         this.state.slots[key] = { job: job.id, attempts: (previous?.attempts || 0) + 1 };
         // Retain a week of slot/event deduplication, rather than an unbounded ledger.
         const cutoff = calendar(new Date(now - 7 * 86400_000), config.timezone).day;

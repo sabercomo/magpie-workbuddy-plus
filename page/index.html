@@ -7,31 +7,54 @@
 </head>
 <body class="wb-board">
   <header>
-    <div><h1>WorkBuddy Plus</h1><p class="muted" id="state">读取中…</p></div>
-    <div class="actions">
-      <button type="button" class="quiet" data-action="login">添加账号</button>
-      <button type="button" class="quiet" data-action="travel">猫猫旅行</button>
-      <button type="button" class="quiet" id="schedule" data-action="pause">暂停定时</button>
-      <button type="button" class="quiet" id="intl" data-action="intl-off" hidden>关闭国际版任务</button>
-      <button type="button" data-action="refresh">刷新</button>
-      <button type="button" data-action="all">全部执行</button>
-    </div>
+    <div><h1>WorkBuddy Plus</h1><p class="muted"><span id="state">读取中…</span><button type="button" class="inline" data-action="refresh"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg>刷新</button></p></div>
+    <details class="run-menu add-menu"><summary><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>添加账号<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg></summary>
+      <div class="menu" role="menu">
+        <button type="button" role="menuitem" data-action="login">国内版<small>WorkBuddy · 在浏览器里登录</small></button>
+        <button type="button" role="menuitem" data-action="login-intl">国际版<small>WorkBuddy AI · 在浏览器里登录</small></button>
+        <hr>
+        <p class="menu-note">登录由 Magpie 的 WorkBuddy 插件完成并保存，本插件只是打开它的登录页。</p>
+      </div>
+    </details>
   </header>
   <p id="note" class="note" role="status" hidden></p>
   <section id="board"></section>
-  <section><h2>最近执行</h2><div id="jobs"></div></section>
-  <section><details id="settings"><summary>定时与设置 <span class="muted">执行时段、随机错开、时区、代理</span></summary>
+  <section>
+    <div class="section-head"><h2>执行记录</h2>
+      <details class="run-menu" id="run-menu"><summary><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7-4.5z"/></svg>立即执行<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg></summary>
+        <div class="menu" role="menu">
+          <button type="button" role="menuitem" data-action="all">全部跑一遍<small>连登活跃、成长任务、猫猫旅行、连登福利；国际版另含签到和网页会话</small></button>
+          <hr>
+          <button type="button" role="menuitem" data-action="travel">只放猫猫旅行<small>领回归来的猫猫，再出发</small></button>
+          <button type="button" role="menuitem" data-action="tasks">只做成长任务<small>上报能模拟的任务，领已完成的奖励</small></button>
+        </div>
+      </details>
+    </div>
+    <div id="jobs"></div>
+  </section>
+  <section><details id="settings"><summary>定时与设置 <span class="muted">国内版与国际版各自的执行时段、随机错开、时区、代理</span></summary>
     <form id="settings-form">
+      <div class="realms">
+        <fieldset><legend>国内版 <span class="muted" id="cn-state"></span></legend>
+          <label>活跃 / 旅行 / 连登福利<input name="daily" placeholder="09:00, 21:00"></label>
+          <label>成长任务<input name="tasks" placeholder="09:10, 21:10"></label>
+          <label>夜猫子任务<input name="night" placeholder="01:00"></label>
+          <label>登录续期检查<input name="keepalive" placeholder="22:00"></label>
+        </fieldset>
+        <fieldset id="intl-fields"><legend>国际版 <span class="muted" id="intl-state"></span></legend>
+          <label>连登活跃 / 签到 / 连登福利<input name="intl-daily" placeholder="09:00, 21:00"></label>
+          <label>成长任务<input name="intl-tasks" placeholder="09:10, 21:10"></label>
+          <label>网页会话（每日活跃奖励）<input name="intl-web" placeholder="10:30"></label>
+          <label>网页会话用的模型<select name="intl-model"><option value="auto">自动：优先当前免费的模型</option></select></label>
+          <label>登录续期检查<input name="intl-keepalive" placeholder="22:00"></label>
+        </fieldset>
+      </div>
       <div class="fields">
-        <label>活跃 / 旅行 / 连登福利<input name="daily" placeholder="HH:MM, HH:MM"></label>
-        <label>成长任务<input name="tasks" placeholder="HH:MM, HH:MM"></label>
-        <label>夜猫子任务<input name="night" placeholder="HH:MM"></label>
-        <label>登录续期检查<input name="keepalive" placeholder="HH:MM"></label>
         <label>随机错开（分钟，0 关闭）<input name="spread" type="number" min="0" max="60" step="1"></label>
         <label>时区<input name="timezone" placeholder="Asia/Shanghai"></label>
         <label class="wide">HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label>
       </div>
-      <p class="muted">同类多个时段用逗号分隔，清空可关闭该类定时。保存后由 Magpie 重载插件交给后台服务，Docker 等打不开本机面板时在这里改。</p>
+      <p class="muted">国内版和国际版的定时各用「今日定时」里那一排右边的开关暂停或开启，暂停只停定时，手动执行照样能用。同类多个时段用逗号分隔，清空可关闭该类定时。网页会话每天只跑一次，跑过就不再跑；自动选模型时用当前免费的模型，没有免费的或它跑不了时用 DeepSeek-V4.1-Flash。保存后由 Magpie 重载插件交给后台服务，Docker 等打不开本机面板时在这里改。</p>
       <button type="submit">保存设置</button>
     </form>
   </details></section>

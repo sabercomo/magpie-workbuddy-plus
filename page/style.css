@@ -3,10 +3,32 @@ header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
 h1{font-size:22px;font-weight:650;letter-spacing:-.02em;margin:0 0 2px}
 h2{font-size:13px;font-weight:600;margin:22px 2px 8px}
 .muted{color:var(--wb-muted);font-size:12px;margin:0}
-.actions{display:flex;gap:6px;flex-wrap:wrap}
-.actions button{font-size:12.5px;padding:4px 12px;border-radius:7px;cursor:pointer}
-.actions button:active{transform:scale(.97);transition:transform 100ms ease-out}
-.actions .quiet{background:none;border-color:transparent;color:var(--wb-muted)}.actions .quiet:hover{color:inherit}
+/* The header: refresh beside the time it updates, one quiet button for accounts. */
+header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+header button{font:inherit;display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:inherit}
+header button svg,.run-menu svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+header .inline{all:unset;display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:12px;color:var(--wb-accent);padding:1px 4px;border-radius:5px}
+header .inline:hover{background:var(--wb-soft)}header .inline:focus-visible,header .quiet:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+header .quiet{font-size:12.5px;padding:5px 11px;border-radius:8px;border:1px solid var(--wb-line);background:var(--wb-card);white-space:nowrap}
+header .quiet:hover{border-color:color-mix(in srgb,var(--wb-muted) 55%,var(--wb-line))}
+header .quiet:active,.run-menu summary:active{transform:scale(.97);transition:transform 100ms ease-out}
+header .quiet svg{color:var(--wb-muted)}
+.run-menu summary{font:inherit;font-size:12.5px;display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:8px;cursor:pointer;border:1px solid var(--wb-line)}
+/* 立即执行: the common run first, single jobs below it. */
+.section-head{display:flex;justify-content:space-between;align-items:center;margin:22px 2px 8px}.section-head h2{margin:0}
+.run-menu{position:relative}
+.run-menu summary{list-style:none;background:var(--wb-accent);border-color:var(--wb-accent);color:#fff}.run-menu summary::-webkit-details-marker{display:none}
+.run-menu summary svg:first-child{fill:currentColor;stroke:none}.run-menu .chev{transition:transform 150ms ease}.run-menu[open] .chev{transform:rotate(180deg)}
+.run-menu .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:5;width:min(280px,calc(100vw - 32px));background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:5px;box-shadow:0 8px 24px rgba(0,0,0,.12);transform-origin:top right;animation:menu-in 160ms ease-out}
+@keyframes menu-in{from{opacity:0;transform:scale(.96)}}
+.run-menu .menu button{all:unset;box-sizing:border-box;display:block;width:100%;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:12.5px}
+.run-menu .menu button small{display:block;font-size:11px;color:var(--wb-muted);margin-top:1px}
+.run-menu .menu button:hover,.run-menu .menu button:focus-visible{background:var(--wb-soft);color:var(--wb-accent)}
+.run-menu hr{border:0;border-top:1px solid var(--wb-line);margin:4px 6px}
+.run-menu .menu-note{font-size:11px;color:var(--wb-muted);margin:2px 10px 4px;line-height:1.45}
+/* 添加账号 is quiet: an outline button whose menu opens under it. */
+.add-menu summary{background:var(--wb-card);border-color:var(--wb-line);color:inherit}.add-menu summary:hover{border-color:color-mix(in srgb,var(--wb-muted) 55%,var(--wb-line))}
+.add-menu summary svg:first-child{fill:none;stroke:currentColor;color:var(--wb-muted)}
 .note{border:1px solid var(--wb-line);border-radius:10px;padding:8px 12px;font-size:12px;margin:0 0 12px}.note.bad{color:var(--wb-urgent)}
 #jobs{border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);overflow:hidden}
 #jobs>p{padding:10px 14px}
@@ -17,8 +39,13 @@ footer{font-size:11.5px;margin-top:18px}
 #settings{margin-top:22px;border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);padding:10px 14px}
 #settings>summary{cursor:pointer;font-size:13px;font-weight:600}#settings>summary .muted{font-weight:400;margin-left:6px}
 #settings-form{display:flex;flex-direction:column;gap:10px;margin-top:10px;align-items:flex-start}
+.realms{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;width:100%}
+.realms fieldset{margin:0;border:1px solid var(--wb-line);border-radius:10px;padding:8px 12px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.realms legend{font-size:12.5px;font-weight:600;padding:0 4px}
+.realms label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--wb-muted)}
+.realms input,.realms select{font:inherit;font-size:12.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--wb-line);background:transparent;color:inherit}
 .fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 12px;width:100%}
 .fields label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--wb-muted)}.fields label.wide{grid-column:1/-1}
 .fields input{font:inherit;font-size:12.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--wb-line);background:transparent;color:inherit}
 #settings-form button{font-size:12.5px;padding:4px 14px;border-radius:7px;cursor:pointer}
-@media (prefers-reduced-motion:reduce){.actions button:active{transform:none}}
+@media (prefers-reduced-motion:reduce){header .quiet:active,.run-menu summary:active{transform:none}.run-menu .chev{transition:none}.run-menu .menu{animation:none}}

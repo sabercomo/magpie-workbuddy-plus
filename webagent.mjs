@@ -15,14 +15,29 @@
 //
 // The web app's own requests carry only the bearer token and X-User-Id, no
 // desktop fingerprint, so the Magpie login works as it is. One short turn on
-// a cheap model ("Hi" on DeepSeek-V4.1-Flash) costs a fraction of a credit.
+// a model free right now costs nothing; DeepSeek-V4.1-Flash, the fallback,
+// about half a credit. The prompt asks for one word: a "Hi" drew 150 pieces
+// of reply, all charged.
 
 import { setTimeout as delay } from "node:timers/promises";
 
 const web = "https://www.workbuddy.ai", conversations = web + "/console/as/conversations/";
 const agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0";
 
-export async function webActivity(client, { model = "deepseek-v4.1-flash", prompt = "Hi", wait = 120_000, poll = 3000, sleep = delay } = {}) {
+export const fallback = "deepseek-v4.1-flash";
+
+// The model for the day's conversation: the one set, or else a model free
+// right now (0x, not only in some hours, open to this plan), Hy3 first as the
+// web app is known to take it; none free, the fallback.
+export function pickModel(list, wanted = "auto") {
+  if (wanted && wanted !== "auto") return { id: wanted, why: "设置指定" };
+  const paid = list?.plan?.paid === true;
+  const free = (list?.models || []).filter(m => (m.rate === 0 || (m.promo?.rate === 0 && !m.promo.hours)) && (paid || !m.tier?.exclusive));
+  const pick = free.find(m => m.id === "hy3") || free[0];
+  return pick ? { id: pick.id, why: "当前免费" } : { id: fallback, why: "没有免费模型" };
+}
+
+export async function webActivity(client, { model = fallback, prompt = "只回复一个字：好", wait = 120_000, poll = 3000, sleep = delay } = {}) {
   await client.refresh();
   const a = client.account.auth, started = Date.now();
   const headers = { Authorization: `Bearer ${a.access}`, "X-User-Id": a.uid, "Content-Type": "application/json", Accept: "application/json, text/plain, */*", Origin: web, Referer: web + "/app", "User-Agent": agent };

@@ -12,21 +12,25 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
     constructor(tag) { this.tag = tag; this.children = []; this.value = ""; this.dataset = {}; this.style = {}; }
     append(...children) { this.children.push(...children); }
     replaceChildren(...children) { this.children = children; }
-    setAttribute() {}
+    setAttribute(k, v) { (this.attributes ||= {})[k] = v; }
+    getAttribute(k) { return this.attributes?.[k] ?? null; }
     removeAttribute() {}
+    get lastChild() { return this.children.at(-1); }
   }
   const nodes = new Map(), buttonNames = [...readFileSync(new URL("../public/index.html", import.meta.url), "utf8").matchAll(/data-action="([^"]+)"/g)].map(m => m[1]);
   const buttons = buttonNames.map(action => { const b = new Element("button"); b.dataset.action = action; return b; });
-  for (const id of ["schedule-state", "toggle-schedule", "error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "saved", "board", "board-state", "board-refresh", "board-login", "toggle-intl"]) nodes.set(id, new Element("div"));
+  for (const id of ["error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "intl-schedule-fields", "intl-fields", "cn-state", "intl-state", "saved", "board", "board-state", "board-refresh", "add-menu"]) nodes.set(id, new Element("div"));
+  nodes.get("add-menu").contains = () => false;
+  // The switches: a dot, a name and the state they show.
   const form = nodes.get("config-form"); form.elements = {};
   for (const name of ["timezone", "proxy", "spread"]) form.elements[name] = new Element("input");
-  nodes.get("schedule-fields").append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };
-  const calls = [], status = { config: structuredClone(defaults), accounts: [
+  for (const id of ["schedule-fields", "intl-schedule-fields"]) nodes.get(id).append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };
+  const calls = [], status = { config: structuredClone(defaults), intlSchedules: structuredClone(defaults.intlSchedules), intlModels: ["hy3", "kimi-k3"], accounts: [
     { id: "cn:a", name: "国内测试", realm: "cn", source: "magpie", enabled: true },
     { id: "cn:b", name: "国内测试二", realm: "cn", source: "magpie", enabled: true }
   ], jobs: [] };
-  const board = { at: Date.now(), enabled: true, signin: { status: "waiting", started: new Date().toISOString(), url: "https://www.workbuddy.cn/login?state=s" }, today: { timezone: "Asia/Shanghai", next: { kind: "daily", at: "21:00", status: "upcoming" }, slots: [
-    { kind: "daily", at: "09:00", status: "succeeded", attempts: 1 }, { kind: "tasks", at: "09:10", status: "failed", attempts: 2 }, { kind: "daily", at: "21:00", status: "upcoming", attempts: 0 }
+  const board = { at: Date.now(), enabled: true, intlEnabled: false, signin: { status: "waiting", started: new Date().toISOString(), url: "https://www.workbuddy.cn/login?state=s" }, today: { timezone: "Asia/Shanghai", next: { kind: "daily", at: "21:00", status: "upcoming" }, slots: [
+    { kind: "daily", at: "09:00", status: "succeeded", attempts: 1 }, { kind: "tasks", at: "09:10", status: "failed", attempts: 2 }, { kind: "daily", at: "21:00", status: "upcoming", attempts: 0 }, { kind: "intl-web", at: "10:30", status: "upcoming", attempts: 0, paused: true }
   ] }, accounts: [{ id: "cn:a", name: "国内测试", expires: 0, errors: {}, balance: { balance: 120, size: 300, packages: [{ name: "活动赠送", balance: 120, size: 300, expires: Date.now() + 86400_000 }] },
     streak: { days: 8, makeupCards: 1, active: true, nextTier: { days: 14, remaining: 6, credit: 50, energy: 3 } },
     growth: { energy: 30, earned: 110, spent: 80, draws: 0, buddies: 2, rarity: { SR: 1, R: 1 }, current: ["团子"] },
@@ -53,7 +57,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
         { id: "primary-model", name: "Primary", desc: "", rate: 3.31, context: 272000 },
         { id: "gpt-6-luna", name: "GPT-6-Luna", desc: "", rate: 0.07, context: 1000000, tier: { label: "Pro Only", note: "模型仅面向 Pro 用户开放。", exclusive: true } }] } } };
   const context = vm.createContext({
-    document: { getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: () => buttons },
+    document: { getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: selector => selector === "[data-action]" ? buttons : [], addEventListener() {} },
     fetch: async (path, init) => { calls.push({ path, body: init.body ? JSON.parse(init.body) : undefined }); return { ok: true, json: async () => path === "/api/status" ? structuredClone(status) : path === "/api/board" ? structuredClone(board) : {} }; },
     setInterval() {}, console
   });
@@ -61,7 +65,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   for (const file of ["../page/board.js", "../public/app.js"]) vm.runInContext(readFileSync(new URL(file, import.meta.url), "utf8"), context);
   await setImmediate();
   const text = node => typeof node === "string" ? node : [node.textContent || "", ...node.children.map(text)].join(" ");
-  assert.match(text(nodes.get("board")), /^\s*正在等待 WorkBuddy 登录[\s\S]*https:\/\/www\.workbuddy\.cn\/login\?state=s/);
+  assert.match(text(nodes.get("board")), /^\s*正在等待国内版 WorkBuddy 登录[\s\S]*https:\/\/www\.workbuddy\.cn\/login\?state=s/);
   // The list view: the account row and its expanded detail, then what needs a person.
   assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天 · 已签到 \+100[\s\S]*120 \/ 300[\s\S]*每日签到 已签到 \+100 \d\d:\d\d 由 Magpie 签到 · 连续签到 11 天[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*模型额度用完 1 个[\s\S]*需要你处理 1 件\s+120 积分（活动赠送）将作废[\s\S]*其他提醒 1 件 [\s\S]*「关注公众号」需手动完成 \+100 积分/);
   // 模型限额: a spent model in the detail, and among what needs a person.
@@ -115,12 +119,22 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   button(nodes.get("board"), "列表").onclick();
   // The enterprise login has no daily credits: no check-in shown, nothing to flag.
   assert.doesNotMatch(text(nodes.get("board")), /企业号：|没签上/);
-  assert.match(text(nodes.get("board")), /今日定时 · 每天 3 次 下一次 21:00 活跃 · 旅行 · 福利[\s\S]*09:00 完成[\s\S]*09:10 失败 2\/3 成长任务[\s\S]*21:00 下一次[\s\S]*模型额度用完/);
+  assert.match(text(nodes.get("board")), /今日定时 · 每天 4 次 下一次 21:00 国内版 活跃 · 旅行 · 福利\s+国内版\s+运行中\s+09:00 完成[\s\S]*09:10 失败 2\/3 成长任务[\s\S]*21:00 下一次[\s\S]*国际版\s+已暂停\s+10:30 已暂停 网页会话[\s\S]*模型额度用完/);
   assert.equal(nodes.get("accounts").children.length, 2);
   const checkbox = nodes.get("accounts").children[1].children[0]; checkbox.checked = true; checkbox.onchange();
   await buttons.find(b => b.dataset.action === "activity").onclick();
   assert.deepEqual(calls.find(c => c.path === "/api/run").body, { action: "activity", accounts: ["cn:b"] });
+  // Each build's switch sits on its row in 今日定时: China's on, WorkBuddy AI's paused; a click answers at once.
+  const switches = all(nodes.get("board"), "wb-switch");
+  assert.deepEqual(switches.map(b => [b.attributes["aria-label"], b.attributes["aria-checked"]]), [["国内版定时", "true"], ["国际版定时", "false"]]);
+  assert.equal(nodes.get("cn-state").textContent, "· 定时已暂停", "the settings card follows the saved config");
+  await switches[1].onclick();
+  assert.equal(switches[1].attributes["aria-checked"], "true");
+  assert.equal(calls.filter(c => c.path === "/api/config").at(-1).body.intlEnabled, true, "the WorkBuddy AI switch flips its own schedule only");
   form.elements["schedule-daily"].value = "21:00, 09:00, 09:00";
+  form.elements["intl-web"].value = "11:00，10:30";
+  form.elements["intl-model"].value = "hy3";
   await form.onsubmit({ preventDefault() {}, currentTarget: form });
-  assert.deepEqual(calls.find(c => c.path === "/api/config").body.schedules.daily, ["09:00", "21:00"]);
+  const saved = calls.filter(c => c.path === "/api/config").at(-1).body;
+  assert.deepEqual([saved.schedules.daily, saved.intlSchedules.web, saved.intlSchedules.daily, saved.intlWebModel], [["09:00", "21:00"], ["10:30", "11:00"], ["09:00", "21:00"], "hy3"]);
 });
