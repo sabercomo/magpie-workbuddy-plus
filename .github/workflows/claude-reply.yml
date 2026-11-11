@@ -1,0 +1,31 @@
+name: Claude reply
+
+# 在 issue 评论里写 @claude 才触发（回复 GitHub 通知邮件等于发一条评论）。
+# 只有仓库写权限的账号能唤起；路人 @ 会被 action 拒绝，不消耗额度。
+# 交互模式：Claude 在 issue 里回进度，改完开 draft PR，不合并。
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: claude-reply-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    if: contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model sonnet
