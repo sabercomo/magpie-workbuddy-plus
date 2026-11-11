@@ -1,0 +1,30 @@
+name: Upstream tasks
+
+# 每天 09:00（上海）对照一次上游任务表，有本插件还没适配的任务码就开一条 issue。
+# 只开 issue，不改代码、不合并；不需要任何密钥，用仓库自带的 GITHUB_TOKEN。
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Compare task codes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/upstream-watch.mjs
