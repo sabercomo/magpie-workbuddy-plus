@@ -67,7 +67,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const text = node => typeof node === "string" ? node : [node.textContent || "", ...node.children.map(text)].join(" ");
   assert.match(text(nodes.get("board")), /^\s*正在等待国内版 WorkBuddy 登录[\s\S]*https:\/\/www\.workbuddy\.cn\/login\?state=s/);
   // The list view: the account row and its expanded detail, then what needs a person.
-  assert.match(text(nodes.get("board")), /国内测试 国内 个人 · 连登 8 天 · 已签到 \+100[\s\S]*120 \/ 300[\s\S]*每日签到 已签到 \+100 \d\d:\d\d 由 Magpie 签到 · 连续签到 11 天[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*模型额度用完 1 个[\s\S]*需要你处理 1 件\s+120 积分（活动赠送）将作废[\s\S]*其他提醒 1 件 [\s\S]*「关注公众号」需手动完成 \+100 积分/);
+  assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天 · 已签到 \+100[\s\S]*120 \/ 300[\s\S]*每日签到 已签到 \+100 \d\d:\d\d 由 Magpie 签到 · 连续签到 11 天[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*模型额度用完 1 个[\s\S]*需要你处理 1 件\s+120 积分（活动赠送）将作废[\s\S]*其他提醒 1 件 [\s\S]*「关注公众号」需手动完成 \+100 积分/);
   // 模型限额: a spent model in the detail, and among what needs a person.
   assert.match(text(nodes.get("board")), /kimi-k3-1 额度已用完 (今天|明天) \d\d:\d\d 恢复[\s\S]*kimi-k3.1-pro 排队中 第 907 位 · 预计 (今天|明天) \d\d:\d\d/);
   // A model short of capacity queues an enterprise account too: same yellow box, after the spent ones.
@@ -83,6 +83,8 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const button = (node, label) => typeof node === "string" ? undefined : node.textContent === label && node.onclick ? node : node.children.map(c => button(c, label)).find(Boolean);
   // 成长 starts folded. WorkBuddy AI has no Buddy travel, so its detail shows none.
   const all = (node, cls) => typeof node === "string" ? [] : [...(node.className === cls ? [node] : []), ...node.children.flatMap(c => all(c, cls))];
+  // Every account starts folded, China's first one too.
+  assert.deepEqual([...new Set(all(nodes.get("board"), "wb-row").map(r => r.attributes?.["aria-expanded"]).filter(Boolean))], ["false"]);
   // Only the spent model is yellow; what can wait is a plain list, folded.
   const notes = all(nodes.get("board"), "wb-fold wb-notes");
   assert.equal(notes.length, 1);
@@ -97,24 +99,24 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   assert.match(text(intlDetail), /每日活跃奖励 今日到账 \+30 \d\d:\d\d 到账；奖励在活跃后的次日凌晨发放[\s\S]*成长 连登 2 天/);
   assert.doesNotMatch(text(intlDetail), /暂无签到活动|每日签到|完成一次对话/);
   assert.doesNotMatch(text(nodes.get("board")), /「完成一次对话」/);
-  // Two builds: one summary card each (separate wallets, no one total), a tag on every account, China's first.
-  const cards = all(nodes.get("board"), "wb-kpi").map(text);
-  assert.equal(cards.length, 2);
-  assert.match(cards[0], /国内版\s+2 个账号[\s\S]*近 7 天 [\d,]+ · 日均[\s\S]*成长 \d+\/\d+/);
-  assert.match(cards[1], /国际版\s+1 个账号[\s\S]*每日奖励 今日到账 \+30/);
-  assert.doesNotMatch(cards[1], /成长|猫猫/);
+  // Two builds, two groups: each header has its name, credits and accounts, and what its accounts need today.
+  const heads = all(nodes.get("board"), "wb-group-head").map(h => text(h).replace(/\s+/g, " ").trim());
+  assert.equal(heads.length, 2);
+  assert.match(heads[0], /^国内版 120 积分 · 2 个账号 今日 0\/1 完成 · 成长 1\/2 · 近 7 天 \d+/);
+  assert.match(heads[1], /^国际版 移到上面 0 积分 · 1 个账号 每日奖励 今日到账 \+30 · 近 7 天/);
+  assert.doesNotMatch(heads[1], /成长|猫猫/);
   const listNames = () => all(nodes.get("board"), "wb-who").map(w => text(w).trim().split(/\s+/)[0]);
   assert.deepEqual(listNames(), ["国内测试", "企业号", "海外号"]);
-  // The sort puts WorkBuddy AI first, in the list and in the summary; the choice is a button on the list.
-  button(nodes.get("board"), "国际在前").onclick();
+  // The lower group moves up from its own header, and the other can move back.
+  button(nodes.get("board"), "移到上面").onclick();
   assert.deepEqual(listNames(), ["海外号", "国内测试", "企业号"]);
-  assert.match(all(nodes.get("board"), "wb-kpi").map(text)[0], /^\s*国际版/);
-  button(nodes.get("board"), "国内在前").onclick();
+  assert.match(text(all(nodes.get("board"), "wb-group-head")[1]), /国内版\s+移到上面/);
+  button(nodes.get("board"), "移到上面").onclick();
   assert.deepEqual(listNames(), ["国内测试", "企业号", "海外号"]);
   button(nodes.get("board"), "圆环").onclick();
   // Two rings for WorkBuddy AI: active and tasks.
-  assert.match(text(nodes.get("board")), /海外号 国际[^海]*今日完成 1\/2/);
-  assert.match(text(nodes.get("board")), /全部[\s\S]*国内测试 国内 120 积分 今日完成 2\/3/);
+  assert.match(text(nodes.get("board")), /国际版[\s\S]*海外号[^海]*今日完成 1\/2/);
+  assert.match(text(nodes.get("board")), /全部[\s\S]*国内版\s+120\s+积分 · 2 个账号[\s\S]*国内测试 120 积分 今日完成 2\/3/);
   button(nodes.get("board"), "国内测试").onclick();
   assert.match(text(nodes.get("board")), /今日活跃 连登 8 天[\s\S]*在咖啡馆[\s\S]*每日签到 已签到 \+100[\s\S]*待处理 关注公众号 · \+100 积分/);
   button(nodes.get("board"), "小组件").onclick();
