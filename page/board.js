@@ -24,6 +24,13 @@
   const parts = { balance: "积分", usage: "用量", travel: "猫猫旅行", streak: "连登", tasks: "成长任务", growth: "能量与 Buddy", checkin: "签到" };
   const expanded = new Set();
   const saved = { get() { try { return localStorage.getItem("wb-view"); } catch { return null; } }, set(v) { try { localStorage.setItem("wb-view", v); } catch {} } };
+  // Which build's accounts come first; chosen on the list, kept for the other views too.
+  const orderSaved = { get() { try { return localStorage.getItem("wb-order"); } catch { return null; } }, set(v) { try { localStorage.setItem("wb-order", v); } catch {} } };
+  let order = orderSaved.get() === "intl" ? "intl" : "cn", both = false;
+  const abroad = a => a.realm === "intl";
+  const ordered = list => [...list].sort((a, b) => (abroad(a) === (order === "intl") ? 0 : 1) - (abroad(b) === (order === "intl") ? 0 : 1));
+  // A small tag for the build, shown only when the board holds both.
+  const realmTag = (a, text) => el("span", abroad(a) ? "wb-realm intl" : "wb-realm", text || (abroad(a) ? "国际" : "国内"));
   const views = [["list", "列表"], ["rings", "圆环"], ["widgets", "小组件"], ["models", "模型"]];
   let seeded = false, mode = views.some(([k]) => k === saved.get()) ? saved.get() : "list", focus = "all", last = null, switched = false;
 
@@ -172,12 +179,14 @@
       const intl = name === "国际版", on = intl ? view.intlEnabled !== false : view.enabled !== false;
       if (groups.length > 1 || hooks.onSchedule) box.append(line(el("span", "wb-sched-realm", name), hooks.onSchedule ? scheduleSwitch(name, intl, on) : el("span", "wb-sub", on ? "" : "定时已暂停")));
       const row = el("div", on ? "wb-slots" : "wb-slots wb-paused");
+      // Each build marks its own next slot; the header's line names the soonest of both.
+      const mine = list.find(s => s.status === "upcoming" && !s.paused);
       for (const s of list) {
         let [label, cls] = slotStates[s.status] || [s.status, ""];
         // A paused build's slots wait without running.
         if (s.paused && ["pending", "upcoming"].includes(s.status)) [label, cls] = ["已暂停", ""];
         if (s.status === "failed" && s.attempts) label = `失败 ${s.attempts}/3`;
-        const isNext = next && next.at === s.at && next.kind === s.kind, chip = el("div", isNext ? "wb-slot next" : "wb-slot");
+        const isNext = s === mine, chip = el("div", isNext ? "wb-slot next" : "wb-slot");
         // The moment it runs today, set ±spread minutes around its set time.
         if (s.runAt && s.runAt !== s.at) chip.title = `设定 ${s.at}，今天 ${s.runAt} 执行`;
         chip.append(line(el("strong", undefined, s.runAt || s.at), el("span", `wb-pill ${cls}`, isNext ? "下一次" : label)), el("span", "wb-sub", kinds[s.kind] || s.kind));
@@ -284,21 +293,27 @@
     return group;
   }
 
+  // One summary card per build: their credits are separate wallets, and
+  // WorkBuddy AI has other things to watch (no trips, no tasks to do), so
+  // each says what its own accounts need. The first card follows the sort.
   function kpis(rows, now) {
-    const personal = rows.filter(a => !a.enterprise), credit = rows.reduce((s, a) => s + (a.usage?.credit || 0), 0);
-    // WorkBuddy AI's tasks count use of its client, nothing to do here: left out of the totals.
-    const china = personal.filter(a => a.realm !== "intl");
-    const claimed = china.reduce((s, a) => s + (a.tasks?.claimed || 0), 0), total = china.reduce((s, a) => s + (a.tasks?.total || 0), 0), pending = china.reduce((s, a) => s + (a.tasks?.credit || 0), 0);
-    const done = personal.filter(a => closed(today(a, now))).length;
     const strip = el("div", "wb-kpis");
-    for (const [k, v, sub] of [
-      ["可用积分", num(rows.reduce((s, a) => s + (a.balance?.balance || 0), 0)), `${rows.length} 个账号`],
-      ["近 7 天消耗", num(credit), `日均 ${num(credit / 7)}`],
-      ["成长任务", total ? `${claimed}/${total}` : "—", pending ? `待拿 ${num(pending)} 积分` : "全部已领奖"],
-      ["今日", !personal.length ? "—" : done === personal.length ? "全部完成" : `${done}/${personal.length} 完成`, "活跃 · 旅行 · 任务"]
-    ]) {
-      const t = el("div", "wb-kpi");
-      t.append(el("span", "wb-sub", k), el("strong", undefined, v), el("span", "wb-sub", sub));
+    const groups = [["cn", rows.filter(a => !abroad(a))], ["intl", rows.filter(abroad)]].filter(([, list]) => list.length);
+    if (order === "intl") groups.reverse();
+    strip.className = `wb-kpis wb-kpis-${groups.length}`;
+    for (const [kind, list] of groups) {
+      const personal = list.filter(a => !a.enterprise), credit = list.reduce((s, a) => s + (a.usage?.credit || 0), 0), facts = [`近 7 天 ${num(credit)} · 日均 ${num(credit / 7)}`];
+      if (kind === "cn") {
+        const claimed = personal.reduce((s, a) => s + (a.tasks?.claimed || 0), 0), total = personal.reduce((s, a) => s + (a.tasks?.total || 0), 0), pending = personal.reduce((s, a) => s + (a.tasks?.credit || 0), 0);
+        const done = personal.filter(a => closed(today(a, now))).length;
+        facts.push([total && `成长 ${claimed}/${total}${pending ? ` · 待拿 ${num(pending)}` : ""}`, personal.length && (done === personal.length ? "今日全部完成" : `今日 ${done}/${personal.length} 完成`)].filter(Boolean).join(" · ") || "没有个人账号");
+      } else {
+        const got = personal.filter(a => earned(a, now).tone === "ok").length;
+        facts.push(`每日奖励 ${personal.length === 1 ? earned(personal[0], now).label : `${got}/${personal.length} 今日到账`}`);
+      }
+      const t = el("div", "wb-kpi"), head = el("span", "wb-sub");
+      head.append(realmTag(list[0], kind === "intl" ? "国际版" : "国内版"), ` ${list.length} 个账号`);
+      t.append(head, el("strong", undefined, num(list.reduce((s, a) => s + (a.balance?.balance || 0), 0))), ...facts.map(f => el("span", "wb-sub", f)));
       strip.append(t);
     }
     return strip;
@@ -425,7 +440,9 @@
     else panel.setAttribute("aria-hidden", "true");
 
     const who = el("span", "wb-who");
-    who.append(el("strong", undefined, a.name), el("span", "wb-sub", a.enterprise ? `企业${a.balance?.size ? ` · 每月 ${num(a.balance.size)} 积分` : ""}` : `${a.realm === "intl" ? "国际版" : "个人"}${a.streak ? ` · 连登 ${a.streak.days} 天` : ""}${checked(a) ? ` · ${checked(a).label}` : ""}${a.intlOff ? " · 自动任务已关闭" : ""}`));
+    const name = el("strong", undefined, a.name);
+    if (both) name.append(realmTag(a));
+    who.append(name, el("span", "wb-sub", a.enterprise ? `企业${a.balance?.size ? ` · 每月 ${num(a.balance.size)} 积分` : ""}` : `${a.realm === "intl" && !both ? "国际版" : "个人"}${a.streak ? ` · 连登 ${a.streak.days} 天` : ""}${checked(a) ? ` · ${checked(a).label}` : ""}${a.intlOff ? " · 自动任务已关闭" : ""}`));
     const money = el("span", "wb-money");
     if (a.balance?.size) { const n = line(el("strong", undefined, num(a.balance.balance)), el("span", "wb-sub", `/ ${num(a.balance.size)}`)); n.className = "wb-line wb-amount"; money.append(n, meter(a.balance, now)); }
     else money.append(el("span", "wb-sub", a.errors.balance ? "积分读取失败" : a.enterprise ? "没有企业额度" : "没有积分包"));
@@ -453,7 +470,10 @@
     head.append(el("span"), el("span", undefined, "账号"), el("span", undefined, "积分 · 按作废先后"), el("span", undefined, "今日 · 7 天"), el("span"));
     list.append(head);
     for (const a of rows) list.append(account(a, now));
-    box.append(kpis(rows, now), list, el("p", "wb-legend", "圆环由外到内：今日活跃、猫猫旅行、成长任务。积分条：红 = 2 天内作废，橙 = 10 天内，浅色 = 长期有效。"), ...(extra ? [extra] : []), alerts(attention(rows, now)));
+    // Only when there are two builds to put in order.
+    const sorter = both ? el("div", "wb-listbar") : null;
+    if (sorter) sorter.append(el("span", "wb-sub", "排序"), segs([["cn", "国内在前"], ["intl", "国际在前"]], order, v => { order = v; orderSaved.set(v); again(); }, "账号排序"));
+    box.append(kpis(rows, now), ...(sorter ? [sorter] : []), list, el("p", "wb-legend", "圆环由外到内：今日活跃、猫猫旅行、成长任务。积分条：红 = 2 天内作废，橙 = 10 天内，浅色 = 长期有效。"), ...(extra ? [extra] : []), alerts(attention(rows, now)));
     return box;
   }
 
@@ -491,7 +511,9 @@
         const card = el("button", "wb-ringcard"), r = today(a, now);
         card.type = "button";
         const done = r ? goals(r).filter(v => v >= 1).length : 0, all = r ? goals(r).length : 0;
-        card.append(r ? rings(r, true) : el("div", "wb-ring-none", "企业账号"), el("strong", undefined, a.name),
+        const title = el("strong", undefined, a.name);
+        if (both) title.append(realmTag(a));
+        card.append(r ? rings(r, true) : el("div", "wb-ring-none", "企业账号"), title,
           el("span", "wb-sub", a.balance?.size ? `${num(a.balance.balance)} 积分${a.enterprise ? ` / 每月 ${num(a.balance.size)}` : ""}` : a.enterprise ? "没有企业额度" : "没有积分包"),
           el("span", "wb-sub", r ? (done === all ? "今日全部完成" : `今日完成 ${done}/${all}`) : `近 7 天 ${num(a.usage?.credit)} 积分`));
         card.onclick = () => { focus = a.id; again(); };
@@ -562,8 +584,16 @@
     widget("s", "", "能量", el("strong", "wb-w-big", num(sum("energy"))), el("span", "wb-w-foot", `Buddy ${num(sum("buddies"))} 只 · 抽奖 ${num(sum("draws"))} 次${personal.length > 1 ? ` · ${personal.length} 个号` : ""}`));
 
     const credits = widget("m", "", "可用积分");
-    credits.append(el("strong", "wb-w-corner", num(rows.reduce((s, a) => s + (a.balance?.balance || 0), 0))));
+    // Two builds hold separate wallets: no one total, a subtotal over each build's accounts.
+    if (!both) credits.append(el("strong", "wb-w-corner", num(rows.reduce((s, a) => s + (a.balance?.balance || 0), 0))));
+    let heading = null;
     for (const a of rows) {
+      if (both && heading !== abroad(a)) {
+        heading = abroad(a);
+        const mine = rows.filter(x => abroad(x) === heading), sum = mine.reduce((s, x) => s + (x.balance?.balance || 0), 0), h = line(realmTag(a, heading ? "国际版" : "国内版"), el("strong", "wb-num", num(sum)));
+        h.className += " wb-w-realm";
+        credits.append(h);
+      }
       if (!a.balance?.size) { credits.append(el("div", "wb-sub", `${a.name}：${a.enterprise ? "没有企业额度" : "没有积分包"}`)); continue; }
       const row = el("div", "wb-w-acct");
       row.append(line(el("span", "wb-name", a.name), el("span", "wb-num", num(a.balance.balance))), meter(a.balance, now));
@@ -591,6 +621,7 @@
     const tasks = personal.filter(a => a.tasks && a.realm !== "intl"), claimed = tasks.reduce((s, a) => s + a.tasks.claimed, 0), all = tasks.reduce((s, a) => s + a.tasks.total, 0), pending = tasks.reduce((s, a) => s + a.tasks.credit, 0);
     const growth = widget("w", "", "成长任务");
     growth.append(el("strong", "wb-w-corner", all ? `${claimed}/${all}` : "—"));
+    if (tasks.length > 1) growth.append(el("div", "wb-sub", `${tasks.length} 个国内账号合计，每个账号 ${tasks.map(a => a.tasks.total).join(" / ")} 个任务`));
     const manual = new Map();
     for (const a of tasks) for (const t of a.tasks.open) if (t.state === "manual") manual.set(t.title, (manual.get(t.title) || 0) + 1);
     for (const [title, count] of manual) growth.append(line(el("span", "wb-name", title), el("span", "wb-pill warn", `需手动${count > 1 ? ` ×${count}` : ""}`)));
@@ -731,7 +762,8 @@
     if (options) hooks = options;
     last = [host, view];
     host.replaceChildren();
-    const rows = view?.accounts || [];
+    const rows = ordered(view?.accounts || []);
+    both = rows.some(abroad) && rows.some(a => !abroad(a));
     if (!rows.length) { host.append(el("p", "wb-sub", view?.at ? "没有国内账号。请先在 Magpie 登录 WorkBuddy 国内版。" : "正在读取余额与旅行状态…")); return; }
     if (!seeded) { seeded = true; const first = rows.find(a => !a.enterprise) || rows[0]; expanded.add(first.id); }
     const bar = el("div", "wb-viewbar");

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { calendar } from "./storage.mjs";
-import { specs, growthTasks, miniProgram } from "./events.mjs";
+import { specs, growthTasks, miniProgram, unreachable } from "./events.mjs";
 
 // Read-only account board: credit packages, official request usage, the
 // Buddy's trip, growth tasks, energy and the login streak. Package merging and usage paging are
@@ -146,16 +146,17 @@ async function streak(client) {
 }
 
 // Growth tasks as the board shows them: what waits for a claim and what the
-// scheduler will finish. What nothing here can do (following an account, a
-// donation, WorkBuddy AI's client-only tasks) is neither listed nor counted.
+// scheduler will finish, then any task nothing here does yet (to do by hand).
+// What only a person can do (following an account, a donation, sharing a
+// skill) and WorkBuddy AI's client-only tasks are neither listed nor counted.
 export function taskBoard(list, now = Date.now()) {
   const done = t => t.accept_status === "completed" || (t.progress?.target > 0 && t.progress.current >= t.progress.target);
-  const live = list.filter(t => (!t.valid_end || Date.parse(t.valid_end) > now) && (t.accept_status === "claimed" || done(t) || (!t.intl && specs[t.task_code])));
-  const order = { claimable: 0, auto: 1, locked: 2 };
+  const live = list.filter(t => (!t.valid_end || Date.parse(t.valid_end) > now) && (t.accept_status === "claimed" || done(t) || (!t.intl && !unreachable.has(t.task_code))));
+  const order = { claimable: 0, auto: 1, manual: 2, locked: 3 };
   const open = live.filter(t => t.accept_status !== "claimed").map(t => ({
     title: t.title || t.task_code, ...(t.intl ? { intl: true } : {}),
-    state: done(t) ? "claimable" : t.locked === true ? "locked" : "auto",
-    note: t.note || "", current: t.progress?.current ?? 0, target: t.progress?.target ?? 0,
+    state: done(t) ? "claimable" : t.locked === true ? "locked" : specs[t.task_code] ? "auto" : "manual",
+    note: specs[t.task_code] ? t.note || "" : "尚未适配此任务，欢迎到 GitHub 提 issue", current: t.progress?.current ?? 0, target: t.progress?.target ?? 0,
     credit: Number(t.reward_credit) || 0, energy: Number(t.reward_energy) || 0, ends: t.valid_end ? Date.parse(t.valid_end) : 0
   })).sort((a, b) => order[a.state] - order[b.state] || (a.ends || Infinity) - (b.ends || Infinity));
   return { total: live.length, claimed: live.length - open.length, credit: open.reduce((s, t) => s + t.credit, 0), open };

@@ -156,8 +156,8 @@ test("the mini program's tasks are listed, accepted, reported and claimed as a m
   assert.deepEqual([reports[1].body[0].eventCode, reports[1].body[0].agentName], ["chat_request_send", "mp"]);
   assert.match(p.logs.join("\n"), /完成 5 次对话：要按真人节奏上报/);
   assert.deepEqual(state, { Sequential_Tasks_2: "claimed", Sequential_Tasks_3: "claimed" });
-  assert.equal(p.logs.at(-1), "本次领奖 2 项");
-  assert.doesNotMatch(p.logs.join("\n"), /还没适配的/);
+  // A task not known yet is listed for a person, so a new one is seen the day it appears.
+  assert.equal(p.logs.at(-1), "本次领奖 2 项；1 项尚未适配：还没适配的");
 });
 
 test("a mini-program task that can't be accepted yet waits without failing the run", async t => {

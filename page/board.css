@@ -205,6 +205,7 @@
   .wb-b-top{grid-template-columns:1fr}
   .wb-widgets{grid-template-columns:repeat(2,minmax(0,1fr))}.wb-w-m{grid-column:1/-1}
   .wb-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .wb-kpis.wb-kpis-2{grid-template-columns:1fr}
   .wb-row{grid-template-columns:30px minmax(0,1fr) 94px 14px}.wb-row .wb-money{grid-column:2/4;grid-row:2}
   .wb-list-head{display:none}
   .wb-detail-grid{grid-template-columns:1fr;padding-left:14px}
@@ -231,3 +232,12 @@
 .wb-pick-free{color:var(--wb-accent);background:var(--wb-soft);padding:1px 7px;border-radius:999px}
 .wb-pick-menu hr{border:0;border-top:1px solid var(--wb-line);margin:4px 6px}
 @media (prefers-reduced-motion:reduce){.wb-pick-chev{transition:none}.wb-pick-menu{animation:none}}
+
+/* One summary card per build, and a small tag where the build is not obvious. */
+.wb-kpis.wb-kpis-2{grid-template-columns:repeat(2,minmax(0,1fr))}.wb-kpis.wb-kpis-1{grid-template-columns:minmax(0,1fr)}
+.wb-kpi>.wb-sub:first-child{display:flex;align-items:center;gap:6px}
+.wb-realm{display:inline-flex;align-items:center;font-size:11px;font-weight:500;line-height:1.5;padding:0 7px;border-radius:999px;background:var(--wb-soft);color:var(--wb-accent);white-space:nowrap;vertical-align:1px}
+.wb-realm.intl{background:color-mix(in srgb,var(--wb-warn) 14%,transparent);color:var(--wb-warn)}
+.wb-who strong .wb-realm,.wb-ringcard strong .wb-realm{margin-left:6px}
+.wb-listbar{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:-4px 0 8px}
+.wb-w-realm{margin-top:6px}.wb-w-realm .wb-num{font-size:15px}

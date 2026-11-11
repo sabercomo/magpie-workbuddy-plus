@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { calendar } from "./storage.mjs";
-import { specs, buildEvent, buildEvents, growthTasks, miniProgram } from "./events.mjs";
+import { specs, unreachable, buildEvent, buildEvents, growthTasks, miniProgram } from "./events.mjs";
 import { UpstreamError } from "./client.mjs";
 import { fallback, pickModel, webActivity } from "./webagent.mjs";
 
@@ -55,11 +55,14 @@ export async function perform(action, client, context) {
     const code = task.task_code;
     if (task.accept_status === "claimed") return "done";
     if (completed(task)) return claim(task).then(() => "claimed");
-    // What nothing here can do (a donation, following an account, WorkBuddy
+    // What only a person can do (a donation, following an account, WorkBuddy
     // AI's client-only tasks) is left alone and not listed; it is still
-    // claimed above once its progress is there.
-    const spec = task.intl ? null : specs[code];
-    if (!spec || task.locked === true) return "skip";
+    // claimed above once its progress is there. A task not known yet is
+    // listed for a person, as before.
+    if (task.intl || unreachable.has(code)) return "skip";
+    const spec = specs[code];
+    if (!spec) { log(`${task.title || code}：尚未适配此任务${task.jump_url ? `（${task.jump_url}）` : ""}`); return task.locked === true ? "skip" : "manual"; }
+    if (task.locked === true) return "skip";
     if (spec.night) {
       const hour = calendar(new Date(), config.timezone).hour;
       if (hour >= 8 && hour < 23) { log("夜猫子任务：等待 23:00–08:00 时段"); return "open"; }
@@ -121,18 +124,20 @@ export async function perform(action, client, context) {
     }
     // first_buddy unlocks acceptance of the other tasks and supplies the pet.
     list.sort((a, b) => Number(b.task_code === "first_buddy") - Number(a.task_code === "first_buddy"));
-    const outcome = { claimed: 0, open: 0 };
+    const outcome = { claimed: 0, open: 0, manual: [] };
     for (const task of list) {
       if (onlyNight && task.task_code !== "black_cat") continue;
       try {
         const got = await progress(task);
-        if (got in outcome) outcome[got]++;
+        if (got === "manual") outcome.manual.push(task.title || task.task_code);
+        else if (got in outcome) outcome[got]++;
       }
       catch (e) { failures.push(`${task.task_code}：${e.message}`); errors.push(e); log(failures.at(-1)); }
     }
     if (failures.length) throw roundError(`部分任务失败：${failures.join("；")}`, errors);
     // The job row shows the last line, so it says what this run left undone.
-    if (!onlyNight) log([`本次领奖 ${outcome.claimed} 项`, outcome.open && `${outcome.open} 项未达成`].filter(Boolean).join("；"));
+    if (!onlyNight) log([`本次领奖 ${outcome.claimed} 项`, outcome.open && `${outcome.open} 项未达成`,
+      outcome.manual.length && `${outcome.manual.length} 项尚未适配：${outcome.manual.join("、")}`].filter(Boolean).join("；"));
     return { checked: list.length };
   };
 

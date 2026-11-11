@@ -30,6 +30,11 @@ export const specs = {
   Sequential_Tasks_3: { kind: "minichat", via: "mp", target: 5, pace: 45_000 }
 };
 
+// Tasks that need a person and are neither listed nor counted. Any other task
+// nothing here does yet still shows, as one to do by hand, so a new one
+// is seen the day it appears.
+export const unreachable = new Set(["wb_wechat_oa_subscribe_task", "Expert_Philanthropy", "skill_share"]);
+
 // What a mini-program client sends to see, accept and claim its own tasks.
 export const miniProgram = { "X-Client-Platform": "miniprogram" };
 
