@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { calendar } from "./storage.mjs";
-import { specs, manualTasks, growthTasks } from "./events.mjs";
+import { specs, growthTasks, miniProgram } from "./events.mjs";
 
 // Read-only account board: credit packages, official request usage, the
 // Buddy's trip, growth tasks, energy and the login streak. Package merging and usage paging are
@@ -145,24 +145,30 @@ async function streak(client) {
   };
 }
 
-// Growth tasks as the board shows them: what waits for a claim, what the
-// scheduler will finish, and what needs a person at the desktop client.
+// Growth tasks as the board shows them: what waits for a claim and what the
+// scheduler will finish. What nothing here can do (following an account, a
+// donation, WorkBuddy AI's client-only tasks) is neither listed nor counted.
 export function taskBoard(list, now = Date.now()) {
-  const live = list.filter(t => !t.valid_end || Date.parse(t.valid_end) > now);
   const done = t => t.accept_status === "completed" || (t.progress?.target > 0 && t.progress.current >= t.progress.target);
-  const order = { claimable: 0, auto: 1, manual: 2, locked: 3 };
+  const live = list.filter(t => (!t.valid_end || Date.parse(t.valid_end) > now) && (t.accept_status === "claimed" || done(t) || (!t.intl && specs[t.task_code])));
+  const order = { claimable: 0, auto: 1, locked: 2 };
   const open = live.filter(t => t.accept_status !== "claimed").map(t => ({
     title: t.title || t.task_code, ...(t.intl ? { intl: true } : {}),
-    state: done(t) ? "claimable" : t.locked === true ? "locked" : specs[t.task_code] ? "auto" : "manual",
-    note: manualTasks[t.task_code] || t.note || "", current: t.progress?.current ?? 0, target: t.progress?.target ?? 0,
+    state: done(t) ? "claimable" : t.locked === true ? "locked" : "auto",
+    note: t.note || "", current: t.progress?.current ?? 0, target: t.progress?.target ?? 0,
     credit: Number(t.reward_credit) || 0, energy: Number(t.reward_energy) || 0, ends: t.valid_end ? Date.parse(t.valid_end) : 0
   })).sort((a, b) => order[a.state] - order[b.state] || (a.ends || Infinity) - (b.ends || Infinity));
   return { total: live.length, claimed: live.length - open.length, credit: open.reduce((s, t) => s + t.credit, 0), open };
 }
 
-async function tasks(client) {
+async function tasks(client, account) {
   const list = (await client.request("/v2/activity/growth/tasks"))?.tasks;
   if (!Array.isArray(list)) throw new Error("成长任务接口缺少 tasks 列表");
+  // The mini program's own tasks are listed only to a mini-program client.
+  if (account?.realm !== "intl") {
+    try { for (const t of (await client.request("/v2/activity/growth/tasks", { extra: miniProgram }))?.tasks || []) if (!list.some(x => x.task_code === t.task_code)) list.push(t); }
+    catch (e) { if (e.limited) throw e; }
+  }
   return taskBoard(growthTasks(list));
 }
 
@@ -204,7 +210,7 @@ export const dropped = e => !e?.status && !e?.limited && /ECONNRESET|ECONNREFUSE
 export async function collect(account, client, config, memory, pause = ms => new Promise(r => setTimeout(r, ms))) {
   const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {} };
   const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone) };
-  if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client) }), streak: () => streak(client), tasks: () => tasks(client), growth: () => growth(client) });
+  if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client) }), streak: () => streak(client), tasks: () => tasks(client, account), growth: () => growth(client) });
   if (!account.enterprise && account.realm === "intl") parts.checkin = () => intlCheckin(client);
   for (const [name, run] of Object.entries(parts)) {
     try { row[name] = await run(); }

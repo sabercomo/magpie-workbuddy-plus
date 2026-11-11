@@ -30,7 +30,7 @@ If you find it useful, a ⭐ Star helps others find it too.
 | **Account board** | Each account's credits, when each credit package lapses, the last 7 days of usage, and travel and task progress, in switchable views. |
 | **Which models you can use** | The Models view (「模型」) lists both builds' models (and an enterprise's, when an enterprise account is added) with their ids, native reasoning levels, context and credit multipliers, sets WorkBuddy AI's Pro-only models apart, and marks subscriber priority and running promotions. |
 | **WorkBuddy AI too** | With a WorkBuddy AI login in Magpie, that account is kept active daily, its streak tiers are redeemed, and it checks in whenever a campaign runs. It has its own schedule switch and times, apart from China's. |
-| **What needs you** | Credits about to lapse, enterprise allowance resets, tasks only you can do and logins about to expire, gathered at the bottom of the board. |
+| **What needs you** | Credits about to lapse, enterprise allowance resets and logins about to expire, gathered at the bottom of the board. |
 | **Add accounts** | A button opens WorkBuddy's official browser sign-in; this plugin never handles a token. |
 
 ## Screenshots
@@ -127,7 +127,7 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 - Rings (「圆环」): one account at a time with today's rings (activity, travel, tasks), a credit lapse timeline and usage.
 - Widgets (「小组件」): one fact per tile across all accounts: next lapse, today, Buddies, energy, credits, 7-day usage, growth tasks.
 - Models (「模型」): switch between China (「国内版」) and WorkBuddy AI (「国际版」); with an enterprise account added, an 「企业」 tab comes first with the models that account may use (set by its enterprise, not the personal list), and without one it isn't shown. Models the current plan can use come first; WorkBuddy AI's Pro-only models are dimmed below. Each row has the model id (click to copy), reasoning levels, context and multiplier. Reasoning levels are each model's native ones from WorkBuddy's config (such as `low high max`), the default in bold, 「可关」 when thinking can be switched off, 「固定」 when there is only one, 「—」 when none are listed; multipliers of 3 or more are orange, and limited-time free, night discounts and subscriber priority follow WorkBuddy's own labels. WorkBuddy AI needs a `workbuddy-ai` sign-in in Magpie.
-- At the bottom, today's schedule (「今日定时」) shows each slot's result and the next run; below it, the alerts: spent models in a yellow box (「模型额度用完」); a login about to expire, a failed read and credit lapsing within 2 days in a red one (「需要你处理」); everything else (credit lapsing within 10 days, enterprise allowance resets, tasks to do by hand, check-in notes) in a plain list (「其他提醒」), folded until opened.
+- At the bottom, today's schedule (「今日定时」) shows each slot's result and the next run; below it, the alerts: spent models in a yellow box (「模型额度用完」); a login about to expire, a failed read and credit lapsing within 2 days in a red one (「需要你处理」); everything else (credit lapsing within 10 days, enterprise allowance resets, check-in notes) in a plain list (「其他提醒」), folded until opened.
 - Each personal account shows today's daily check-in: for China, Magpie's record (checked in +100, not yet, needs the WorkBuddy client…), with a switched-off or missed check-in in the alerts; for WorkBuddy AI, this plugin's own result, or 「暂无签到活动」 (no campaign) while none runs. Enterprise accounts have no daily check-in credits and show none. WorkBuddy AI accounts are tagged 「国际版」 in the list.
 - Enterprise accounts show their monthly allowance, usage and reset time.
 
@@ -138,7 +138,7 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 - Add account (「添加账号」) offers China or WorkBuddy AI and runs Magpie's own `magpie plugin login workbuddy` or `magpie plugin login workbuddy-ai`, which opens the official browser sign-in; signing in to an account again replaces its old login. This plugin never touches login tokens and offers no account file import or export.
 
 > [!IMPORTANT]
-> Growth tasks include simulated client event reports; they don't mean the action was really done in the desktop client. Whether they count, pay out, or get an account restricted is up to WorkBuddy, and not every task can be completed. Following the official account, real donations and some desktop actions need you; tasks already reached can still be claimed.
+> Growth tasks include simulated client event reports; they don't mean the action was really done in the desktop client. Whether they count, pay out, or get an account restricted is up to WorkBuddy, and not every task can be completed. Following the official account, real donations and sharing a skill need you and are no longer listed (nor counted in the task total); once reached they are still claimed. Besides the ordinary tasks, three kinds are reported as another client would: the desktop client's (a desktop chat, entering a Buddy app, 企鹅教师助手), the web app's (reading the library's introduction) and the mini program's own (`Sequential_Tasks_1` to `3`: one chat, one expert chat, five chats). The mini program's tasks unlock one a day, each after the one before it is claimed, and its chats are reported at a person's pace (about 45 seconds apart, since a burst is rolled back), so the five-chat task takes about four minutes. Their event shapes follow [workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel).
 
 ## Default schedule
 
@@ -148,11 +148,11 @@ All times are `Asia/Shanghai` and can be changed in the panel; clearing a kind's
 | --- | --- | --- |
 | 01:00 | Night-owl task | — |
 | 09:00, 21:00 | Activity, Buddy travel, streak rewards | Activity, check-in, streak rewards |
-| 09:10, 21:10 | Growth tasks | Growth tasks (claiming finished ones) |
+| 09:10, 21:10 | Growth tasks | — |
 | 10:30 | — | Web conversation (daily activity reward, once a day) |
 | 22:00 | Login renewal check, renewing two hours ahead | Login renewal check |
 
-Each build's times are edited in 「定时与设置」 and paused with the switch on its row in 「今日定时」. Upgrading from 0.5.6 or earlier, WorkBuddy AI keeps the times it had, with the web conversation at 10:30; if 「国际版任务」 was off, its schedule stays paused.
+Each build's times are edited in 「定时与设置」 and paused with the switch on its row in 「今日定时」. WorkBuddy AI's growth-task slot is gone from 0.5.9 (its tasks count only real use of its client, and the slot never claimed anything); a saved one is ignored. Upgrading from 0.5.6 or earlier, WorkBuddy AI keeps the times it had, with the web conversation at 10:30; if 「国际版任务」 was off, its schedule stays paused.
 
 Each slot runs at a random moment around its set time (±10 minutes by default, different every day and on every computer; the night-owl task stays inside 23:00–08:00), and a scheduled run waits a random 5–45 seconds between accounts, so not everyone reaches WorkBuddy on the hour. Change it with 「随机错开」 under the panel's settings; 0 turns it off. The board's 「今日定时」 shows when each slot runs today. Schedules are checked every 30 seconds. A failure is retried at least 15 minutes later, up to 3 tries per slot. When WorkBuddy rate-limits (HTTP 429) the run first waits and retries; a run still limited is marked "retry later" (「稍后重试」) rather than failed, and is retried on the same spacing. Each kind takes up to 24 times. Streak activity doesn't repeat once it succeeded that day; travel and task rewards are checked against WorkBuddy's state. China's daily check-in follows Magpie's own setting and is not one of this plugin's schedules; WorkBuddy AI's check-in runs in the activity, travel and streak-rewards slots.
 

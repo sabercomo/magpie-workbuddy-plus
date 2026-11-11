@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 const names = { all:"全部执行",checkin:"签到（旧版记录）",activity:"连登活跃",tasks:"成长任务",travel:"猫猫旅行",bonus:"连登福利",night:"夜猫子",keepalive:"登录续期",web:"国际版网页会话",inspect:"查询状态" };
 const scheduleNames = { daily:"活跃 / 旅行 / 连登福利",tasks:"成长任务",night:"夜猫子任务",keepalive:"登录续期检查" };
-const intlNames = { daily:"连登活跃 / 签到 / 连登福利",tasks:"成长任务",web:"网页会话（每日活跃奖励）",keepalive:"登录续期检查" };
+const intlNames = { daily:"连登活跃 / 签到 / 连登福利",web:"网页会话（每日活跃奖励）",keepalive:"登录续期检查" };
 
 const statuses = { running:"执行中",queued:"排队中",succeeded:"已完成",failed:"有失败项目",deferred:"稍后重试",interrupted:"重启中断",cancelled:"已停止" };
 let current, filled = false, modelField = null;

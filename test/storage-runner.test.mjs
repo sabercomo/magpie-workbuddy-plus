@@ -46,7 +46,7 @@ test("China and WorkBuddy AI logins are read, each build's schedule on its own s
   assert.deepEqual(accounts({ ...p.config(), intl: false }).map(a => [a.id, a.enabled]), [["cn:u1", true], ["intl:u2", true]]);
   const { intlEnabled: _, ...before } = { ...p.config(), enabled: true };
   assert.deepEqual([settle(before).intlEnabled, settle({ ...before, intl: false }).intlEnabled, settle({ ...before, enabled: false }).intlEnabled, "intl" in settle({ ...before, intl: false })], [true, false, false, false]);
-  assert.deepEqual(plan({ ...before, intlEnabled: false }).map(s => s.on), [true, true, true, true, false, false, false, false]);
+  assert.deepEqual(plan({ ...before, intlEnabled: false }).map(s => s.on), [true, true, true, true, false, false, false]);
   const runner = new Runner(p.dir);
   const status = JSON.stringify(runner.status());
   assert.ok(!/private-access|private-refresh|unrelated-secret|private-international/.test(status));
@@ -96,8 +96,11 @@ test("each build runs its own slots; settings from before the split carry on fro
   // Saved by 0.5.6: no intlSchedules. WorkBuddy AI takes China's times, its web conversation at 10:30.
   const { intlSchedules: _, intlEnabled: __, ...old } = { ...p.config(), enabled: true, schedules: { daily: ["09:00"], tasks: [], night: [], keepalive: ["22:00"] } };
   writeJSON(join(p.dir, "config.json"), old);
-  assert.deepEqual(intlSchedules(old), { daily: ["09:00"], tasks: [], web: ["10:30"], keepalive: ["22:00"] });
-  assert.deepEqual(plan(old).map(s => `${s.kind}:${s.actions.join("+")}`), ["daily:activity+travel+bonus", "tasks:tasks", "night:night", "keepalive:keepalive", "intl-daily:activity+bonus", "intl-tasks:tasks", "intl-web:web", "intl-keepalive:keepalive"]);
+  assert.deepEqual(intlSchedules(old), { daily: ["09:00"], web: ["10:30"], keepalive: ["22:00"] });
+  // Saved by 0.5.7 or 0.5.8: WorkBuddy AI's growth-task slot is dropped, the rest kept.
+  assert.deepEqual(intlSchedules({ intlSchedules: { daily: ["08:00"], tasks: ["09:10"], web: [], keepalive: ["22:00"] } }), { daily: ["08:00"], web: [], keepalive: ["22:00"] });
+  assert.ok(!plan({ ...old, intlSchedules: { daily: [], tasks: ["09:10"], web: [], keepalive: [] } }).some(s => s.kind === "intl-tasks"));
+  assert.deepEqual(plan(old).map(s => `${s.kind}:${s.actions.join("+")}`), ["daily:activity+travel+bonus", "tasks:tasks", "night:night", "keepalive:keepalive", "intl-daily:activity+bonus", "intl-web:web", "intl-keepalive:keepalive"]);
   assert.equal(intlSchedules({ schedules: { ...old.schedules, daily: [] } }).web.length, 0, "activity off before, no web conversation now");
   assert.ok(!plan({ ...old, intlWeb: false }).some(s => s.kind === "intl-web"));
 

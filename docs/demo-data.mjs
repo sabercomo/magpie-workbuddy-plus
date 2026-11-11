@@ -167,7 +167,7 @@ const models = {
 
 const hhmm = t => `${String(new Date(t).getHours()).padStart(2, "0")}:${String(new Date(t).getMinutes()).padStart(2, "0")}`;
 const slots = [["night", "01:00"], ["daily", "09:00"], ["tasks", "09:10"], ["daily", "21:00"], ["tasks", "21:10"], ["keepalive", "22:00"],
-  ["intl-daily", "09:00"], ["intl-tasks", "09:10"], ["intl-web", "10:30"], ["intl-daily", "21:00"], ["intl-keepalive", "22:00"]].map(([kind, time]) => {
+  ["intl-daily", "09:00"], ["intl-web", "10:30"], ["intl-daily", "21:00"], ["intl-keepalive", "22:00"]].map(([kind, time]) => {
   const [h, m] = time.split(":").map(Number), due = at(0, h, m) <= now;
   return { kind, at: time, status: due ? "succeeded" : "upcoming", attempts: due ? 1 : 0 };
 });
@@ -176,7 +176,7 @@ const job = (actions, minutes, last) => ({ id: `demo-${minutes}`, actions, statu
 writePage(join(process.argv[2], "data.js"), {
   generated: new Date(now).toISOString(), at: now - 4 * 60_000, refreshing: false, enabled: true, intlEnabled: true,
   schedules: { daily: ["09:00", "21:00"], tasks: ["09:10", "21:10"], night: ["01:00"], keepalive: ["22:00"] },
-  intlSchedules: { daily: ["09:00", "21:00"], tasks: ["09:10"], web: ["10:30"], keepalive: ["22:00"] },
+  intlSchedules: { daily: ["09:00", "21:00"], web: ["10:30"], keepalive: ["22:00"] },
   intl: { enabled: true, web: true, accounts: 1 },
   settings: { timezone: "Asia/Shanghai", spread: 0, proxy: "", intlWebModel: "auto" },
   accounts, models, today: { timezone: "Asia/Shanghai", slots, next: slots.find(s => s.status === "upcoming") || null },

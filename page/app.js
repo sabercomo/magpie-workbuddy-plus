@@ -40,7 +40,7 @@ function paint() {
 
 // The settings form follows the saved settings until it's edited; an edit is
 // kept through the redraws until it's saved.
-const kinds = ["daily", "tasks", "night", "keepalive"], intlKinds = ["daily", "tasks", "web", "keepalive"];
+const kinds = ["daily", "tasks", "night", "keepalive"], intlKinds = ["daily", "web", "keepalive"];
 let edited = false;
 function fill(view) {
   const form = $("settings-form");

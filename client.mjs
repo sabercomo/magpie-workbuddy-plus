@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { readJSON, writeJSON, withLock } from "./storage.mjs";
+import { channel } from "./events.mjs";
 
 // Each build answers on its own site; WorkBuddy AI keeps its billing there too.
 const sites = {
@@ -72,12 +73,14 @@ export class WorkBuddyClient {
     return this.fetcher(url, { ...init, signal, ...(this.config.proxy ? { proxy: this.config.proxy } : {}) });
   }
 
-  async request(path, { body, billing = false, renew = true, envelope = false, base = billing ? this.site.billing : this.site.origin } = {}) {
+  // `extra` adds headers to this client's own; `headers` replaces them (a
+  // report sent as the desktop, web or mini-program client would).
+  async request(path, { body, billing = false, renew = true, envelope = false, base = billing ? this.site.billing : this.site.origin, extra, headers } = {}) {
     if (renew) await this.refresh();
     let response;
     for (let attempt = 0; ; attempt++) {
       response = await this.fetch(base + path, {
-        method: body === undefined ? "GET" : "POST", headers: this.headers(),
+        method: body === undefined ? "GET" : "POST", headers: headers ? headers() : { ...this.headers(), ...extra },
         ...(body === undefined ? {} : { body: JSON.stringify(body) })
       });
       if (response.status !== 429) break;
@@ -90,6 +93,14 @@ export class WorkBuddyClient {
     catch { throw new Error(`${path}: HTTP ${response.status}，上游返回 ${response.headers.get("content-type") || "未知类型"}，不是 JSON`); }
     if (!response.ok || (payload.code !== undefined && payload.code !== 0)) throw new UpstreamError(path, response.status, payload);
     return envelope ? payload : payload.data;
+  }
+
+  // Events for a growth task, sent as the client that task counts: this
+  // one's own (the CLI) when `via` names none.
+  async report(events, via) {
+    const as = via && channel(via, this.account);
+    if (!as) return this.request("/v2/report", { body: events });
+    return this.request("/v2/report", { body: events.map(e => ({ ...as.stamp, ...e })), base: as.base, headers: () => channel(via, this.account).headers });
   }
 
   async refresh(force = false) {

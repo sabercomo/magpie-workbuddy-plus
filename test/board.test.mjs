@@ -179,7 +179,7 @@ test("page snapshot carries no credentials and each page request runs once", asy
   assert.match(runner.pageRequest({ id: "c3", action: "config", at: Date.now(), config: { schedules: { ...schedules, daily: ["25:00"] } } }).error, /HH:MM/);
   assert.deepEqual(readJSON(join(dir, "config.json")).schedules, schedules, "a refused change saves nothing");
   // WorkBuddy AI's own times and its web conversation's model.
-  const intlSchedules = { daily: ["09:30"], tasks: [], web: ["11:00"], keepalive: ["22:00"] };
+  const intlSchedules = { daily: ["09:30"], web: ["11:00"], keepalive: ["22:00"] };
   assert.equal(runner.pageRequest({ id: "c4", action: "config", at: Date.now(), config: { schedules, intlSchedules, intlWebModel: "hy3" } }).ok, true);
   assert.deepEqual([readJSON(join(dir, "config.json")).intlSchedules, readJSON(join(dir, "config.json")).intlWebModel], [intlSchedules, "hy3"]);
   assert.deepEqual(runner.boardView().intlSchedules, intlSchedules);
@@ -187,20 +187,22 @@ test("page snapshot carries no credentials and each page request runs once", asy
   assert.match(runner.pageRequest({ id: "c6", action: "config", at: Date.now(), config: { intlSchedules: { daily: [] } } }).error, /类别无效/);
 });
 
-test("task board puts claimable first, then what the scheduler does, then manual tasks", () => {
+test("task board puts claimable first, then what the scheduler does; what nothing here can do is left out", () => {
   const now = Date.parse("2026-10-29T12:00:00+08:00");
   const got = taskBoard([
     { task_code: "wb_wechat_oa_subscribe_task", title: "关注公众号", accept_status: "accepted", progress: { current: 0, target: 1 }, reward_credit: 100 },
+    { task_code: "Expert_Philanthropy", title: "公益捐赠", accept_status: "not_accepted", progress: null, reward_credit: 100 },
     { task_code: "chat_5", title: "聊天 5 次", accept_status: "accepted", progress: { current: 2, target: 5 }, reward_credit: 100, valid_end: "2026-11-02T23:59:00+08:00" },
     { task_code: "skill_1", title: "尝鲜技能", accept_status: "accepted", progress: { current: 1, target: 1 }, reward_credit: 50 },
+    { task_code: "RichMeow_Chat", title: "桌面端对话", accept_status: "accepted", progress: { current: 0, target: 1 }, reward_credit: 100 },
+    { task_code: "Sequential_Tasks_3", title: "小程序 5 次对话", accept_status: "not_accepted", progress: null, reward_credit: 300, locked: true },
+    { task_code: "skill_share", title: "别人帮忙完成的", accept_status: "completed", progress: null, reward_credit: 100 },
     { task_code: "template_5", title: "已领", accept_status: "claimed", progress: { current: 5, target: 5 }, reward_credit: 100 },
     { task_code: "expert_5", title: "已过期", accept_status: "accepted", progress: { current: 0, target: 5 }, valid_end: "2026-10-01T00:00:00+08:00" }
   ], now);
-  assert.equal(got.total, 4);
-  assert.equal(got.claimed, 1);
-  assert.equal(got.credit, 250);
-  assert.deepEqual(got.open.map(t => [t.title, t.state]), [["尝鲜技能", "claimable"], ["聊天 5 次", "auto"], ["关注公众号", "manual"]]);
-  assert.match(got.open[2].note, /公众号/);
+  // Following an account and donating are neither listed nor counted; a task nothing here does still shows once it waits for a claim.
+  assert.deepEqual([got.total, got.claimed, got.credit], [6, 1, 650]);
+  assert.deepEqual(got.open.map(t => [t.title, t.state]), [["尝鲜技能", "claimable"], ["别人帮忙完成的", "claimable"], ["聊天 5 次", "auto"], ["桌面端对话", "auto"], ["小程序 5 次对话", "locked"]]);
 });
 
 test("an enterprise allowance is what's left of the month, and none when it grants nothing", () => {

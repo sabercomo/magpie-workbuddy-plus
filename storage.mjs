@@ -27,9 +27,9 @@ export const defaults = {
     night: ["01:00"],
     keepalive: ["22:00"]
   },
+  // No growth-task slot: WorkBuddy AI's tasks count real use of its client.
   intlSchedules: {
     daily: ["09:00", "21:00"],
-    tasks: ["09:10", "21:10"],
     web: ["10:30"],
     keepalive: ["22:00"]
   },
@@ -135,10 +135,11 @@ export const newer = (a, b) => { const x = String(a).split(".").map(Number), y =
 // WorkBuddy AI's slots. Settings from before they were split ran it with
 // China's, its web conversation inside the activity slot: they carry on from
 // China's times, the web conversation at 10:30 unless activity was off.
+// Its growth-task slot (through 0.5.8) is dropped: it never had a task it could do.
 export function intlSchedules(config) {
-  if (config.intlSchedules) return config.intlSchedules;
+  if (config.intlSchedules) { const { tasks: _, ...kept } = config.intlSchedules; return kept; }
   const s = config.schedules || defaults.schedules;
-  return { daily: s.daily || [], tasks: s.tasks || [], web: s.daily?.length ? [...defaults.intlSchedules.web] : [], keepalive: s.keepalive || [] };
+  return { daily: s.daily || [], web: s.daily?.length ? [...defaults.intlSchedules.web] : [], keepalive: s.keepalive || [] };
 }
 
 // Settings as they read now. Before 0.5.7 one switch ran both builds'
@@ -157,7 +158,6 @@ export const slotKinds = {
   night: { realm: "cn", actions: ["night"] },
   keepalive: { realm: "cn", actions: ["keepalive"] },
   "intl-daily": { realm: "intl", actions: ["activity", "bonus"] },
-  "intl-tasks": { realm: "intl", actions: ["tasks"] },
   "intl-web": { realm: "intl", actions: ["web"] },
   "intl-keepalive": { realm: "intl", actions: ["keepalive"] }
 };
@@ -188,7 +188,7 @@ export function validateConfig(value) {
   if (!Array.isArray(value.disabledAccounts) || value.disabledAccounts.some(a => typeof a !== "string")) throw new Error("账号停用列表无效");
   if (value.intlWebModel !== undefined && !(typeof value.intlWebModel === "string" && /^[\w.:-]{1,80}$/.test(value.intlWebModel))) throw new Error("国际版网页会话模型无效");
   times(value.schedules, "schedules");
-  if (value.intlSchedules !== undefined) times(value.intlSchedules, "intlSchedules");
+  if (value.intlSchedules !== undefined) times(intlSchedules(value), "intlSchedules");
   return value;
 }
 

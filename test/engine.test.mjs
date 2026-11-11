@@ -18,10 +18,10 @@ function fixture(t, serve, realm = "cn") {
   const config = { ...defaults };
   const client = new WorkBuddyClient(account, config, { gap: 0, fetcher: async (url, init = {}) => {
     const path = new URL(url).pathname;
-    seen.push({ path, body: init.body === undefined ? undefined : JSON.parse(init.body), headers: init.headers });
+    seen.push({ path, host: new URL(url).host, body: init.body === undefined ? undefined : JSON.parse(init.body), headers: init.headers });
     return serve(path, seen.at(-1), seen);
   } });
-  const context = { account, config, state, log: message => logs.push(message), checkpoint() {}, pollDelay: 0, signal: new AbortController().signal, web: { poll: 0, sleep: async () => {} } };
+  const context = { account, config, state, log: message => logs.push(message), checkpoint() {}, pollDelay: 0, pace: 0, signal: new AbortController().signal, web: { poll: 0, sleep: async () => {} } };
   return { run: action => perform(action, client, context), client, context, state, seen, logs };
 }
 
@@ -97,17 +97,79 @@ test("a partially failed report resumes remaining events without repeating accep
   assert.equal(attempts, 4);
 });
 
-test("completed desktop-only tasks can be claimed, unfinished ones show their required action", async t => {
-  const p = fixture(t, path => path.endsWith("/tasks") ? ok({ tasks: [
-    { task_code: "Library_read", accept_status: "completed", progress: { current: 1, target: 1 } },
-    { task_code: "Buddy_App", accept_status: "accepted", progress: { current: 0, target: 1 } }
-  ] }) : ok({ credit: 100 }));
+test("desktop and web tasks are reported as those clients; what nothing here can do is left alone and not listed", async t => {
+  const done = new Set();
+  const p = fixture(t, (path, request) => {
+    if (path.endsWith("/tasks")) return ok({ tasks: request.headers["X-Client-Platform"] ? [] : [
+      { task_code: "skill_share", title: "分享技能", accept_status: "completed", progress: null },
+      { task_code: "Buddy_App", accept_status: done.has("buddyapp_enter_click") ? "completed" : "accepted", progress: { current: 0, target: 1 } },
+      { task_code: "RichMeow_Chat", accept_status: done.has("chat_request_response") ? "completed" : "accepted", progress: { current: 0, target: 1 } },
+      { task_code: "Library_read", accept_status: done.has("web_element_click") ? "completed" : "accepted", progress: { current: 0, target: 1 } },
+      { task_code: "Expert_Philanthropy", title: "公益捐赠", accept_status: "not_accepted", progress: null },
+      { task_code: "wb_wechat_oa_subscribe_task", title: "关注公众号", accept_status: "accepted", progress: { current: 0, target: 1 } }
+    ] });
+    if (path === "/v2/report") { for (const e of request.body) done.add(e.eventCode); return ok({}); }
+    return ok({ credit: 100 });
+  });
   await p.run("tasks");
-  assert.ok(p.seen.some(r => r.path.endsWith("/Library_read/claim")));
+  const reports = p.seen.filter(r => r.path === "/v2/report");
+  // The desktop client's five steps into a Buddy app and its six-event chat go to its own host, stamped as that client.
+  assert.deepEqual(reports.map(r => [r.host, r.body.length, r.body[0].extName]), [["copilot.tencent.com", 5, "workbuddy-desktop"], ["copilot.tencent.com", 6, "workbuddy-desktop"], ["www.workbuddy.cn", 1, undefined]]);
+  assert.deepEqual([reports[0].headers["User-Agent"], reports[0].headers["X-Domain"], reports[0].headers.Origin], ["WorkBuddy/5.9.3 WorkBuddy/5.9.3 CLI/2.165.0", "copilot.tencent.com", undefined]);
+  assert.equal(reports[0].body[0].machineId, reports[1].body[0].machineId, "one account reads as one machine");
+  assert.deepEqual([reports[2].body[0].elementId, reports[2].headers["X-Domain"]], ["library_doc_intro_click", "www.workbuddy.cn"]);
+  // A task nothing here does is still claimed once it is complete.
+  assert.deepEqual(p.seen.filter(r => r.path.endsWith("/claim")).map(r => r.path.split("/").at(-2)), ["skill_share", "Buddy_App", "RichMeow_Chat", "Library_read"]);
+  assert.ok(!p.seen.some(r => r.path.endsWith("/accept")), "the donation is not accepted");
+  assert.doesNotMatch(p.logs.join("\n"), /公益捐赠|关注公众号|手动/);
+  assert.equal(p.logs.at(-1), "本次领奖 4 项");
+});
+
+// The mini program's tasks: its own list, accept and claim, its own reports, at a person's pace.
+test("the mini program's tasks are listed, accepted, reported and claimed as a mini-program client, one after another", async t => {
+  const state = { Sequential_Tasks_2: "not_accepted", Sequential_Tasks_3: "not_accepted" }, sent = { Sequential_Tasks_2: 0, Sequential_Tasks_3: 0 }, waits = [];
+  const p = fixture(t, (path, request) => {
+    const mp = request.headers["X-Client-Platform"] === "miniprogram";
+    if (path.endsWith("/tasks")) return ok({ tasks: !mp ? [{ task_code: "chat_5", accept_status: "claimed", progress: { current: 5, target: 5 } }] : [
+      { task_code: "chat_5", accept_status: "claimed", progress: { current: 5, target: 5 } },
+      { task_code: "Sequential_Tasks_3", title: "完成 5 次对话", accept_status: state.Sequential_Tasks_3, progress: state.Sequential_Tasks_3 === "not_accepted" ? null : { current: sent.Sequential_Tasks_3, target: 5 } },
+      { task_code: "Sequential_Tasks_2", title: "完成 1 次专家对话", accept_status: state.Sequential_Tasks_2, progress: state.Sequential_Tasks_2 === "not_accepted" ? null : { current: sent.Sequential_Tasks_2, target: 1 } },
+      { task_code: "Sequential_Tasks_4", title: "还没适配的", accept_status: "not_accepted", progress: null }
+    ] });
+    if (path.endsWith("/accept")) {
+      assert.equal(mp, true, "accepted as the mini program");
+      const [code] = request.body.task_codes;
+      // The third opens only once the second is claimed.
+      if (code === "Sequential_Tasks_3" && state.Sequential_Tasks_2 !== "claimed") return Response.json({ code: 400, msg: "prerequisite not met" }, { status: 400 });
+      state[code] = "accepted";
+      return ok({ results: [{ task_code: code, status: "accepted" }] });
+    }
+    if (path === "/v2/report") { sent[request.body[0].eventCode === "expert_actual_use" ? "Sequential_Tasks_2" : "Sequential_Tasks_3"]++; return ok({}); }
+    if (path.endsWith("/claim")) { assert.equal(mp, true); state[path.split("/").at(-2)] = "claimed"; return ok({ credit: 200, energy: 5 }); }
+    throw new Error("unexpected " + path);
+  });
+  await p.run("tasks");
+  const reports = p.seen.filter(r => r.path === "/v2/report");
+  assert.deepEqual(sent, { Sequential_Tasks_2: 1, Sequential_Tasks_3: 5 }, "the second first, then the third's five chats");
+  assert.deepEqual([reports[0].host, reports[0].headers["X-Client-Platform"], reports[0].body[0].ideType, reports[0].body[0].source], ["www.codebuddy.cn", "mp-weixin", "WorkBuddy_MP", "mini_program"]);
+  assert.match(reports[0].body[0].id, /^ex_/);
+  assert.deepEqual([reports[1].body[0].eventCode, reports[1].body[0].agentName], ["chat_request_send", "mp"]);
+  assert.match(p.logs.join("\n"), /完成 5 次对话：要按真人节奏上报/);
+  assert.deepEqual(state, { Sequential_Tasks_2: "claimed", Sequential_Tasks_3: "claimed" });
+  assert.equal(p.logs.at(-1), "本次领奖 2 项");
+  assert.doesNotMatch(p.logs.join("\n"), /还没适配的/);
+});
+
+test("a mini-program task that can't be accepted yet waits without failing the run", async t => {
+  const p = fixture(t, (path, request) => {
+    if (path.endsWith("/tasks")) return ok({ tasks: request.headers["X-Client-Platform"] ? [{ task_code: "Sequential_Tasks_3", title: "完成 5 次对话", accept_status: "not_accepted", progress: null }] : [] });
+    if (path.endsWith("/accept")) return Response.json({ code: 400, msg: "task locked until 2026-11-12" }, { status: 400 });
+    throw new Error("unexpected " + path);
+  });
+  await p.run("tasks");
+  assert.match(p.logs.join("\n"), /完成 5 次对话：还不能接取（.*task locked until 2026-11-12/);
   assert.ok(!p.seen.some(r => r.path === "/v2/report"));
-  assert.ok(p.logs.some(s => s.includes("需要在桌面端进入")));
-  // The job row shows the last line: it must not read as if everything was done.
-  assert.equal(p.logs.at(-1), "本次领奖 1 项；1 项需要你手动完成：Buddy_App");
+  assert.equal(p.logs.at(-1), "本次领奖 0 项；1 项未达成");
 });
 
 test("idle travel with buddy_id=0 departs using the server's destination ID", async t => {
@@ -197,7 +259,8 @@ test("a WorkBuddy AI account runs on its own site and claims its check-in only w
   assert.ok(p.seen.some(s => s.path === "/v2/billing/meter/daily-checkin"));
   assert.match(p.logs.join("\n"), /国际版签到：\+100 积分/);
   await p.run("tasks");
-  assert.match(p.logs.at(-1), /1 项需要你手动完成：完成一次对话/);
+  assert.equal(p.logs.at(-1), "本次领奖 0 项", "its client-only tasks are neither tried nor listed");
+  assert.ok(!p.seen.some(s => s.headers?.["X-Client-Platform"]), "the mini program's list is China's");
   assert.ok(!p.seen.some(s => s.path.includes("/tasks/accept")), "WorkBuddy AI's tasks are not simulated");
 });
 

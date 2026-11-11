@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { calendar } from "./storage.mjs";
-import { specs, manualTasks, buildEvent, growthTasks } from "./events.mjs";
+import { specs, buildEvent, buildEvents, growthTasks, miniProgram } from "./events.mjs";
 import { UpstreamError } from "./client.mjs";
 import { fallback, pickModel, webActivity } from "./webagent.mjs";
 
@@ -33,13 +33,20 @@ export async function perform(action, client, context) {
     return { renewed, expires: account.auth.expires };
   }
   if (account.enterprise) { log("企业账号没有个人成长奖励，跳过"); return { skipped: true, reason: "enterprise" }; }
-  const tasks = async () => {
-    const result = await client.request("/v2/activity/growth/tasks");
+  // The mini program's own tasks are listed, accepted and claimed only as
+  // a mini-program client; `mp` asks that way.
+  const as = mp => mp ? { extra: miniProgram } : {};
+  const tasks = async mp => {
+    const result = await client.request("/v2/activity/growth/tasks", as(mp));
     if (!Array.isArray(result?.tasks)) throw new Error("成长任务接口缺少 tasks 列表");
-    return growthTasks(result.tasks);
+    return growthTasks(result.tasks).map(t => mp ? { ...t, mp: true } : t);
   };
   const claim = async task => {
-    const got = await client.request(`/activity/growth/tasks/${encodeURIComponent(task.task_code)}/claim`, { body: {} });
+    const path = `/activity/growth/tasks/${encodeURIComponent(task.task_code)}/claim`;
+    let got;
+    try { got = await client.request(path, { body: {}, ...as(task.mp) }); }
+    // Some mini-program tasks are claimed the ordinary way instead.
+    catch (e) { if (!task.mp || e.status !== 400) throw e; got = await client.request(path, { body: {} }); }
     log(`${task.title || task.task_code}：已领奖，${got?.credit ?? 0} 积分 / ${got?.energy ?? 0} 能量`);
     return got;
   };
@@ -48,37 +55,54 @@ export async function perform(action, client, context) {
     const code = task.task_code;
     if (task.accept_status === "claimed") return "done";
     if (completed(task)) return claim(task).then(() => "claimed");
-    if (task.intl) { log(`${task.title || code}：${task.note}`); return "manual"; }
-    const spec = specs[code];
-    if (!spec) { log(`${task.title || code}：${manualTasks[code] || "尚未适配此任务"}${task.jump_url ? `（${task.jump_url}）` : ""}`); return "manual"; }
+    // What nothing here can do (a donation, following an account, WorkBuddy
+    // AI's client-only tasks) is left alone and not listed; it is still
+    // claimed above once its progress is there.
+    const spec = task.intl ? null : specs[code];
+    if (!spec || task.locked === true) return "skip";
     if (spec.night) {
       const hour = calendar(new Date(), config.timezone).hour;
       if (hour >= 8 && hour < 23) { log("夜猫子任务：等待 23:00–08:00 时段"); return "open"; }
     }
     if (task.accept_status === "not_accepted" && task.task_type !== "auto") {
-      const accepted = await client.request("/v2/activity/growth/tasks/accept", { body: { task_codes: [code] } });
+      let accepted;
+      try { accepted = await client.request("/v2/activity/growth/tasks/accept", { body: { task_codes: [code] }, ...as(task.mp) }); }
+      // The mini program's tasks open one after another, a day apart.
+      catch (e) { if (!task.mp || e.limited) throw e; log(`${task.title || code}：还不能接取（${e.message}）`); return "open"; }
       const result = accepted?.results?.find(r => r.task_code === code);
-      if (!["accepted", "already_accepted"].includes(result?.status)) throw new Error(`${code} 接取失败：${result?.message || result?.status || "响应缺少任务回执"}`);
+      if (task.mp) {
+        // An accept can answer OK without taking: read the task back.
+        task = (await tasks(true)).find(t => t.task_code === code) || task;
+        if (task.accept_status === "not_accepted") { log(`${task.title || code}：还不能接取${result?.message ? `（${result.message}）` : ""}`); return "open"; }
+        if (task.accept_status === "claimed") return "done";
+        if (completed(task)) return claim(task).then(() => "claimed");
+      }
+      else if (!["accepted", "already_accepted"].includes(result?.status)) throw new Error(`${code} 接取失败：${result?.message || result?.status || "响应缺少任务回执"}`);
     }
-    if (!task.progress || !(task.progress.target > 0)) throw new Error(`${code} 缺少有效进度信息`);
+    // A mini-program task not yet counted has no progress to read; its own target stands in.
+    const had = task.progress?.target > 0 ? task.progress : spec.target ? { current: 0, target: spec.target } : null;
+    if (!had) throw new Error(`${code} 缺少有效进度信息`);
     const key = reportKey(code);
-    const amount = spec.night ? 1 : Math.max(0, task.progress.target - task.progress.current);
-    const reporting = state.reports[key] || { sent: 0, total: amount, base: task.progress.current };
+    const amount = spec.night ? 1 : Math.max(0, had.target - had.current);
+    const reporting = state.reports[key] || { sent: 0, total: amount, base: had.current };
     if (reporting.sent) log(`${task.title || code}：今天已上报 ${reporting.sent} 次，核对上游进度`);
+    if (spec.pace && reporting.sent < reporting.total) log(`${task.title || code}：要按真人节奏上报，约需 ${Math.ceil((reporting.total - reporting.sent) * (context.pace ?? spec.pace + 5000) / 60_000)} 分钟`);
     for (let i = reporting.sent; i < reporting.total; i++) {
-      await client.request("/v2/report", { body: [buildEvent(account.auth.uid, spec, reporting.base + i)] });
+      // Reports sent in a burst are counted, then rolled back: wait before each, the first too.
+      if (spec.pace) await delay(context.pace ?? spec.pace + Math.random() * 10_000, undefined, { signal: context.signal });
+      await client.report(buildEvents(account, spec, reporting.base + i), spec.via);
       reporting.sent = i + 1;
       state.reports[key] = reporting;
       checkpoint();
     }
     log(`${task.title || code}：累计已上报 ${reporting.sent} 次`);
     for (let attempt = 0; attempt < 3; attempt++) {
-      const updated = (await tasks()).find(t => t.task_code === code);
+      const updated = (await tasks(task.mp)).find(t => t.task_code === code);
       if (!updated) throw new Error(`${code} 在进度查询中消失`);
       if (updated.accept_status === "claimed") return "done";
       if (completed(updated)) return claim(updated).then(() => "claimed");
       if (attempt < 2) await delay(context.pollDelay ?? 1500, undefined, { signal: context.signal });
-      else log(`${task.title || code}：上游进度 ${updated.progress.current}/${updated.progress.target}，尚未达成，未领奖`);
+      else log(`${task.title || code}：上游进度 ${updated.progress?.current ?? 0}/${updated.progress?.target ?? had.target}，尚未达成，未领奖`);
     }
     return "open";
   };
@@ -86,26 +110,29 @@ export async function perform(action, client, context) {
   const runTasks = async onlyNight => {
     const failures = [], errors = [];
     const list = await tasks();
+    // The mini program's tasks come only in its own list; each is done after the one before it.
+    if (!intl && !onlyNight) {
+      try { list.push(...(await tasks(true)).filter(t => !list.some(x => x.task_code === t.task_code)).sort((a, b) => String(a.task_code).localeCompare(String(b.task_code)))); }
+      catch (e) { if (e.limited) throw e; log(`小程序任务列表读取失败：${e.message}`); }
+    }
     if (onlyNight && !list.some(t => t.task_code === "black_cat")) {
       log("当前任务中心没有夜猫子任务");
       return { checked: 0, inactive: true };
     }
     // first_buddy unlocks acceptance of the other tasks and supplies the pet.
     list.sort((a, b) => Number(b.task_code === "first_buddy") - Number(a.task_code === "first_buddy"));
-    const outcome = { claimed: 0, open: 0, manual: [] };
+    const outcome = { claimed: 0, open: 0 };
     for (const task of list) {
       if (onlyNight && task.task_code !== "black_cat") continue;
       try {
         const got = await progress(task);
-        if (got === "manual") outcome.manual.push(task.title || task.task_code);
-        else if (got in outcome) outcome[got]++;
+        if (got in outcome) outcome[got]++;
       }
       catch (e) { failures.push(`${task.task_code}：${e.message}`); errors.push(e); log(failures.at(-1)); }
     }
     if (failures.length) throw roundError(`部分任务失败：${failures.join("；")}`, errors);
     // The job row shows the last line, so it says what this run left undone.
-    if (!onlyNight) log([`本次领奖 ${outcome.claimed} 项`, outcome.open && `${outcome.open} 项未达成`,
-      outcome.manual.length && `${outcome.manual.length} 项需要你手动完成：${outcome.manual.join("、")}`].filter(Boolean).join("；"));
+    if (!onlyNight) log([`本次领奖 ${outcome.claimed} 项`, outcome.open && `${outcome.open} 项未达成`].filter(Boolean).join("；"));
     return { checked: list.length };
   };
 

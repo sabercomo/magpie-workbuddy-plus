@@ -134,7 +134,7 @@
     return box;
   }
 
-  const kinds = { daily: "活跃 · 旅行 · 福利", tasks: "成长任务", night: "夜猫子", keepalive: "登录续期", "intl-daily": "活跃 · 签到 · 福利", "intl-tasks": "成长任务", "intl-web": "网页会话", "intl-keepalive": "登录续期" };
+  const kinds = { daily: "活跃 · 旅行 · 福利", tasks: "成长任务", night: "夜猫子", keepalive: "登录续期", "intl-daily": "活跃 · 签到 · 福利", "intl-web": "网页会话", "intl-keepalive": "登录续期" };
   const slotStates = { succeeded: ["完成", "ok"], failed: ["失败", "urgent"], deferred: ["稍后重试", "warn"], running: ["执行中", "go"], queued: ["排队中", "go"], interrupted: ["中断", "warn"], cancelled: ["已停止", ""], upcoming: ["待执行", ""], pending: ["等待补跑", "warn"], missed: ["已错过", ""] };
 
   // What the page around the board does when a schedule switch is flipped.
@@ -529,7 +529,7 @@
     if (!a.enterprise) {
       const foot = el("div", "wb-card wb-b-foot"), manual = (a.tasks?.open || []).filter(t => t.state === "manual"), g = a.growth, s = a.streak;
       const todo = el("span", "wb-b-todo");
-      todo.append(el("span", "wb-label", "待处理"), el("span", manual.length ? "wb-warn-text" : "wb-sub", manual.length ? manual.map(t => `${t.title}${t.credit ? ` · +${t.credit} 积分` : ""}`).join("；") : "没有需要手动完成的任务"));
+      if (manual.length) todo.append(el("span", "wb-label", "待处理"), el("span", "wb-warn-text", manual.map(t => `${t.title}${t.credit ? ` · +${t.credit} 积分` : ""}`).join("；")));
       foot.append(todo, el("span", "wb-sub", [g && `能量 ${num(g.energy)}`, g && `Buddy ${g.buddies}`, g && `抽奖 ${g.draws}`, s?.nextTier && `再 ${s.nextTier.remaining} 天到 ${s.nextTier.days} 天档`].filter(Boolean).join(" · ")));
       box.append(foot);
     }
