@@ -426,7 +426,8 @@
     // WorkBuddy AI's tasks can only be done in its client: they aren't listed.
     for (const task of intl ? [] : t?.open || []) {
       const [label, cls] = states[task.state] || [task.state, ""];
-      const row = line(el("span", "wb-name", task.title), el("span", `wb-pill ${cls}`, label));
+      const status = task.state === "locked" && task.unlockAt > now ? `${when(task.unlockAt)} 解锁` : label;
+      const row = line(el("span", "wb-name", task.title), el("span", `wb-pill ${cls}`, status));
       row.title = [task.target ? `${task.current}/${task.target}` : "", task.credit ? `+${task.credit} 积分` : "", task.ends ? `${date(task.ends)} 截止` : "", task.note].filter(Boolean).join(" · ");
       body.append(row);
     }

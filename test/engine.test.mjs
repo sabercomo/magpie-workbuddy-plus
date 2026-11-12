@@ -160,6 +160,30 @@ test("the mini program's tasks are listed, accepted, reported and claimed as a m
   assert.equal(p.logs.at(-1), "本次领奖 2 项；1 项尚未适配：还没适配的");
 });
 
+test("a locked mini-program task is skipped until unlocked and can be claimed once completed", async t => {
+  const task = { task_code: "Sequential_Tasks_4", title: "创建 1 个定时任务", accept_status: "not_accepted", locked: true };
+  const p = fixture(t, (path, request) => {
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: request.headers["X-Client-Platform"] ? [task] : [] });
+    if (path.endsWith("/config")) return ok({ config: { in_period: false } });
+    if (path === "/activity/growth/tasks/Sequential_Tasks_4/claim") {
+      assert.equal(task.accept_status, "completed");
+      assert.equal(request.headers["X-Client-Platform"], "miniprogram");
+      task.accept_status = "claimed";
+      return ok({ credit: 100 });
+    }
+    throw new Error("unexpected " + path);
+  });
+  await p.run("tasks");
+  assert.doesNotMatch(p.logs.join("\n"), /尚未适配/);
+  assert.ok(p.seen.every(request => request.body === undefined));
+  task.locked = false;
+  task.accept_status = "completed";
+  await p.run("tasks");
+  await p.run("tasks");
+  assert.equal(p.seen.filter(request => request.body !== undefined).length, 1);
+  assert.match(p.logs.join("\n"), /创建 1 个定时任务：已领奖，100 积分/);
+});
+
 test("a mini-program task that can't be accepted yet waits without failing the run", async t => {
   const p = fixture(t, (path, request) => {
     if (path.endsWith("/tasks")) return ok({ tasks: request.headers["X-Client-Platform"] ? [{ task_code: "Sequential_Tasks_3", title: "完成 5 次对话", accept_status: "not_accepted", progress: null }] : [] });

@@ -153,12 +153,16 @@ export function taskBoard(list, now = Date.now()) {
   const done = t => t.accept_status === "completed" || (t.progress?.target > 0 && t.progress.current >= t.progress.target);
   const live = list.filter(t => (!t.valid_end || Date.parse(t.valid_end) > now) && (t.accept_status === "claimed" || done(t) || (!t.intl && !unreachable.has(t.task_code))));
   const order = { claimable: 0, auto: 1, manual: 2, locked: 3 };
-  const open = live.filter(t => t.accept_status !== "claimed").map(t => ({
-    title: t.title || t.task_code, ...(t.intl ? { intl: true } : {}),
-    state: done(t) ? "claimable" : t.locked === true ? "locked" : specs[t.task_code] ? "auto" : "manual",
-    note: specs[t.task_code] ? t.note || "" : "尚未适配此任务，欢迎到 GitHub 提 issue", current: t.progress?.current ?? 0, target: t.progress?.target ?? 0,
-    credit: Number(t.reward_credit) || 0, energy: Number(t.reward_energy) || 0, ends: t.valid_end ? Date.parse(t.valid_end) : 0
-  })).sort((a, b) => order[a.state] - order[b.state] || (a.ends || Infinity) - (b.ends || Infinity));
+  const open = live.filter(t => t.accept_status !== "claimed").map(t => {
+    const state = done(t) ? "claimable" : t.locked === true ? "locked" : specs[t.task_code] ? "auto" : "manual";
+    return {
+      title: t.title || t.task_code, ...(t.intl ? { intl: true } : {}), state,
+      ...(state === "locked" && t.unlock_at ? { unlockAt: Date.parse(t.unlock_at) } : {}),
+      note: t.note || t.task_desc?.trim() || (state === "manual" ? "尚未适配此任务，欢迎到 GitHub 提 issue" : ""),
+      current: t.progress?.current ?? 0, target: t.progress?.target ?? 0,
+      credit: Number(t.reward_credit) || 0, energy: Number(t.reward_energy) || 0, ends: t.valid_end ? Date.parse(t.valid_end) : 0
+    };
+  }).sort((a, b) => order[a.state] - order[b.state] || (a.ends || Infinity) - (b.ends || Infinity));
   return { total: live.length, claimed: live.length - open.length, credit: open.reduce((s, t) => s + t.credit, 0), open };
 }
 

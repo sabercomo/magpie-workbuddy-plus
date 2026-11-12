@@ -196,7 +196,7 @@ test("task board puts claimable first, then what the scheduler does; what nothin
     { task_code: "chat_5", title: "聊天 5 次", accept_status: "accepted", progress: { current: 2, target: 5 }, reward_credit: 100, valid_end: "2026-11-02T23:59:00+08:00" },
     { task_code: "skill_1", title: "尝鲜技能", accept_status: "accepted", progress: { current: 1, target: 1 }, reward_credit: 50 },
     { task_code: "RichMeow_Chat", title: "桌面端对话", accept_status: "accepted", progress: { current: 0, target: 1 }, reward_credit: 100 },
-    { task_code: "Sequential_Tasks_3", title: "小程序 5 次对话", accept_status: "not_accepted", progress: null, reward_credit: 300, locked: true },
+    { task_code: "Sequential_Tasks_4", title: "创建 1 个定时任务", accept_status: "not_accepted", progress: null, reward_credit: 300, locked: true, unlock_at: "2026-10-30T00:00:00+08:00", task_desc: "在小程序内创建一个定时任务\t" },
     { task_code: "skill_share", title: "别人帮忙完成的", accept_status: "completed", progress: null, reward_credit: 100 },
     { task_code: "New_Task_X", title: "今天新出的任务", accept_status: "not_accepted", progress: null, reward_credit: 80 },
     { task_code: "template_5", title: "已领", accept_status: "claimed", progress: { current: 5, target: 5 }, reward_credit: 100 },
@@ -205,8 +205,9 @@ test("task board puts claimable first, then what the scheduler does; what nothin
   // Following an account and donating are neither listed nor counted; a task nothing here does still shows once it waits for a claim.
   assert.deepEqual([got.total, got.claimed, got.credit], [7, 1, 730]);
   // A task no one has written yet still shows, to do by hand, until it is.
-  assert.deepEqual(got.open.map(t => [t.title, t.state]), [["尝鲜技能", "claimable"], ["别人帮忙完成的", "claimable"], ["聊天 5 次", "auto"], ["桌面端对话", "auto"], ["今天新出的任务", "manual"], ["小程序 5 次对话", "locked"]]);
+  assert.deepEqual(got.open.map(t => [t.title, t.state]), [["尝鲜技能", "claimable"], ["别人帮忙完成的", "claimable"], ["聊天 5 次", "auto"], ["桌面端对话", "auto"], ["今天新出的任务", "manual"], ["创建 1 个定时任务", "locked"]]);
   assert.match(got.open.find(t => t.state === "manual").note, /尚未适配/);
+  assert.deepEqual([got.open.at(-1).unlockAt, got.open.at(-1).note], [Date.parse("2026-10-30T00:00:00+08:00"), "在小程序内创建一个定时任务"]);
 });
 
 test("an enterprise allowance is what's left of the month, and none when it grants nothing", () => {

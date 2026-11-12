@@ -63,10 +63,9 @@ export async function perform(action, client, context) {
     // AI's client-only tasks) is left alone and not listed; it is still
     // claimed above once its progress is there. A task not known yet is
     // listed for a person, as before.
-    if (task.intl || unreachable.has(code)) return "skip";
+    if (task.intl || task.locked === true || unreachable.has(code)) return "skip";
     const spec = specs[code];
-    if (!spec) { log(`${task.title || code}：尚未适配此任务${task.jump_url ? `（${task.jump_url}）` : ""}`); return task.locked === true ? "skip" : "manual"; }
-    if (task.locked === true) return "skip";
+    if (!spec) { log(`${task.title || code}：尚未适配此任务${task.jump_url ? `（${task.jump_url}）` : ""}`); return "manual"; }
     if (spec.night) {
       const hour = calendar(new Date(), config.timezone).hour;
       if (hour >= 8 && hour < 23) { log("夜猫子任务：等待 23:00–08:00 时段"); return "open"; }

@@ -161,4 +161,11 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   await form.onsubmit({ preventDefault() {}, currentTarget: form });
   const saved = calls.filter(c => c.path === "/api/config").at(-1).body;
   assert.deepEqual([saved.schedules.daily, saved.intlSchedules.web, saved.intlSchedules.daily, saved.intlWebModel, saved.intlWeb], [["09:00", "21:00"], ["10:30", "11:00"], ["09:00", "21:00"], "hy3", false]);
+
+  const unlockAt = new Date(2026, 10, 13).getTime();
+  board.accounts[0].tasks.open.push({ title: "创建 1 个定时任务", state: "locked", unlockAt });
+  context.WBBoard.render(nodes.get("board"), board, unlockAt - 1000);
+  assert.match(text(nodes.get("board")), /创建 1 个定时任务 11\/13 00:00 解锁/);
+  context.WBBoard.render(nodes.get("board"), board, unlockAt);
+  assert.match(text(nodes.get("board")), /创建 1 个定时任务 未解锁/);
 });

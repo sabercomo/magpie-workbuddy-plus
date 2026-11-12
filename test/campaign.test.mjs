@@ -9,8 +9,8 @@ const client = handler => {
 
 test("the campaign claims only tasks already earned, viewed first", async () => {
   const c = client(path => {
-    if (path.startsWith("/portal/activity/campaign/config")) return { config: { in_period: true } };
-    if (path.startsWith("/portal/activity/campaign/tasks?")) return {
+    if (path.startsWith("/portal/activity/config?")) return { config: { in_period: true } };
+    if (path.startsWith("/portal/activity/tasks?")) return {
       tasks: [
         { task_code: "ai_chat", target_count: 3, enabled: 1 },
         { task_code: "expert", target_count: 1, enabled: 1 },
@@ -21,11 +21,11 @@ test("the campaign claims only tasks already earned, viewed first", async () => 
     return {};
   });
   assert.deepEqual(await campaign(c), { tasks: 3, ready: 1, claimed: 1, errors: [] });
-  assert.deepEqual(c.calls.map(x => x.path.split("?")[0]), [
-    "/portal/activity/campaign/config",
-    "/portal/activity/campaign/tasks",
-    "/portal/activity/campaign/tasks/ai_chat/viewed",
-    "/portal/activity/campaign/tasks/ai_chat/claim"
+  assert.deepEqual(c.calls.map(x => x.path), [
+    "/portal/activity/config?activity_code=campaign_starbucks_2026",
+    "/portal/activity/tasks?activity_code=campaign_starbucks_2026",
+    "/portal/activity/tasks/ai_chat/viewed?activity_code=campaign_starbucks_2026",
+    "/portal/activity/tasks/ai_chat/claim?activity_code=campaign_starbucks_2026"
   ]);
   // Claims are POSTs without a body, as the mini program sends them.
   for (const call of c.calls.slice(2)) assert.deepEqual([call.body, call.headers()["X-Client-Platform"]], [{}, "miniprogram"]);
@@ -39,8 +39,8 @@ test("an out-of-period campaign does not read tasks", async () => {
 
 test("12304 means the task was not actually ready; other claim errors are reported and the rest still run", async () => {
   const c = client(path => {
-    if (path.startsWith("/portal/activity/campaign/config")) return { config: { in_period: true } };
-    if (path.startsWith("/portal/activity/campaign/tasks?")) return {
+    if (path.startsWith("/portal/activity/config?")) return { config: { in_period: true } };
+    if (path.startsWith("/portal/activity/tasks?")) return {
       tasks: [{ task_code: "a", target_count: 1, enabled: 1 }, { task_code: "b", target_count: 1, enabled: 1 }],
       progress: [{ task_code: "a", progress: 1 }, { task_code: "b", progress: 1 }]
     };
