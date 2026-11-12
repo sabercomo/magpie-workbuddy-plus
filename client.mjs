@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { readJSON, writeJSON, withLock } from "./storage.mjs";
 import { channel } from "./events.mjs";
+import { note as noteLimit, forget as forgetLimit } from "./limits.mjs";
 
 // Each build answers on its own site; WorkBuddy AI keeps its billing there too.
 const sites = {
@@ -36,13 +37,14 @@ export function backoff(response, attempt) {
 }
 
 export class WorkBuddyClient {
-  constructor(account, config, { fetcher = fetch, gap = 1000, signal, wait = delay } = {}) {
+  constructor(account, config, { fetcher = fetch, gap = 1000, signal, wait = delay, limits = null } = {}) {
     this.account = account;
     this.wait = wait;
     this.config = config;
     this.fetcher = fetcher;
     this.gap = gap;
     this.signal = signal;
+    this.limits = limits;
     this.lastRequest = 0;
     this.site = sites[account.realm] || sites.cn;
   }
@@ -64,6 +66,10 @@ export class WorkBuddyClient {
     return headers;
   }
 
+  // A real chat refused with 6004/6020 is remembered for the board.
+  recordLimit(model, payload) { noteLimit(this.limits, model, payload); }
+  clearLimit(model) { forgetLimit(this.limits, model); }
+
   async fetch(url, init = {}) {
     if (this.config.proxy && !globalThis.Bun && this.fetcher === globalThis.fetch) throw new Error("HTTP 代理需要使用 Bun 启动 WorkBuddy Plus");
     const wait = this.gap - (Date.now() - this.lastRequest);
@@ -84,7 +90,10 @@ export class WorkBuddyClient {
         ...(body === undefined ? {} : { body: JSON.stringify(body) })
       });
       if (response.status !== 429) break;
-      if (attempt === 2) { let payload = {}; try { payload = JSON.parse(await response.text()); } catch {} throw new RateLimited(path, payload); }
+      let payload = {};
+      try { payload = JSON.parse(await response.text()); } catch {}
+      this.recordLimit(body?.model, payload);
+      if (attempt === 2) throw new RateLimited(path, payload);
       await this.wait(backoff(response, attempt), undefined, { signal: this.signal });
     }
     const text = await response.text();
@@ -92,6 +101,7 @@ export class WorkBuddyClient {
     try { payload = JSON.parse(text); }
     catch { throw new Error(`${path}: HTTP ${response.status}，上游返回 ${response.headers.get("content-type") || "未知类型"}，不是 JSON`); }
     if (!response.ok || (payload.code !== undefined && payload.code !== 0)) throw new UpstreamError(path, response.status, payload);
+    if (body?.model) this.clearLimit(body.model);
     return envelope ? payload : payload.data;
   }
 

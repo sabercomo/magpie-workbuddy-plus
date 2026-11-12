@@ -23,7 +23,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   nodes.get("add-menu").contains = () => false;
   // The switches: a dot, a name and the state they show.
   const form = nodes.get("config-form"); form.elements = {};
-  for (const name of ["timezone", "proxy", "spread"]) form.elements[name] = new Element("input");
+  for (const name of ["timezone", "proxy", "spread", "intlWeb"]) form.elements[name] = new Element("input");
   for (const id of ["schedule-fields", "intl-schedule-fields"]) nodes.get(id).append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };
   const calls = [], status = { config: structuredClone(defaults), intlSchedules: structuredClone(defaults.intlSchedules), intlModels: ["hy3", "kimi-k3"], accounts: [
     { id: "cn:a", name: "国内测试", realm: "cn", source: "magpie", enabled: true },
@@ -156,7 +156,9 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   option.onclick();
   assert.equal(form.elements["intl-model"].value, "kimi-k3", "picking from the menu sets the form's value");
   form.elements["intl-model"].value = "hy3";
+  assert.equal(form.elements.intlWeb.checked, true, "the switch shows the saved setting");
+  form.elements.intlWeb.checked = false;
   await form.onsubmit({ preventDefault() {}, currentTarget: form });
   const saved = calls.filter(c => c.path === "/api/config").at(-1).body;
-  assert.deepEqual([saved.schedules.daily, saved.intlSchedules.web, saved.intlSchedules.daily, saved.intlWebModel], [["09:00", "21:00"], ["10:30", "11:00"], ["09:00", "21:00"], "hy3"]);
+  assert.deepEqual([saved.schedules.daily, saved.intlSchedules.web, saved.intlSchedules.daily, saved.intlWebModel, saved.intlWeb], [["09:00", "21:00"], ["10:30", "11:00"], ["09:00", "21:00"], "hy3", false]);
 });

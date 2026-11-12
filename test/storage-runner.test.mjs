@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { defaults, accounts, calendar, initialize, intlSchedules, plan, readJSON, settle, writeJSON } from "../storage.mjs";
+import { defaults, accounts, calendar, initialize, intlSchedules, plan, readJSON, settle, validateConfig, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
 import { EventEmitter } from "node:events";
 import { Runner, magpieBin, shifted } from "../runner.mjs";
@@ -442,4 +442,16 @@ test("a slot moves within ±spread minutes, the same all day, differently each d
   const runner = new Runner(p.dir);
   const slot = runner.today(runner.config(), new Date("2026-11-07T00:00:00Z")).slots[0];
   assert.equal(slot.runAt, shifted("2026-11-07", "daily", "09:00", 10, runner.state.salt));
+});
+
+test("the page saves the web conversation switch; anything but a boolean is refused", () => {
+  const dir = mkdtempSync(join(tmpdir(), "wbplus-switches-"));
+  try {
+    initialize(dir);
+    const runner = new Runner(dir);
+    assert.equal(runner.pageRequest({ id: "s1", action: "config", at: Date.now(), config: { intlWeb: false } }).ok, true);
+    const saved = readJSON(join(dir, "config.json"));
+    assert.equal(saved.intlWeb, false);
+    assert.throws(() => validateConfig({ ...defaults, intlWeb: "no" }), /国际版网页会话开关无效/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

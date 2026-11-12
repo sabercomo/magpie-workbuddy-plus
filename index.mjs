@@ -112,7 +112,7 @@ export const WorkBuddyPlusPlugin = async (input, options) => {
       execute: () => rpc("/api/board")
     },
     schedules: {
-      description: "查看或开关 WorkBuddy Plus 的定时执行：enabled 是国内版的定时，intlEnabled 是国际版的定时，关掉只停定时、手动执行不受影响。国内版与国际版各有自己的时段（schedules 与 intlSchedules），在本地面板或 Magpie 页面的「定时与设置」中调整，已开始的手动任务不受开关影响。",
+      description: "查看或开关 WorkBuddy Plus 的定时执行：enabled 是国内版的定时，intlEnabled 是国际版的定时，关掉只停定时、手动执行不受影响。国内版与国际版各有自己的时段（schedules 与 intlSchedules），在本地面板的「定时与设置」或 Magpie 页面的「设置」中调整，已开始的手动任务不受开关影响。",
       args: { type: "object", properties: { enabled: { type: "boolean" }, intlEnabled: { type: "boolean" } }, additionalProperties: false },
       async execute(args) {
         const { config } = await rpc("/api/status");

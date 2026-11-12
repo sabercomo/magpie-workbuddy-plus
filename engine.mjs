@@ -4,6 +4,7 @@ import { calendar } from "./storage.mjs";
 import { specs, unreachable, buildEvent, buildEvents, growthTasks, miniProgram } from "./events.mjs";
 import { UpstreamError } from "./client.mjs";
 import { fallback, pickModel, webActivity } from "./webagent.mjs";
+import { campaign } from "./campaign.mjs";
 
 export const actions = ["all", "activity", "tasks", "travel", "bonus", "night", "keepalive", "web", "inspect"];
 
@@ -13,6 +14,9 @@ function roundError(message, errors) {
   e.limited = errors.length > 0 && errors.every(x => x.limited);
   return e;
 }
+
+// Whole days between two YYYY-MM-DD stamps, for a failure streak that spans days.
+const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 
 export async function perform(action, client, context) {
   const { account, config, state, log, checkpoint } = context;
@@ -124,20 +128,49 @@ export async function perform(action, client, context) {
     }
     // first_buddy unlocks acceptance of the other tasks and supplies the pet.
     list.sort((a, b) => Number(b.task_code === "first_buddy") - Number(a.task_code === "first_buddy"));
-    const outcome = { claimed: 0, open: 0, manual: [] };
+    const outcome = { claimed: 0, open: 0, manual: [], stopped: 0 };
+    const stops = state.taskStops ||= {};
     for (const task of list) {
       if (onlyNight && task.task_code !== "black_cat") continue;
+      const key = `${account.id}:${task.task_code}`, stop = stops[key];
+      // A report the server keeps rejecting for its format is paused after
+      // three days; a manual run still tries it.
+      if (!onlyNight && context.trigger !== "manual" && stop?.days >= 3 && stop.last && daysBetween(stop.last, today()) <= 1) {
+        log(`${task.title || task.task_code}：连续 ${stop.days} 天上报失败，已暂停自动上报；手动执行可重试`);
+        outcome.stopped++;
+        continue;
+      }
       try {
         const got = await progress(task);
+        if (stop) { delete stops[key]; checkpoint(); }
         if (got === "manual") outcome.manual.push(task.title || task.task_code);
         else if (got in outcome) outcome[got]++;
       }
-      catch (e) { failures.push(`${task.task_code}：${e.message}`); errors.push(e); log(failures.at(-1)); }
+      catch (e) {
+        failures.push(`${task.task_code}：${e.message}`); errors.push(e); log(failures.at(-1));
+        // Only a report format rejection counts; a network blip or a rate
+        // limit must not pause a task for days.
+        if (e.status === 400 && /\/v2\/report/.test(e.message)) {
+          const day = today(), days = stop?.last === day ? stop.days : stop?.last && daysBetween(stop.last, day) === 1 ? stop.days + 1 : 1;
+          stops[key] = { days, last: day, error: e.message.slice(0, 160) };
+          checkpoint();
+        }
+      }
+    }
+    // The campaign's tasks can't be done from here; claim the ones already earned.
+    if (!intl && !onlyNight) {
+      try {
+        const got = await campaign(client);
+        if (got.skipped) log("活动：当前不在活动期");
+        else log([`活动：领取 ${got.claimed} 项`, got.ready > got.claimed && `${got.ready - got.claimed} 项未领到`, got.tasks > got.ready && `${got.tasks - got.ready} 项未达标`].filter(Boolean).join("，"));
+        for (const e of got.errors || []) log(`活动领奖失败：${e}`);
+      } catch (e) { log(`活动任务读取失败：${e.message}`); }
     }
     if (failures.length) throw roundError(`部分任务失败：${failures.join("；")}`, errors);
     // The job row shows the last line, so it says what this run left undone.
     if (!onlyNight) log([`本次领奖 ${outcome.claimed} 项`, outcome.open && `${outcome.open} 项未达成`,
-      outcome.manual.length && `${outcome.manual.length} 项尚未适配：${outcome.manual.join("、")}`].filter(Boolean).join("；"));
+      outcome.manual.length && `${outcome.manual.length} 项尚未适配：${outcome.manual.join("、")}`,
+      outcome.stopped && `${outcome.stopped} 项已暂停`].filter(Boolean).join("；"));
     return { checked: list.length };
   };
 

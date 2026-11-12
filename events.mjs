@@ -120,7 +120,7 @@ export function buildEvents(account, spec, index = 0) {
       const app = { mode: "LOCAL", buddyId: "cb_y5Dy46tPQGGWtueMxXbe", buddyName: "企鹅教师助手" }, element = { elementId: app.buddyId, elementName: app.buddyName };
       return [
         { eventCode: "buddyapp_discover_click", ...app }, { eventCode: "buddyapp_show", ...app, ...element, position: 2 },
-        { eventCode: "buddyapp_enter_click", ...app, ...element, position: 2, isFirstPage: "1" },
+        { eventCode: "buddyapp_enter_click", ...app, ...element, position: 2, isFirstPage: true },
         { eventCode: "buddyapp_auth_confirm_click", ...app, ...element }, { eventCode: "buddyapp_bindaccount_skip_click", ...app, ...element }
       ];
     }

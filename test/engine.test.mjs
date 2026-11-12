@@ -336,3 +336,41 @@ test("a WorkBuddy AI account's web conversation runs once a day through its sand
   assert.deepEqual(await p.run("web"), { skipped: true, reason: "off" });
   assert.ok(!p.seen.some(s => s.path.startsWith("/console")), "intlWeb: false skips the web turn");
 });
+
+// The server drops a buddyapp_enter_click whose isFirstPage is the string "1"
+// ("dropped=1 events by format validation"), so Buddy_App stays at 0/1.
+test("the Buddy app entry reports isFirstPage as a boolean", async () => {
+  const { buildEvents, specs } = await import("../events.mjs");
+  const events = buildEvents({ auth: { uid: "u1" } }, specs.Buddy_App);
+  assert.equal(events.length, 5);
+  assert.equal(events.find(e => e.eventCode === "buddyapp_enter_click").isFirstPage, true);
+});
+
+// A report rejected for its format is retried, but after three days the task
+// is paused for scheduled runs; a manual run still tries it and clears it.
+test("a task whose report keeps failing for its format pauses after three days, until a manual run", async t => {
+  let failing = true;
+  const task = () => ({ task_code: "Buddy_App", title: "进入 Buddy 应用", accept_status: "accepted", task_type: "single", progress: failing ? { current: 0, target: 1 } : { current: 1, target: 1 } });
+  const p = fixture(t, path => {
+    if (path.endsWith("/tasks")) return ok({ tasks: [task()] });
+    if (path === "/v2/report") return failing ? Response.json({ code: 1, msg: "partial success: dropped=1 events by format validation" }, { status: 400 }) : ok({});
+    if (path.endsWith("/claim")) return ok({ credit: 100 });
+    throw new Error("unexpected " + path);
+  });
+  p.context.trigger = "schedule:daily";
+  p.state.taskStops = { "cn:u1:Buddy_App": { days: 2, last: calendar(new Date(Date.now() - 86400_000), p.context.config.timezone).day, error: "HTTP 400" } };
+
+  await assert.rejects(p.run("tasks"), /partial success/);
+  assert.equal(p.state.taskStops["cn:u1:Buddy_App"].days, 3);
+
+  const reports = p.seen.filter(r => r.path === "/v2/report").length;
+  await p.run("tasks");
+  assert.equal(p.seen.filter(r => r.path === "/v2/report").length, reports, "the scheduled run does not report again");
+  assert.match(p.logs.join("\n"), /连续 3 天上报失败，已暂停自动上报/);
+
+  failing = false;
+  p.context.trigger = "manual";
+  await p.run("tasks");
+  assert.equal(p.state.taskStops["cn:u1:Buddy_App"], undefined, "a manual run clears the pause");
+  assert.ok(p.seen.some(r => r.path.endsWith("/claim")));
+});

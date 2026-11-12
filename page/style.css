@@ -1,4 +1,6 @@
 body{margin:0;padding:20px 22px 28px}
+/* 设置 view and the 国际版 group toggle with hidden, which display:flex would otherwise override. */
+[hidden]{display:none!important}
 header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
 h1{font-size:22px;font-weight:650;letter-spacing:-.02em;margin:0 0 2px}
 h2{font-size:13px;font-weight:600;margin:22px 2px 8px}
@@ -36,16 +38,34 @@ header .quiet svg{color:var(--wb-muted)}
 .job .last{grid-column:2/4;color:var(--wb-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .job .failed,.job .interrupted{color:var(--wb-urgent)}.job .running,.job .queued{color:var(--wb-go)}.job .succeeded{color:var(--wb-accent)}.job .deferred{color:var(--wb-warn)}
 footer{font-size:11.5px;margin-top:18px}
-#settings{margin-top:22px;border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);padding:10px 14px}
-#settings>summary{cursor:pointer;font-size:13px;font-weight:600}#settings>summary .muted{font-weight:400;margin-left:6px}
-#settings-form{display:flex;flex-direction:column;gap:10px;margin-top:10px;align-items:flex-start}
+/* 设置 is its own view: the board and jobs step aside while it's open. */
+.header-actions{display:flex;gap:8px;align-items:center}
+header .quiet{display:inline-flex;align-items:center;gap:5px}header .quiet svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+body.in-settings #main-view,body.in-settings footer,body.in-settings .header-actions{display:none}
+.settings-head{display:flex;align-items:center;gap:8px;margin:4px 0 12px}.settings-head h2{margin:0;font-size:15px}
+.back{all:unset;display:inline-flex;align-items:center;gap:2px;cursor:pointer;font-size:12.5px;color:var(--wb-accent);padding:3px 8px 3px 4px;border-radius:7px}
+.back:hover{background:var(--wb-soft)}.back:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+.back svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+#settings-form{display:flex;flex-direction:column;gap:12px}
+.group{border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px;align-items:stretch}
+.group h3{margin:0;font-size:13px;font-weight:600}
+.hint,.field small,.toggle small{font-size:11.5px;color:var(--wb-muted);line-height:1.5;margin:0}
 .realms{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;width:100%}
 .realms fieldset{margin:0;border:1px solid var(--wb-line);border-radius:10px;padding:8px 12px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .realms legend{font-size:12.5px;font-weight:600;padding:0 4px}
-.realms label,.realms .field{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--wb-muted)}
-.realms input{font:inherit;font-size:12.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--wb-line);background:transparent;color:inherit}
-.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 12px;width:100%}
-.fields label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--wb-muted)}.fields label.wide{grid-column:1/-1}
-.fields input{font:inherit;font-size:12.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--wb-line);background:transparent;color:inherit}
-#settings-form button{font-size:12.5px;padding:4px 14px;border-radius:7px;cursor:pointer}
-@media (prefers-reduced-motion:reduce){header .quiet:active,.run-menu summary:active{transform:none}.run-menu .chev{transition:none}.run-menu .menu{animation:none}}
+.group label,.group .field{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--wb-muted)}
+.group label.short{max-width:220px}
+.group input:not([type=checkbox]){font:inherit;font-size:12.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--wb-line);background:transparent;color:inherit}
+.fields{display:grid;grid-template-columns:minmax(160px,1fr) minmax(200px,2fr);gap:8px 12px;width:100%}
+/* A switch row: the knob, then what it does and what turning it off costs. */
+.group label.toggle{flex-direction:row;align-items:flex-start;gap:10px;font-size:12.5px;color:inherit;cursor:pointer}
+.toggle span:last-child{display:flex;flex-direction:column;gap:2px}
+.toggle input{position:absolute;opacity:0;pointer-events:none}
+.toggle .knob{flex:none;width:28px;height:16px;margin-top:1px;border-radius:999px;background:color-mix(in srgb,var(--wb-muted) 35%,transparent);position:relative;transition:background 150ms ease}
+.toggle .knob::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform 150ms ease}
+.toggle input:checked+.knob{background:var(--wb-accent)}.toggle input:checked+.knob::after{transform:translateX(12px)}
+.toggle input:focus-visible+.knob{outline:2px solid var(--wb-accent);outline-offset:2px}
+.save{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.save button{font-size:12.5px;padding:5px 16px;border-radius:7px;cursor:pointer;background:var(--wb-accent);border:1px solid var(--wb-accent);color:#fff}
+@media (max-width:520px){.fields{grid-template-columns:1fr}.group label.short{max-width:none}}
+@media (prefers-reduced-motion:reduce){header .quiet:active,.run-menu summary:active{transform:none}.run-menu .chev{transition:none}.run-menu .menu{animation:none}.toggle .knob,.toggle .knob::after{transition:none}}

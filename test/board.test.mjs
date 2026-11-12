@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { defaults, initialize, readJSON, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
 import { summarize, usage, collect, taskBoard, pageBuild, allowance, dropped } from "../board.mjs";
+import { note } from "../limits.mjs";
 import { Runner } from "../runner.mjs";
 
 const ok = data => Response.json({ code: 0, data });
@@ -166,7 +167,7 @@ test("page snapshot carries no credentials and each page request runs once", asy
 
   // Settings saved from Magpie's page, for installs whose local panel can't be reached.
   writeJSON(join(dir, "config.json"), { ...runner.config(), proxy: "http://user:secret@proxy.example:8080" });
-  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlWebModel: "auto" });
+  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlWebModel: "auto", intlWeb: true });
   assert.ok(!JSON.stringify(runner.boardView()).includes("secret"));
   const schedules = { daily: ["08:30"], tasks: ["08:40", "20:40"], night: [], keepalive: ["22:00"] };
   assert.equal(runner.pageRequest({ id: "c1", action: "config", at: Date.now(), config: { schedules, spread: 5, timezone: "Asia/Shanghai", proxy: "http://***@proxy.example:8080" } }).ok, true);
@@ -232,4 +233,21 @@ test("a package keeps each grant's own lapse time, so a small early grant doesn'
     { balance: 200, expires: Date.parse("2026-11-12T09:00:00+08:00") },
     { balance: 9796, expires: Date.parse("2026-11-27T09:00:00+08:00") }
   ]);
+});
+
+// Model limits are only learned from a real chat refusal; the board never asks.
+test("the board shows limits learned from a real refusal, never by probing", async () => {
+  const at = new Date(Date.now() - 10 * 60_000).toLocaleString("sv-SE", { timeZone: "Asia/Shanghai" });
+  let probes = 0;
+  const { account, client } = clientFor(url => {
+    if (url.pathname.endsWith("/chat/completions")) { probes++; return new Response("data: {}\n\n"); }
+    if (url.pathname.endsWith("/get-user-request-usage")) return ok({ data: [{ requestId: "r", model: "glm-5.2", credit: 1, requestTime: at }] });
+    return Response.json({ code: 404, msg: "not here" }, { status: 404 });
+  });
+  const who = { ...account, id: "cn:u1", realm: "cn" }, memory = {}, now = Date.now();
+  note(memory, "glm-5.2", { code: 6004 }, now);
+  const row = await collect(who, new WorkBuddyClient(who, defaults, { gap: 0, fetcher: client.fetcher }), defaults, memory, async () => {});
+  assert.ok(row.usage, "usage was read");
+  assert.equal(probes, 0, "collect never asks a model");
+  assert.deepEqual(row.limits, [{ model: "glm-5.2", resets: now + 86400_000 }]);
 });

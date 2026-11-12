@@ -13,7 +13,7 @@
   <section><details id="settings"><summary>定时与设置 <span class="muted">国内版与国际版各自的时段、时区、代理</span></summary>
     <form id="config-form"><div class="realms"><fieldset><legend>国内版 <span class="muted" id="cn-state"></span></legend><div id="schedule-fields" class="fields"></div></fieldset><fieldset id="intl-fields"><legend>国际版 <span class="muted" id="intl-state"></span></legend><div id="intl-schedule-fields" class="fields"></div></fieldset></div><div class="fields">
       <label>时区<input name="timezone" required></label><label>HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label><label>随机错开（分钟，0 关闭）<input name="spread" type="number" min="0" max="60" step="1"></label>
-    </div><p class="muted">国内版和国际版的定时各用「今日定时」里那一排右边的开关暂停或开启，暂停只停定时，手动执行照样能用。同类多个时段用逗号分隔，清空可关闭该类定时。每个时段在设定时间前后「随机错开」分钟内执行，每天不同，多个账号之间也会间隔几十秒，避免整点统一请求。连登活跃和国际版网页会话每天成功后不重复执行，任务与旅行会核对上游状态。网页会话自动选模型时用当前免费的模型，没有免费的或它跑不了时用 DeepSeek-V4.1-Flash。每日签到请在 Magpie 开启。</p><button type="submit">保存设置</button><span id="saved" role="status"></span></form>
+    </div><div class="switches"><label class="check"><input type="checkbox" name="intlWeb"> 国际版每天跑一次网页会话 <span class="muted">每日活跃奖励只认网页端会话；关掉后连登照常，但拿不到这份奖励</span></label></div><p class="muted">国内版和国际版的定时各用「今日定时」里那一排右边的开关暂停或开启，暂停只停定时，手动执行照样能用。同类多个时段用逗号分隔，清空可关闭该类定时。每个时段在设定时间前后「随机错开」分钟内执行，每天不同，多个账号之间也会间隔几十秒，避免整点统一请求。连登活跃和国际版网页会话每天成功后不重复执行，任务与旅行会核对上游状态。网页会话自动选模型时用当前免费的模型，没有免费的或它跑不了时用 DeepSeek-V4.1-Flash。每日签到请在 Magpie 开启。</p><button type="submit">保存设置</button><span id="saved" role="status"></span></form>
   </details></section>
   <section><div class="section-head"><h2>执行记录</h2><span id="updated" class="muted"></span></div><div id="jobs"></div></section>
   <footer>仅本机访问 · 独立定时服务 · Magpie 关闭后仍可执行 · 日志时间按本机显示</footer>

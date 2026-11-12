@@ -17,7 +17,7 @@ function paint() {
     : `${view.refreshing ? "正在刷新…" : `余额更新于 ${WBBoard.when(view.at)}`}${offline ? " · 后台服务可能未运行" : ""}`;
   if (view?.panel) $("panel").textContent = view.panel;
   // WorkBuddy AI's settings show once one of its logins is on the board.
-  $("intl-fields").hidden = !view?.intl?.accounts;
+  for (const node of document.querySelectorAll(".intl-only")) node.hidden = !view?.intl?.accounts;
   $("cn-state").textContent = view ? `· 定时${view.enabled ? "已开启" : "已暂停"}` : "";
   $("intl-state").textContent = view ? `· 定时${view.intlEnabled ? "已开启" : "已暂停"}` : "";
   // Each build's schedule switch lives on its row in 今日定时.
@@ -54,11 +54,23 @@ function fill(view) {
     pick.value = wanted;
     host.replaceChildren(WBBoard.picker(pick, WBBoard.modelChoices(view.models?.intl?.models, wanted), () => { edited = true; }));
   }
+  form.elements["intl-web-on"].checked = view.settings.intlWeb !== false;
   form.elements.spread.value = view.settings.spread;
   form.elements.timezone.value = view.settings.timezone || "";
   form.elements.proxy.value = view.settings.proxy || "";
 }
-$("settings-form").oninput = () => { edited = true; };
+$("settings-form").oninput = $("settings-form").onchange = () => { edited = true; };
+
+// 设置 opens in place of the board; 返回 or Escape goes back. An edit not
+// saved is let go, so the form shows the saved settings next time.
+function settings(open) {
+  document.body.classList.toggle("in-settings", open);
+  $("settings").hidden = !open;
+  if (!open && edited) { edited = false; fill(globalThis.WBPLUS); }
+  (open ? $("close-settings") : $("open-settings")).focus();
+}
+$("open-settings").onclick = () => settings(true);
+$("close-settings").onclick = () => settings(false);
 
 async function ask(action, extra = {}) {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -73,11 +85,11 @@ $("settings-form").onsubmit = async event => {
   event.preventDefault();
   const form = event.target, button = form.querySelector("button");
   const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
-  const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), intlSchedules: Object.fromEntries(intlKinds.map(k => [k, times(form.elements[`intl-${k}`].value)])), intlWebModel: form.elements["intl-model"].value || "auto", spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
+  const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), intlSchedules: Object.fromEntries(intlKinds.map(k => [k, times(form.elements[`intl-${k}`].value)])), intlWebModel: form.elements["intl-model"].value || "auto", intlWeb: form.elements["intl-web-on"].checked, spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
   const bad = [...Object.values(config.schedules), ...Object.values(config.intlSchedules)].flat().find(t => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t));
   if (bad) return note(`时间「${bad}」不对，应为 HH:MM，例如 09:00`, true);
   button.disabled = true;
-  try { await ask("config", { config }); edited = false; }
+  try { await ask("config", { config }); edited = false; settings(false); }
   catch (e) { note(`提交失败：${e.message}`, true); }
   finally { setTimeout(() => { button.disabled = false; }, 3000); }
 };
@@ -98,7 +110,7 @@ function reload() {
 // A menu closes once something is picked, on a click outside it, or on Escape.
 const menus = [...document.querySelectorAll("details.run-menu")];
 document.addEventListener("click", event => { for (const m of menus) if (!m.contains(event.target)) m.open = false; });
-document.addEventListener("keydown", event => { if (event.key !== "Escape") return; for (const m of menus) if (m.open) { m.open = false; m.querySelector("summary").focus(); } });
+document.addEventListener("keydown", event => { if (event.key !== "Escape") return; if (!$("settings").hidden && !menus.some(m => m.open) && !document.querySelector(".wb-pick[open]")) return settings(false); for (const m of menus) if (m.open) { m.open = false; m.querySelector("summary").focus(); } });
 
 for (const button of document.querySelectorAll("[data-action]")) button.onclick = async () => {
   const action = button.dataset.action;

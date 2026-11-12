@@ -47,9 +47,11 @@ export async function webActivity(client, { model = fallback, prompt = "只回�
     let payload;
     try { payload = JSON.parse(text); } catch { throw new Error(`网页会话：HTTP ${response.status}，不是 JSON`); }
     if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+      if (body?.model) client.recordLimit(body.model, payload);
       const full = payload.code === 10105 || /active conversation|会话.*上限/i.test(payload.msg || "");
       throw new Error(full ? "网页会话：活跃会话已满 10 条，请到 workbuddy.ai 网页端结束几条旧对话" : `网页会话：HTTP ${response.status}，${payload.msg || `code=${payload.code}`}`);
     }
+    if (body?.model) client.clearLimit(body.model);
     return payload.data;
   };
 

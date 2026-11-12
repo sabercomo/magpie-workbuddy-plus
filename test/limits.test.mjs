@@ -1,10 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { defaults } from "../storage.mjs";
-import { WorkBuddyClient } from "../client.mjs";
-import { limits, parseReset, probe } from "../limits.mjs";
+import { WorkBuddyClient, RateLimited } from "../client.mjs";
+import { limits, note, forget, parseReset } from "../limits.mjs";
 
-const HOUR = 3600_000;
+const HOUR = 3600_000, DAY = 24 * HOUR;
 
 test("a 6004 reply's reset time is read in its own UTC offset, China's and WorkBuddy AI's wording alike", () => {
   assert.equal(parseReset("您的使用量已超出频率限制，将在 2026-11-09 00:14:03 UTC+8 重置，您也可以切换其他模型继续使用。"), Date.parse("2026-11-08T16:14:03Z"));
@@ -14,88 +13,44 @@ test("a 6004 reply's reset time is read in its own UTC offset, China's and WorkB
   assert.equal(parseReset("rate limited"), null);
 });
 
-test("a probe is one minimal chat request: a spent model answers 6004 with its reset, a live one answers", async () => {
-  const seen = [];
-  let reply;
-  const account = { id: "cn:u1", name: "fixture", realm: "cn", auth: { uid: "u1", access: "private-access", expires: Date.now() + 86400_000 } };
-  const client = new WorkBuddyClient(account, defaults, { gap: 0, fetcher: async (url, init) => { seen.push({ url, headers: init.headers, body: JSON.parse(init.body) }); return reply(); } });
-  reply = () => Response.json({ code: 6004, msg: "您的使用量已超出频率限制，将在 2026-11-09 00:14:03 UTC+8 重置，您也可以切换其他模型继续使用。" }, { status: 429 });
-  assert.deepEqual(await probe(client, "kimi-k3-1"), { limited: true, resets: Date.parse("2026-11-08T16:14:03Z") });
-  assert.equal(seen[0].url, "https://www.workbuddy.cn/v2/chat/completions");
-  assert.deepEqual(seen[0].body, { model: "kimi-k3-1", messages: [{ role: "system", content: "You are a helpful assistant." }, { role: "user", content: "Hi" }], stream: true, max_tokens: 16, reasoning_effort: "none" });
-  // WorkBuddy AI refuses a chat without the client's conversation headers.
-  assert.equal(seen[0].headers["X-Agent-Type"], "main");
-  assert.match(seen[0].headers["X-Conversation-ID"], /^[0-9a-f-]{36}$/);
-  assert.equal(seen[0].headers["X-Request-ID"], seen[0].headers["X-Conversation-Message-ID"]);
-  reply = () => new Response("data: {}\n\n", { headers: { "content-type": "text/event-stream" } });
-  assert.deepEqual(await probe(client, "deepseek-v4.1-flash"), { limited: false });
-  reply = () => Response.json({ code: 11, msg: "model not found" }, { status: 400 });
-  await assert.rejects(probe(client, "nope"), /HTTP 400，model not found/);
-  // Short of capacity, a model queues every account: 6020 with the queue, its wait in seconds.
-  reply = () => Response.json({ code: 6020, msg: "queue.waiting.title", data: { queue_position: 907, queue_size: 908, retry_after: 40, estimated_wait: 4535, client_user_type: "ultimate" } }, { status: 429 });
-  assert.deepEqual(await probe(client, "kimi-k3.1-pro"), { limited: false, queued: { position: 907, size: 908, wait: 4535_000 } });
-  reply = () => Response.json({ code: 6020, msg: "queue.waiting.title", data: { queue_position: 5443, queue_size: "999+", retry_after: 40, estimated_wait: 27215 } }, { status: 429 });
-  assert.deepEqual(await probe(client, "kimi-k3.1-pro"), { limited: false, queued: { position: 5443, size: "999+", wait: 27215_000 } });
-  // A plain 429 without 6004 or a reset time is a rate limit on the request, not a spent model.
-  reply = () => Response.json({ code: 1, msg: "slow down" }, { status: 429 });
-  await assert.rejects(probe(client, "deepseek-v4.1-flash"), /HTTP 429/);
+test("a real refusal is recorded: 6004 keeps its reset, 6020 its queue, a plain 429 nothing", () => {
+  const now = Date.parse("2026-11-09T06:15:00Z"), memory = {};
+  assert.equal(note(memory, "kimi-k3-1", { code: 6004, msg: "您的使用量已超出频率限制，将在 2026-11-09 00:14:03 UTC+8 重置" }, now), true);
+  assert.deepEqual(memory["kimi-k3-1"], { checked: now, resets: Date.parse("2026-11-08T16:14:03Z") });
+  assert.equal(note(memory, "kimi-k3.1-pro", { code: 6020, msg: "queue.waiting.title", data: { queue_position: 907, queue_size: "999+", estimated_wait: 4535 } }, now), true);
+  assert.deepEqual(memory["kimi-k3.1-pro"], { checked: now, queued: { position: 907, size: "999+", wait: 4535_000 } });
+  // A plain 429 is rate limiting on the request, not the model's allowance.
+  assert.equal(note(memory, "glm-5.3", { code: 1, msg: "slow down" }, now), false);
+  assert.equal(memory["glm-5.3"], undefined);
+  assert.equal(note(memory, "glm-5.3", null, now), false);
+  forget(memory, "kimi-k3-1");
+  assert.equal(memory["kimi-k3-1"], undefined);
 });
 
-test("a model is asked only when used within the day and since it was last asked, at most hourly, never inside its window", async () => {
-  const now = Date.parse("2026-11-08T12:00:00Z"), asked = [];
-  const answers = { "kimi-k3-1": { limited: true, resets: now + 12 * HOUR }, "glm-5.3": { limited: false } };
-  const ask = async (_, model) => { asked.push(model); if (model === "broken") throw new Error("HTTP 400，bad"); return answers[model]; };
-  const memory = {};
-  const used = { "kimi-k3-1": now - HOUR, "glm-5.3": now - 2 * HOUR, "old-model": now - 2 * 24 * HOUR, broken: now - HOUR };
-  assert.deepEqual(await limits(null, used, memory, now, ask), [{ model: "kimi-k3-1", resets: now + 12 * HOUR }]);
-  assert.deepEqual(asked.sort(), ["broken", "glm-5.3", "kimi-k3-1"], "a model unused for a day is not asked");
-  assert.equal(memory.broken.error, "HTTP 400，bad");
-
-  // Inside the hour, or not used since: nothing is asked; the spent model stays listed.
-  asked.length = 0;
-  assert.deepEqual(await limits(null, { ...used, "glm-5.3": now + 10 * 60_000 }, memory, now + 30 * 60_000, ask), [{ model: "kimi-k3-1", resets: now + 12 * HOUR }]);
-  const { broken, ...rest } = used;
-  assert.deepEqual(await limits(null, rest, memory, now + 2 * HOUR, ask), [{ model: "kimi-k3-1", resets: now + 12 * HOUR }]);
-  assert.deepEqual(asked, []);
-
-  // Used again after an hour: asked again. A failed check is retried after the hour, used or not.
-  assert.deepEqual(await limits(null, { ...used, "glm-5.3": now + 90 * 60_000 }, memory, now + 2 * HOUR, ask), [{ model: "kimi-k3-1", resets: now + 12 * HOUR }]);
-  assert.deepEqual(asked.sort(), ["broken", "glm-5.3"]);
-  delete used.broken; delete memory.broken;
-
-  // Past its reset the model counts as recovered without asking, until it's used again.
-  asked.length = 0;
-  assert.deepEqual(await limits(null, used, memory, now + 13 * HOUR, ask), []);
-  assert.deepEqual(asked, []);
-  answers["kimi-k3-1"] = { limited: false };
-  await limits(null, { ...used, "kimi-k3-1": now + 13 * HOUR }, memory, now + 13.5 * HOUR, ask);
-  assert.deepEqual(asked, ["kimi-k3-1"]);
-
-  // A model unused for a week is forgotten.
-  await limits(null, { "kimi-k3-1": now + 7.5 * 24 * HOUR }, memory, now + 8 * 24 * HOUR, ask);
-  assert.deepEqual(Object.keys(memory), ["kimi-k3-1"]);
-});
-
-test("a queued model is listed after the spent ones until its told wait is up, and asked again after the hour", async () => {
-  const now = Date.parse("2026-11-09T06:15:00Z"), asked = [];
-  let answer = { limited: false, queued: { position: 907, size: 908, wait: 75 * 60_000 } };
-  const ask = async (_, model) => { asked.push(model); return model === "kimi-k3-1" ? { limited: true, resets: now + 5 * HOUR } : answer; };
-  const memory = {}, used = { "kimi-k3.1-pro": now - 60_000, "kimi-k3-1": now - 60_000 };
-  assert.deepEqual(await limits(null, used, memory, now, ask), [
+test("the board lists a spent model and then a queued one, dropping each once its time is up", () => {
+  const now = Date.parse("2026-11-09T06:15:00Z"), memory = {};
+  note(memory, "kimi-k3-1", { code: 6004, msg: "将在 2026-11-09 19:15:00 UTC+8 重置" }, now);
+  note(memory, "kimi-k3.1-pro", { code: 6020, msg: "queue.waiting.title", data: { queue_position: 3, queue_size: 40, estimated_wait: 30 } }, now);
+  assert.deepEqual(limits(memory, now), [
     { model: "kimi-k3-1", resets: now + 5 * HOUR },
-    { model: "kimi-k3.1-pro", queued: { position: 907, size: 908, at: now, until: now + 75 * 60_000 } }
+    { model: "kimi-k3.1-pro", queued: { position: 3, size: 40, at: now, until: now + 10 * 60_000 } }
   ]);
-  // Past its wait it drops off without asking; within the hour nothing is asked.
-  asked.length = 0;
-  assert.deepEqual(await limits(null, used, memory, now + 50 * 60_000, ask), [{ model: "kimi-k3-1", resets: now + 5 * HOUR }, { model: "kimi-k3.1-pro", queued: { position: 907, size: 908, at: now, until: now + 75 * 60_000 } }]);
-  assert.deepEqual(asked, []);
-  // After the hour it is asked again even if not used since; a short wait still shows for 10 minutes.
-  answer = { limited: false, queued: { position: 3, size: 40, wait: 30_000 } };
-  const later = now + 61 * 60_000;
-  assert.deepEqual((await limits(null, used, memory, later, ask)).at(-1), { model: "kimi-k3.1-pro", queued: { position: 3, size: 40, at: later, until: later + 10 * 60_000 } });
-  assert.deepEqual(asked, ["kimi-k3.1-pro"]);
-  // Through the queue: a reply clears it.
-  answer = { limited: false };
-  await limits(null, used, memory, later + 2 * HOUR, ask);
-  assert.deepEqual(memory["kimi-k3.1-pro"], { checked: later + 2 * HOUR });
+  // A short queue stays listed for at least ten minutes.
+  assert.deepEqual(limits(memory, now + 9 * 60_000).at(-1), { model: "kimi-k3.1-pro", queued: { position: 3, size: 40, at: now, until: now + 10 * 60_000 } });
+  assert.deepEqual(limits(memory, now + 11 * 60_000), [{ model: "kimi-k3-1", resets: now + 5 * HOUR }]);
+  // Past its reset the model is gone; the empty entry is dropped too.
+  assert.deepEqual(limits(memory, now + 6 * HOUR), []);
+  assert.deepEqual(memory, {});
+});
+
+test("a real chat refused with 6004 is recorded by the client; a later success clears it", async () => {
+  const account = { id: "intl:u1", name: "fixture", realm: "intl", auth: { uid: "u1", access: "private-access", expires: Date.now() + DAY } };
+  const memory = {};
+  let reply = () => Response.json({ code: 6004, msg: "your usage will reset at 2026-11-09 10:15:00 UTC+8" }, { status: 429 });
+  const client = new WorkBuddyClient(account, { proxy: "" }, { gap: 0, wait: async () => {}, limits: memory, fetcher: async () => reply() });
+  await assert.rejects(client.request("/v2/chat/completions", { body: { model: "glm-5.2" } }), RateLimited);
+  assert.deepEqual(memory["glm-5.2"], { checked: memory["glm-5.2"].checked, resets: Date.parse("2026-11-09T02:15:00Z") });
+  reply = () => Response.json({ code: 0, data: { ok: true } });
+  assert.deepEqual(await client.request("/v2/chat/completions", { body: { model: "glm-5.2" } }), { ok: true });
+  assert.deepEqual(memory, {});
 });

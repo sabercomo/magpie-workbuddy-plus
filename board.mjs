@@ -223,8 +223,9 @@ export async function collect(account, client, config, memory, pause = ms => new
       row.errors[name] = e.message.slice(0, 160);
     }
   }
-  // Model limits need the usage above; without a memory (tests, one-off reads) none are asked.
-  if (memory && row.usage) row.limits = await limits(client, row.usage.used, memory);
+  // Model limits are learned from real chat refusals (see limits.mjs); the
+  // board only reads what is already known.
+  if (memory) { const found = limits(memory); if (found.length) row.limits = found; }
   return row;
 }
 

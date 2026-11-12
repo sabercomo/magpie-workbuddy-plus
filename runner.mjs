@@ -78,7 +78,7 @@ export class Runner {
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
-      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto" },
+      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false },
       accounts: this.board.accounts.map(({ key, ...a }) => this.withLedger(a, key, found, day)), models: this.board.models || null,
       intl: { enabled: config.intlEnabled, web: config.intlWeb !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
       jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
@@ -209,10 +209,11 @@ export class Runner {
       else if (["login", "login-intl"].includes(request.action)) this.login(request.action === "login-intl" ? "intl" : "cn");
       else if (["pause", "resume"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), enabled: request.action === "resume" });
       else if (request.action === "config") {
-        // Settings saved from Magpie's page: times, spread, time zone, proxy. A
+        // Settings saved from Magpie's page: times, spread, time zone, proxy,
+        // the web conversation and model-limit switches. A
         // proxy shown masked and sent back unchanged keeps the saved one.
         const current = this.config(), given = request.config || {};
-        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
+        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(typeof given.intlWeb === "boolean" ? { intlWeb: given.intlWeb } : {}), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
           ...(given.proxy !== undefined && given.proxy !== maskProxy(current.proxy) ? { proxy: given.proxy } : {}) };
         writeJSON(join(this.dir, "config.json"), validateConfig(next));
       }
@@ -260,14 +261,16 @@ export class Runner {
       }
       const config = this.config();
       const account = this.list().find(a => a.id === snapshot.id);
-      const client = new WorkBuddyClient(account, config, { ...this.clientOptions, signal: controller.signal });
+      // Real refusals during this run are remembered for the board.
+      const remembered = (this.state.limits ||= {})[account.id] ||= {};
+      const client = new WorkBuddyClient(account, config, { ...this.clientOptions, signal: controller.signal, limits: remembered });
       const log = message => {
         job.logs.push({ at: new Date().toISOString(), account: account.id, message });
         job.logs = job.logs.slice(-500);
         this.save();
       };
       // WorkBuddy AI's model list picks the web conversation's model.
-      const context = { account, config, state: this.state, log, checkpoint: () => this.save(), signal: controller.signal, ...(account.realm === "intl" ? { models: this.board.models?.intl } : {}) };
+      const context = { account, config, state: this.state, trigger: job.trigger, log, checkpoint: () => this.save(), signal: controller.signal, ...(account.realm === "intl" ? { models: this.board.models?.intl } : {}) };
       for (const action of job.actions) {
         if (controller.signal.aborted) break;
         const result = { account: account.id, action, ok: false };

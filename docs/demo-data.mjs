@@ -178,7 +178,7 @@ writePage(join(process.argv[2], "data.js"), {
   schedules: { daily: ["09:00", "21:00"], tasks: ["09:10", "21:10"], night: ["01:00"], keepalive: ["22:00"] },
   intlSchedules: { daily: ["09:00", "21:00"], web: ["10:30"], keepalive: ["22:00"] },
   intl: { enabled: true, web: true, accounts: 1 },
-  settings: { timezone: "Asia/Shanghai", spread: 0, proxy: "", intlWebModel: "auto" },
+  settings: { timezone: "Asia/Shanghai", spread: 0, proxy: "", intlWebModel: "auto", intlWeb: true },
   accounts, models, today: { timezone: "Asia/Shanghai", slots, next: slots.find(s => s.status === "upcoming") || null },
   jobs: [
     job(["web"], 70, "海外号：国际版网页会话已跑完（hy3，当前免费，11 秒），每日活跃奖励通常次日凌晨到账"),
