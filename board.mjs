@@ -89,8 +89,14 @@ async function balance(client, account) {
 // Each row is one request and what it cost. The newest charged ones are kept
 // as the board's deductions (扣分明细): when, how much, which model, from
 // which client; never the request's text (input / inputTrunc).
-export async function usage(client, timezone, span = 7, now = new Date(), keep = 50) {
+// An enterprise's monthly allowance is shared by the team, and this login's
+// request list holds only its own requests. The daily totals endpoint gives
+// the team's per-day figures, so an enterprise account takes its days and
+// total from it; the request rows only fill in this login's deductions.
+export async function usage(client, timezone, span = 7, now = new Date(), keep = 50, enterprise = false) {
   const dates = Array.from({ length: span }, (_, i) => calendar(new Date(now - (span - 1 - i) * 86400_000), timezone).day);
+  const daily = enterprise ? (await client.request("/billing/meter/get-user-daily-usage", { body: { startTime: `${dates[0]} 00:00:00`, endTime: `${dates.at(-1)} 23:59:59`, pageNum: 1, pageSize: 31 } }))?.data : null;
+  if (enterprise && !Array.isArray(daily)) throw new Error("企业每日用量接口缺少 data 列表");
   const end = `${dates.at(-1)} 23:59:59`, seen = new Set(), byDay = new Map(dates.map(d => [d, { date: d, credit: 0, count: 0 }])), byModel = new Map(), charged = [], used = {};
   let free = 0;
   let start = `${dates[0]} 00:00:00`;
@@ -115,12 +121,43 @@ export async function usage(client, timezone, span = 7, now = new Date(), keep =
     if (page.length < 3000 || !newest) break;
     start = newest;
   }
+  if (daily) { const team = new Map(daily.map(r => [String(r.date).slice(0, 10), Number(r.credit) || 0])); for (const d of byDay.values()) d.credit = team.get(d.date) || 0; }
   const days = [...byDay.values()].map(d => ({ ...d, credit: round(d.credit) }));
   return {
     days, credit: round(days.reduce((s, d) => s + d.credit, 0)), count: days.reduce((s, d) => s + d.count, 0),
     models: [...byModel.values()].sort((a, b) => b.credit - a.credit).slice(0, 4).map(m => ({ ...m, credit: round(m.credit) })),
     charges: charged.length, free, recent: charged.sort((x, y) => y.at - x.at).slice(0, keep), used
   };
+}
+
+// A light read for the minute-by-minute heartbeat: only the charged requests
+// since `since` (a "YYYY-MM-DD HH:MM:SS" in the account's time zone), newest
+// first. The window is a page or two, not the whole seven days, so a poll
+// every minute is cheap. Rows carry the upstream request id (rid) so the
+// caller can merge without double-counting an overlap.
+export async function usageSince(client, timezone, since, now = new Date(), pageSize = 200) {
+  const day = calendar(now, timezone).day, endTime = `${day} 23:59:59`, seen = new Set(), rows = [];
+  // No cursor yet, or one older than this run: start a little before now.
+  const fresh = `${calendar(new Date(now - 3600_000), timezone).day} 00:00:00`;
+  let start = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(since || "")) ? String(since) : fresh;
+  if (start >= endTime) start = fresh;
+  for (let pass = 0; pass < 10; pass++) {
+    const page = (await client.request("/billing/meter/get-user-request-usage", { body: { startTime: start, endTime, pageNum: 1, pageSize } }))?.data;
+    if (!Array.isArray(page)) throw new Error("用量接口缺少 data 列表");
+    let newest = "";
+    for (const r of page) {
+      const time = String(r.requestTime || ""), rid = String(r.requestId || "");
+      if (!rid || seen.has(rid)) continue;
+      seen.add(rid);
+      if (time > newest) newest = time;
+      const credit = Number(r.credit) || 0;
+      if (credit > 0) rows.push({ rid, at: beijing(time), when: time, credit: round(credit), model: String(r.model || "未知"), ...(r.client ? { client: String(r.client) } : {}) });
+    }
+    // A short page means the window is fully read; a full one moves forward.
+    if (page.length < pageSize || !newest || newest <= start) break;
+    start = newest;
+  }
+  return { rows: rows.sort((x, y) => y.at - x.at), end: endTime };
 }
 
 export async function travel(client) {
@@ -214,7 +251,7 @@ export const dropped = e => !e?.status && !e?.limited && /ECONNRESET|ECONNREFUSE
 // are all reads, so a dropped connection is tried once more before it shows.
 export async function collect(account, client, config, memory, pause = ms => new Promise(r => setTimeout(r, ms))) {
   const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {} };
-  const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone) };
+  const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone, 7, new Date(), 50, account.enterprise) };
   if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client) }), streak: () => streak(client), tasks: () => tasks(client, account), growth: () => growth(client) });
   if (!account.enterprise && account.realm === "intl") parts.checkin = () => intlCheckin(client);
   for (const [name, run] of Object.entries(parts)) {

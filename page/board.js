@@ -351,16 +351,57 @@
   // credit, so these keep two decimals. Ten show; the rest open below.
   const fine = n => Number(n).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
   const unfolded = new Set(), grown = new Set();
-  function spending(u, id) {
-    if (!u?.recent) return [];
-    const head = line(el("span", "wb-label", "扣分明细 · 近 7 天"), el("span", "wb-sub", `${num(u.charges)} 次扣分${u.free ? ` · 另有 ${num(u.free)} 次免费` : ""}`));
-    if (!u.recent.length) return [head, el("div", "wb-sub", "近 7 天没有扣分的请求")];
-    const row = e => {
-      const r = el("div", "wb-ledger-row");
-      r.append(el("span", "wb-sub", when(e.at)), el("strong", "wb-spend", `−${fine(e.credit)}`), el("span", "wb-ledger-why", e.model), el("span", "wb-sub", e.client || ""));
+  // The board redraws every few seconds; a wait for a charge to appear would
+  // otherwise re-animate the whole list. Between redraws we remember which
+  // rows each account has already shown, so only a genuinely new charge (one
+  // whose key we haven't seen) plays the entry. An account's first appearance
+  // is recorded silently, so opening it doesn't flash every row at once.
+  const seenCharges = new Map(), firstPaint = new Set();
+  const chargeKey = e => `${e.at}|${e.credit}|${e.model}|${e.client || ""}`;
+  function spending(u, id, account) {
+    if (!u) return [];
+    // An enterprise's allowance is shared; its request list covers this login only.
+    const enterprise = !!account?.enterprise;
+    const head = line(el("span", "wb-label", `扣分明细 · 近 7 天${enterprise ? "（企业团队）" : ""}`), el("span", "wb-sub", enterprise ? `${num(u.credit)} 积分 · 本账号 ${num(u.charges)} 次请求` : `${num(u.charges)} 次扣分${u.free ? ` · 另有 ${num(u.free)} 次免费` : ""}`));
+    if (!u.recent.length && !enterprise) return [head, el("div", "wb-sub", "近 7 天没有扣分的请求")];
+    // Which of this account's rows the page has already shown; none on first sight.
+    const first = !firstPaint.has(id);
+    const sib = first ? null : (seenCharges.get(id) || new Set());
+    if (first) firstPaint.add(id);
+    const settled = new Set(), row = e => {
+      const k = chargeKey(e), isNew = sib && !sib.has(k);
+      settled.add(k);
+      const r = el("div", `wb-ledger-row${isNew ? " wb-charge-new" : ""}`);
+      // The clock, not "3 分钟前": a charge reads the same however old it is.
+      r.append(el("span", "wb-sub wb-clock", clock(e.at)), el("strong", "wb-spend", `−${fine(e.credit)}`), el("span", "wb-ledger-why", e.model), el("span", "wb-sub", e.client || ""));
       r.title = `${e.model}${e.client ? ` · ${e.client}` : ""} · ${fine(e.credit)} 积分`;
       return r;
     };
+    // Remember this redraw's rows for the next one (after `row` has run over
+    // every visible charge below). set after building so a row only counts new once.
+    const remember = () => seenCharges.set(id, settled);
+    // The team's own total can be added up day by day; the request list can't
+    // (it holds this login's requests only), so it opens below as a detail.
+    if (enterprise) {
+      const days = el("div", "wb-ledger");
+      for (const d of [...u.days].reverse().filter(d => d.credit > 0)) {
+        const r = el("div", "wb-ledger-row");
+        r.append(el("span", "wb-sub", d.date), el("strong", "wb-spend", `−${fine(d.credit)}`), el("span", "wb-ledger-why", "企业团队"), el("span", "wb-sub", d.count ? `本账号 ${num(d.count)} 次` : ""));
+        r.title = `${d.date} 企业额度合计 ${fine(d.credit)} 积分${d.count ? `；本账号 ${d.count} 次请求` : ""}`;
+        days.append(r);
+      }
+      const out = [head, days, el("div", "wb-sub", "企业额度由团队共用，按天合计来自企业用量接口；本账号请求只占其中一部分。")];
+      if (u.recent.length) {
+        const mine = el("details", "wb-more"), inner = el("div", "wb-ledger");
+        mine.open = unfolded.has(id);
+        mine.ontoggle = () => { if (mine.open) unfolded.add(id); else unfolded.delete(id); };
+        inner.append(...u.recent.map(row));
+        mine.append(el("summary", "wb-sub", `本账号请求明细（${num(u.charges)} 条）`), inner);
+        out.push(mine);
+      }
+      remember();
+      return out;
+    }
     const list = el("div", "wb-ledger");
     list.append(...u.recent.slice(0, 10).map(row));
     const out = [head, list];
@@ -374,6 +415,7 @@
       out.push(more);
     }
     if (u.charges > u.recent.length) out.push(el("div", "wb-sub", `只保留最近 ${u.recent.length} 条；更早的计入上面的合计`));
+    remember();
     return out;
   }
 
@@ -389,10 +431,10 @@
     }
     if (a.balance && !a.balance.packages.length) left_.append(el("div", "wb-sub", a.enterprise ? (a.balance.size ? "本月企业额度已用完" : "没有企业额度") : "没有可用积分包"));
     const u = a.usage;
-    left_.append(line(el("span", "wb-label", "近 7 天用量"), el("span", "wb-sub", u ? `${num(u.credit)} 积分 · ${u.count} 次` : "")));
+    left_.append(line(el("span", "wb-label", "近 7 天用量"), el("span", "wb-sub", u ? a.enterprise ? `${num(u.credit)} 积分 · 企业团队合计` : `${num(u.credit)} 积分 · ${u.count} 次` : "")));
     if (u) {
       left_.append(bars(u));
-      if (u.models.length) left_.append(el("div", "wb-sub", u.models.map(m => `${m.model} ${num(m.credit)}`).join(" · ")));
+      if (u.models.length) left_.append(el("div", "wb-sub", `${a.enterprise ? "本账号模型：" : ""}${u.models.map(m => `${m.model} ${num(m.credit)}`).join(" · ")}`));
     }
     // A model whose own 24-hour allowance is spent, and when it comes back.
     // A model queued for capacity, where it stood when last asked.
@@ -406,7 +448,7 @@
     left_.append(...history(a.ledger, now));
     grid.append(left_);
     // Deductions sit at the bottom of the right column, beside the credit history.
-    const spent = spending(u, a.id);
+    const spent = spending(u, a.id, a);
     if (a.enterprise) { right.append(...spent); grid.append(right); return grid; }
 
     const g = a.growth, s = a.streak, t = a.tasks, top = g && ["UR", "SSR", "SR"].find(r => g.rarity[r]);

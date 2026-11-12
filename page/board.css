@@ -154,9 +154,19 @@
 
 /* 积分流水: when, how much, what gave it, what's left of it. */
 .wb-ledger{display:flex;flex-direction:column;gap:2px;margin-top:4px}
-.wb-ledger-row{display:grid;grid-template-columns:auto 52px minmax(0,1fr) auto;gap:10px;align-items:baseline;font-variant-numeric:tabular-nums}
-.wb-ledger-row strong{font-weight:600;text-align:right}.wb-gain{color:var(--wb-accent)}
+.wb-ledger-row{display:grid;grid-template-columns:auto minmax(52px,max-content) minmax(0,1fr) auto;gap:10px;align-items:baseline;font-variant-numeric:tabular-nums}
+.wb-ledger-row strong{font-weight:600;text-align:right;white-space:nowrap}.wb-gain{color:var(--wb-accent)}
 .wb-ledger-why{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* The deduction's time: a clock, kept tabular so the column doesn't wobble. */
+.wb-clock{white-space:nowrap;font-variant-numeric:tabular-nums}
+/* A charge that arrived since the last redraw slides in and marks itself with
+   a thin top rule that fades. Rows redraw on every poll, so only a genuinely
+   new row carries .wb-charge-new; an old one is redrawn unmarked. */
+.wb-ledger-row{position:relative}
+.wb-ledger-row.wb-charge-new{animation:wb-charge-in 240ms cubic-bezier(.2,.8,.2,1)}
+@keyframes wb-charge-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.wb-ledger-row.wb-charge-new::before{content:"";position:absolute;inset:0 0 auto;height:1.5px;background:var(--wb-accent);opacity:.9;animation:wb-charge-line 1.2s ease-out forwards;pointer-events:none}
+@keyframes wb-charge-line{to{opacity:0}}
 /* 扣分明细: same rows, a charge in place of a grant; the rest behind a fold. */
 .wb-spend{color:inherit}
 .wb-more>summary{cursor:pointer;margin-top:4px;list-style:none}
@@ -211,7 +221,7 @@
   .wb-kpis.wb-kpis-3{grid-template-columns:1fr}
   .wb-mrow{grid-template-columns:minmax(0,1fr) 92px}.wb-mrow .wb-mctx{display:none}.wb-mrow>.wb-copy{grid-column:1/-1;grid-row:2}.wb-mrow>.wb-mreason{grid-column:1/-1;grid-row:3;flex-direction:row;gap:8px}.wb-mhead>:nth-child(2),.wb-mhead>.wb-mreason{display:none}
 }
-@media (prefers-reduced-motion:reduce){.wb-detail,.wb-chevron,.wb-row,.wb-seg-btn,.wb-ringcard,.wb-copy{transition:none}.wb-enter{animation:none}.wb-ringcard:active{transform:none}}
+@media (prefers-reduced-motion:reduce){.wb-detail,.wb-chevron,.wb-row,.wb-seg-btn,.wb-ringcard,.wb-copy{transition:none}.wb-enter{animation:none}.wb-ringcard:active{transform:none}.wb-ledger-row.wb-charge-new{animation:none}.wb-ledger-row.wb-charge-new::before{animation:none;opacity:.35}}
 
 /* A menu in place of a native select: the field looks like the inputs beside it, the list like the page's menus. */
 .wb-pick{position:relative;display:block}

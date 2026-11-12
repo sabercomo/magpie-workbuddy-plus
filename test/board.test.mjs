@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaults, initialize, readJSON, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
-import { summarize, usage, collect, taskBoard, pageBuild, allowance, dropped } from "../board.mjs";
+import { summarize, usage, usageSince, collect, taskBoard, pageBuild, allowance, dropped } from "../board.mjs";
 import { note } from "../limits.mjs";
 import { Runner } from "../runner.mjs";
 
@@ -72,6 +72,46 @@ test("usage keeps the newest charged requests as deductions, free ones only coun
   assert.ok(!JSON.stringify(got).includes("secret"));
 });
 
+// The heartbeat's light read: a window of requests, charged rows only, each
+// carrying its request id so a merge over an overlapping window never doubles.
+test("usageSince reads a window of charged requests with ids, and pages a full page forward", async () => {
+  const calls = [];
+  const { client } = clientFor((url, seen) => {
+    calls.push(seen.body);
+    // First page is full (2 = pageSize) and ends at 10:00; second page is short.
+    return calls.length === 1
+      ? ok({ data: [
+        { requestId: "a", model: "glm", credit: 0.5, client: "WorkBuddy", requestTime: "2026-10-29 09:00:00" },
+        { requestId: "b", model: "glm", credit: 0, requestTime: "2026-10-29 10:00:00" },
+        { requestId: "c", model: "kimi", credit: 1.5, requestTime: "2026-10-29 10:00:00" }
+      ].slice(0, 2) })
+      : ok({ data: [{ requestId: "c", model: "kimi", credit: 1.5, requestTime: "2026-10-29 10:00:00" }] });
+  });
+  const got = await usageSince(client, "Asia/Shanghai", "2026-10-29 08:55:00", new Date("2026-10-29T04:00:00Z"), 2);
+  // Charged rows only, newest first, ids kept; the free row at 10:00 is dropped.
+  assert.deepEqual(got.rows.map(r => [r.rid, r.credit, r.model]), [["c", 1.5, "kimi"], ["a", 0.5, "glm"]]);
+  assert.equal(got.end, "2026-10-29 23:59:59");
+  // First call starts at the given cursor; a full page moves the second onward.
+  assert.equal(calls[0].startTime, "2026-10-29 08:55:00");
+  assert.ok(calls.length >= 2 && calls[1].startTime === "2026-10-29 10:00:00");
+});
+
+// An enterprise's allowance is shared by the team; its request list covers
+// this login only, so the day's figures come from the daily usage endpoint.
+test("an enterprise account takes its daily and total usage from the team's daily endpoint", async () => {
+  const rows = [{ requestId: "a", model: "kimi-k3.1-pro", credit: 2, requestTime: "2026-10-29 09:00:00" }];
+  const { client, seen } = clientFor(url => url.pathname.endsWith("/get-user-daily-usage")
+    ? ok({ total: 2, data: [{ date: "2026-10-28", credit: 1000 }, { date: "2026-10-29", credit: 40.5 }] })
+    : ok({ total: 1, data: rows }));
+  const got = await usage(client, "Asia/Shanghai", 7, new Date("2026-10-29T04:00:00Z"), 50, true);
+  const daily = seen.find(r => r.url.endsWith("/get-user-daily-usage"));
+  assert.deepEqual(daily.body, { startTime: "2026-10-23 00:00:00", endTime: "2026-10-29 23:59:59", pageNum: 1, pageSize: 31 });
+  assert.deepEqual(got.days.slice(-2).map(d => [d.date, d.credit]), [["2026-10-28", 1000], ["2026-10-29", 40.5]]);
+  assert.equal(got.credit, 1040.5);
+  // The deductions stay this login's own requests.
+  assert.deepEqual([got.charges, got.recent.length, got.models[0].model], [1, 1, "kimi-k3.1-pro"]);
+});
+
 // A proxy resetting a connection now and then shouldn't show as a failed read.
 test("a read whose connection drops is tried once more; WorkBuddy's own refusals are not", async () => {
   const reset = () => Object.assign(new Error("ECONNRESET: The socket connection was closed unexpectedly."), { code: "ECONNRESET" });
@@ -80,7 +120,7 @@ test("a read whose connection drops is tried once more; WorkBuddy's own refusals
   const waits = [];
   const { account, client } = clientFor(url => {
     if (url.pathname === "/billing/meter/get-enterprise-user-usage") { if (resets-- > 0) throw reset(); return ok({ credit: 1997, limitNum: 2000, cycleStartTime: "2026-11-01 00:00:00", cycleResetTime: "2026-12-01 00:00:00" }); }
-    if (url.pathname === "/billing/meter/get-user-request-usage") { usageCalls++; return Response.json({ code: 403, msg: "denied" }, { status: 403 }); }
+    if (url.pathname === "/billing/meter/get-user-daily-usage") { usageCalls++; return Response.json({ code: 403, msg: "denied" }, { status: 403 }); }
     throw reset();
   });
   const row = await collect({ ...account, enterprise: true }, client, defaults, undefined, async ms => { waits.push(ms); });
@@ -186,6 +226,47 @@ test("page snapshot carries no credentials and each page request runs once", asy
   assert.deepEqual(runner.boardView().intlSchedules, intlSchedules);
   assert.match(runner.pageRequest({ id: "c5", action: "config", at: Date.now(), config: { intlSchedules: { ...intlSchedules, web: ["7:5"] } } }).error, /HH:MM/);
   assert.match(runner.pageRequest({ id: "c6", action: "config", at: Date.now(), config: { intlSchedules: { daily: [] } } }).error, /类别无效/);
+});
+
+// The heartbeat folds only the new charged requests onto the board's recent
+// list, and a repeated window (overlap) never doubles a row it already has.
+test("the heartbeat merges new deductions by request id and skips repeats", async t => {
+  const dir = mkdtempSync(join(tmpdir(), "wb-plus-beat-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  initialize(dir); mkdirSync(join(dir, "magpie"));
+  writeJSON(join(dir, "magpie", "plugin-auth.json"), { "workbuddy#u1": { type: "oauth", uid: "u1", accountId: "fixture", access: "private-access", refresh: "private-refresh", expires: Date.now() + 86400_000 } });
+  writeJSON(join(dir, "config.json"), { ...defaults, magpieDir: join(dir, "magpie") });
+  // The first refresh seeds one deduction; the beat then adds a newer one and
+  // replays the older one to prove the merge dedups it.
+  let served = [];
+  const now = () => new Date().toISOString().slice(0, 10);
+  const day = now();
+  // Times must sit inside the heartbeat's fresh window (last few minutes), or
+  // its since-cursor would page past them.
+  const hh = d => String(d.getHours()).padStart(2, "0"), mm = d => String(d.getMinutes()).padStart(2, "0"), ss = d => String(d.getSeconds()).padStart(2, "0");
+  const at = minsAgo => { const d = new Date(Date.now() - minsAgo * 60_000); return `${hh(d)}:${mm(d)}:${ss(d)}`; };
+  const row = (id, credit, time) => ({ requestId: id, model: "glm", credit, client: "WorkBuddy", requestTime: `${day} ${time}` });
+  served = [row("r1", 1, at(4))];
+  const fetcher = async url => {
+    const path = new URL(url).pathname;
+    if (path.endsWith("/get-user-request-usage")) return ok({ data: served });
+    if (path.endsWith("/get-user-resource")) return ok({ Accounts: [] });
+    if (path.endsWith("/buddy/info")) return ok({ buddy: {} });
+    if (path.endsWith("/streak")) return ok({ streak: { days: 1 } });
+    return ok({});
+  };
+  const runner = new Runner(dir, { gap: 0, fetcher }, { pageFile: join(dir, "page", "data.js") });
+  await runner.refreshBoard();
+  const acct = () => runner.board.accounts.find(a => !a.enterprise);
+  assert.equal(acct().usage.recent.length, 1);
+  // A new charge arrives; the beat picks up both rows (overlap) but adds only the new one.
+  served = [row("r2", 2, at(1)), row("r1", 1, at(4))];
+  await runner.heartbeat();
+  const recent = acct().usage.recent;
+  assert.deepEqual(recent.map(r => r.credit), [2, 1], "newest first, the old row not doubled");
+  assert.ok(!recent.some(r => "rid" in r), "the page never sees internal ids");
+  await runner.heartbeat(); // identical window: nothing changes
+  assert.deepEqual(acct().usage.recent.map(r => r.credit), [2, 1]);
 });
 
 test("task board puts claimable first, then what the scheduler does; what nothing here can do is left out", () => {

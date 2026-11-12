@@ -118,12 +118,17 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const beat = () => {
       runner.tick();
       // A wake from sleep shows a stale board until this catches up.
-      runner.refreshBoard(10 * 60_000).catch(e => console.error(e));
+      // Credits move as one works, so the board is read again every few minutes.
+      runner.refreshBoard(3 * 60_000).catch(e => console.error(e));
     };
     interval = setInterval(beat, 30_000);
     beat();
+    // Deductions arrive within about a minute: a light read pulls only the
+    // newest requests and folds them onto the board, between the full refreshes.
+    const poll = setInterval(() => runner.heartbeat().catch(e => console.error(e)), 60_000);
+    interval.heartbeat = poll;
   });
   server.listen(port, "127.0.0.1");
   // A waiting process has nothing in flight; a serving one lets its calls finish.
-  process.on("SIGTERM", () => { if (!interval) process.exit(0); clearInterval(interval); server.close(); });
+  process.on("SIGTERM", () => { if (!interval) process.exit(0); clearInterval(interval); if (interval.heartbeat) clearInterval(interval.heartbeat); server.close(); });
 }

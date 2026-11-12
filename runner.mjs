@@ -7,7 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { accounts, calendar, checkins, initialize, intlAccount, intlSchedules, maskProxy, plan, publicAccount, readJSON, settle, validateConfig, version, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
-import { checkin, collect, writePage } from "./board.mjs";
+import { checkin, collect, usageSince, writePage } from "./board.mjs";
 import { ledger } from "./history.mjs";
 import { chinaModels, enterpriseModels, intlModels } from "./models.mjs";
 
@@ -188,6 +188,68 @@ export class Runner {
     })().finally(() => { this.boarding = null; this.publish(); });
     this.publish();
     return this.boarding;
+  }
+  // The minute-by-minute read that keeps deductions fresh between the heavier
+  // full refreshes. It pulls only the requests since each account's cursor,
+  // folds them into state.usage, and rewrites the board's recent list in place
+  // — no re-reading balances, travel, tasks or the seven-day paging. A 429 or
+  // a refused read parks that account for a few minutes instead of retrying.
+  usage_() { return (this.state.usage ||= {}); }
+  async heartbeat() {
+    if (this.boarding) return this.board; // a full refresh is already reading; skip this beat
+    const config = this.config(), board = this.board;
+    if (!board?.accounts?.length) return board;
+    // The board carries no credentials, so the reads run over the real logins;
+    // each is matched back to its board row by id to fold the result on.
+    let logins;
+    try { logins = this.list(); } catch { return board; }
+    const enabled = new Set(logins.filter(a => a.enabled !== false).map(a => a.id));
+    const usage = this.usage_(), skipped = this.state.usageSkip ||= {};
+    const keyOf = a => String(a.key || a.id);
+    const pad5 = t => { const c = calendar(new Date(t - 5 * 60_000), config.timezone); return `${c.day} ${c.time}`; };
+    const day7 = new Date(Date.now() - 6 * 86400_000).setHours(0, 0, 0, 0);
+    const next = await Promise.all(logins.map(async login => {
+      const k = keyOf(login);
+      if (!enabled.has(login.id) || Date.now() < (skipped[k] || 0)) return;
+      const rec = usage[k] ||= { rows: [], lastAt: "", synced: 0 };
+      // A cursor older than an hour, or none at all, starts a fresh window.
+      const since = rec.lastAt && Date.now() - rec.synced < 3600_000 ? rec.lastAt : pad5(Date.now());
+      try {
+        const { rows } = await usageSince(new WorkBuddyClient(login, config, { gap: 300, ...this.clientOptions }), config.timezone, since);
+        if (!rows.length) { rec.synced = Date.now(); delete skipped[k]; return; }
+        const known = new Set(rec.rows.map(r => r.rid));
+        const fresh = rows.filter(r => !known.has(r.rid));
+        if (fresh.length) {
+          rec.rows = [...fresh.map(({ rid, at, credit, model, client }) => ({ rid, at, credit, ...(model ? { model } : {}), ...(client ? { client } : {}) })), ...rec.rows];
+          rec.rows.sort((x, y) => y.at - x.at);
+          rec.rows = rec.rows.filter(r => r.at >= day7).slice(0, 500);
+          rec.lastAt = rows[0].when || rec.lastAt;
+        }
+        rec.synced = Date.now();
+        delete skipped[k];
+      } catch (e) {
+        // 429 (or any refusal) parks the account; one stuck login shouldn't
+        // keep hammering upstream or drag the rest of the beat down.
+        if (/\b429\b|too many|频繁|限流/i.test(String(e?.message || e))) skipped[k] = Date.now() + 5 * 60_000;
+        else skipped[k] = Date.now() + 60_000;
+      }
+    }));
+    await Promise.all(next);
+    // Fold the merged rows back onto the board's accounts (recent list only).
+    let touched = false;
+    for (const a of board.accounts) {
+      const rec = usage[keyOf(a)];
+      if (!rec || !rec.rows.length || !a.usage) continue;
+      const keep = (a.usage.recent || []).length || 50;
+      const merged = rec.rows.slice(0, Math.max(keep, 10)).map(({ rid, when, ...rest }) => rest);
+      // Personal accounts can count their charged requests from the rows.
+      if (!a.enterprise) a.usage = { ...a.usage, recent: merged, charges: Math.max(a.usage.charges || 0, rec.rows.length), free: a.usage.free };
+      else a.usage = { ...a.usage, recent: merged };
+      a.usage.synced = new Date(rec.synced).toISOString();
+      touched = true;
+    }
+    if (touched) { this.board = { ...board, at: board.at }; this.publish(); }
+    return this.board;
   }
   // An account as the board shows it: its check-in (Magpie's for China, its
   // own for WorkBuddy AI) and its credit history, the grants named from this
