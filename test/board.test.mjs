@@ -40,6 +40,18 @@ test("packages merge by name, drop ended cycles and treat placeholder expiry as 
   ]);
 });
 
+test("a slice package counts its cycle's remaining credits, not the whole slice", () => {
+  const now = Date.parse("2026-11-14T00:00:00+08:00");
+  const got = summarize([
+    { PackageName: "体验版", CapacityType: 4, CreateTime: now - 3600_000, CycleStartTime: "2026-11-13 23:00:00", CycleEndTime: "2026-11-30 23:59:59", CapacityRemain: 500, CapacitySize: 500, CycleCapacityRemain: 266, CycleCapacityRemainPrecise: "266.8100011", CycleCapacitySize: 500, CycleCapacitySizePrecise: "500" }
+  ], now);
+  assert.equal(got.balance, 266.81);
+  assert.equal(got.size, 500);
+  assert.equal(got.packages[0].balance, 266.81);
+  assert.equal(got.packages[0].lots[0].balance, 266.81);
+  assert.deepEqual(got.grants.map(g => [g.credit, g.left]), [[500, 266.81]]);
+});
+
 test("usage pages past the 3000-row cap, deduplicates and keeps no prompt text", async () => {
   const row = (i, day) => ({ requestId: `r${i}`, model: i % 2 ? "glm" : "kimi", credit: 1, requestTime: `${day} 10:${String(i % 60).padStart(2, "0")}:00`, input: "private prompt" });
   const first = Array.from({ length: 3000 }, (_, i) => row(i, "2026-10-28"));

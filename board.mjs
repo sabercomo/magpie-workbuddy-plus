@@ -28,14 +28,16 @@ export function summarize(rows, now = Date.now()) {
   for (const a of rows) {
     const end = beijing(a.CycleEndTime);
     const made = Number(a.CreateTime) || beijing(a.CycleStartTime);
+    // A slice package (CapacityType 4) keeps the whole slice in CapacityRemain;
+    // its cycle fields are what WorkBuddy's own usage page counts.
+    const remain = Number(a.CycleCapacityRemainPrecise ?? a.CycleCapacityRemain ?? a.CapacityRemain) || 0;
     // A grant may be written minutes after it was given (a draw's prize): its
     // cycle's start is the moment itself.
     const start = beijing(a.CycleStartTime);
-    if (made > now - 30 * 86400_000) grants.push({ at: made, ...(start && start !== made ? { start } : {}), credit: round(Number(a.CapacitySize) || 0), name: a.PackageName || a.ProductName || "积分包", left: round(Number(a.CapacityRemain) || 0), ...(end ? { ends: end } : {}) });
+    if (made > now - 30 * 86400_000) grants.push({ at: made, ...(start && start !== made ? { start } : {}), credit: round(Number(a.CapacitySize) || 0), name: a.PackageName || a.ProductName || "积分包", left: round(remain), ...(end ? { ends: end } : {}) });
     if (end && end <= now) continue;
     const name = a.PackageName || a.ProductName || "积分包";
     const g = groups.get(name) || { name, balance: 0, size: 0, expires: 0, lots: new Map() };
-    const remain = Number(a.CapacityRemain) || 0;
     g.balance += remain;
     g.size += Number(a.CapacitySize) || 0;
     // A spent row's end date says nothing about when the remaining credit lapses.
