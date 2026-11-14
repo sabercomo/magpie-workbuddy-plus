@@ -288,6 +288,24 @@ test("a WorkBuddy AI account runs on its own site and claims its check-in only w
   assert.ok(!p.seen.some(s => s.path.includes("/tasks/accept")), "WorkBuddy AI's tasks are not simulated");
 });
 
+test("a disabled lottery stops drawing without failing WorkBuddy AI's streak benefits", async t => {
+  let message = "lottery disabled";
+  const p = fixture(t, path => {
+    if (path === "/v2/billing/meter/checkin-activity-status") return ok({ active: false });
+    if (path === "/activity/growth/heatmap") return ok({ cells: [] });
+    if (path === "/activity/growth/streak") return ok({ streak: { days: 9 } });
+    if (path === "/activity/growth/lottery/summary") return ok({ chances: 2 });
+    if (path === "/activity/growth/lottery/draw") return Response.json({ msg: message }, { status: 400 });
+    throw new Error("unexpected endpoint " + path);
+  }, "intl");
+  assert.deepEqual(await p.run("bonus"), { days: 9, draws: 0 });
+  assert.equal(p.seen.filter(r => r.path.endsWith("/lottery/draw")).length, 1);
+  assert.ok(p.logs.includes("成长抽奖未开放，已跳过"));
+
+  message = "invalid client token";
+  await assert.rejects(p.run("bonus"), /HTTP 400，invalid client token/);
+});
+
 // A WorkBuddy AI login is renewed like China's, on its own site, so the
 // keep-alive slot keeps it alive though nothing chats on it.
 test("keepalive renews a WorkBuddy AI login on www.workbuddy.ai", async t => {

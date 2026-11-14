@@ -264,9 +264,18 @@ export async function perform(action, client, context) {
       }
     }
     const lottery = await client.request("/activity/growth/lottery/summary");
-    for (let i = 0; i < lottery.chances; i++) {
-      const result = await client.request("/activity/growth/lottery/draw", { body: { client_token: randomUUID() } });
-      log(`成长抽奖 ${i + 1}/${lottery.chances}：${JSON.stringify(result)}`);
+    const drawPath = "/activity/growth/lottery/draw";
+    let draws = 0;
+    for (; draws < lottery.chances; draws++) {
+      let result;
+      try {
+        result = await client.request(drawPath, { body: { client_token: randomUUID() } });
+      } catch (e) {
+        if (!(e instanceof UpstreamError) || e.message !== `${drawPath}: HTTP 400，lottery disabled`) throw e;
+        log("成长抽奖未开放，已跳过");
+        break;
+      }
+      log(`成长抽奖 ${draws + 1}/${lottery.chances}：${JSON.stringify(result)}`);
     }
     // The starter gift and compensation are China's billing; WorkBuddy AI has neither.
     for (const [path, title] of intl ? [] : [["claim-gift", "新手礼包"], ["claim-compensation", "活动补偿"]]) {
@@ -284,7 +293,7 @@ export async function perform(action, client, context) {
       checkpoint();
     }
     log("连登兑换、补签与抽奖检查完毕");
-    return { days: streak.streak?.days, draws: lottery.chances };
+    return { days: streak.streak?.days, draws };
   };
   if (action === "inspect") return {
     tasks: await tasks(), ...(intl ? {} : { travel: await client.request("/activity/growth/buddy/travel/status") }),
