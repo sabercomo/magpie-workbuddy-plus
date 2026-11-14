@@ -46,6 +46,38 @@ export function forget(memory, model) {
   if (memory && model) delete memory[model];
 }
 
+// routingRefusals reads one of Magpie's routing trace lines: a 429 quota rest
+// names the account and model the official plugin was refused for, and a
+// later 200 from that account clears it. A rate/cooldown rest is not a model
+// allowance and is left alone.
+export function routingRefusals(event) {
+  const provider = event?.provider;
+  if (provider !== "workbuddy" && provider !== "workbuddy-ai") return [];
+  const named = new Map();
+  for (const o of [...(Array.isArray(event?.order) ? event.order : []), ...(Array.isArray(event?.left) ? event.left : [])]) {
+    if (typeof o?.id === "string" && typeof o?.who === "string") named.set(o.id, o.who);
+  }
+  const out = [];
+  for (const t of Array.isArray(event?.tries) ? event.tries : []) {
+    if (!t || (t.provider && t.provider !== provider)) continue;
+    const model = typeof t.model === "string" ? t.model : "";
+    if (!model) continue;
+    const rest = t.rest && typeof t.rest === "object" ? t.rest : null;
+    const key = typeof rest?.key === "string" ? rest.key : "";
+    const at = key.indexOf("@"), slash = key.lastIndexOf("/");
+    const keyed = at >= 0 && slash > at ? key.slice(at + 1, slash) : "";
+    const account = named.get(t.id) || keyed;
+    if (!account) continue;
+    const time = Date.parse(t.start ?? event?.time) || 0;
+    if (Number(t.status) === 200) { out.push({ provider, account, model, ok: true, at: time }); continue; }
+    if (Number(t.status) !== 429 || rest?.why !== "quota") continue;
+    const until = Date.parse(typeof rest.until === "string" ? rest.until : "");
+    if (!(until > 0)) continue;
+    out.push({ provider, account, model, until, at: time });
+  }
+  return out;
+}
+
 // memory: { [model]: { checked, resets?, queued? } }, filled by note() from
 // real refusals and kept between board refreshes. Returns the models spent
 // right now, { model, resets }, then those found queued, { model, queued:

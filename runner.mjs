@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
+import { gunzipSync } from "node:zlib";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { accounts, calendar, checkins, initialize, intlAccount, intlSchedules, maskProxy, plan, publicAccount, readJSON, settle, validateConfig, version, writeJSON } from "./storage.mjs";
@@ -9,6 +10,7 @@ import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
 import { checkin, collect, usageSince, writePage } from "./board.mjs";
 import { ledger } from "./history.mjs";
+import { routingRefusals } from "./limits.mjs";
 import { chinaModels, enterpriseModels, intlModels } from "./models.mjs";
 
 // A LaunchAgent's PATH is only the system's, so the usual install places
@@ -21,6 +23,39 @@ export function magpieBin(env = process.env) {
     ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, "Programs", "Magpie")] : [])];
   const places = [env.WORKBUDDY_PLUS_MAGPIE_BIN, ...dirs.flatMap(d => names.map(name => join(d, name)))];
   return places.find(f => f && existsSync(f)) || "";
+}
+
+// Magpie's routing trace records the official plugin's quota refusals. Read
+// today's and yesterday's traces so a model it was refused for shows here too;
+// a later success from the same account clears that model.
+export function routingLimits(config, list, now = Date.now()) {
+  const byWho = new Map(list.map(a => [`${a.realm === "intl" ? "workbuddy-ai" : "workbuddy"}@${a.name.toLowerCase()}`, a.id]));
+  const dir = join(config.magpieDir, "routing");
+  let names;
+  try { names = readdirSync(dir); } catch { return {}; }
+  const days = [calendar(new Date(now - 86400_000), config.timezone).day, calendar(new Date(now), config.timezone).day];
+  const events = [];
+  for (const name of names) {
+    if (!days.some(d => name.startsWith(d) && /^(?:\.\d+)?\.jsonl(?:\.gz)?$/.test(name.slice(d.length)))) continue;
+    try {
+      const body = readFileSync(join(dir, name));
+      const text = name.endsWith(".gz") ? gunzipSync(body).toString("utf8") : body.toString("utf8");
+      for (const line of text.split("\n")) {
+        if (!line.includes('"tries"')) continue;
+        try { const event = JSON.parse(line); if (Array.isArray(event?.tries)) events.push(event); } catch {}
+      }
+    } catch {}
+  }
+  events.sort((a, b) => (Date.parse(a.time) || 0) - (Date.parse(b.time) || 0));
+  const found = {};
+  for (const event of events) for (const r of routingRefusals(event)) {
+    const id = byWho.get(`${r.provider}@${r.account.toLowerCase()}`);
+    if (!id) continue;
+    const mine = found[id] ||= {};
+    if (r.ok) { mine[r.model] = { clear: true, at: r.at || 0 }; continue; }
+    if (r.until > now) mine[r.model] = { checked: r.at || now, resets: r.until };
+  }
+  return found;
 }
 
 // A slot runs at a moment within ±spread minutes of its set time, different
@@ -167,6 +202,15 @@ export class Runner {
       // What each account's model limits were found to be, kept across refreshes and restarts.
       const memory = this.state.limits ||= {};
       for (const k of Object.keys(memory)) if (!list.some(a => a.id === k)) delete memory[k];
+      const fromRouting = routingLimits(config, list);
+      for (const [id, found] of Object.entries(fromRouting)) {
+        const mine = memory[id] ||= {};
+        for (const [model, entry] of Object.entries(found)) {
+          if (entry.clear) {
+            if (mine[model] && entry.at >= (mine[model].checked || 0)) delete mine[model];
+          } else if (!mine[model] || entry.checked >= (mine[model].checked || 0)) mine[model] = entry;
+        }
+      }
       for (const account of list) rows.push({ ...await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions }), config, memory[account.id] ||= {}), key: account.key });
       this.save();
       // One personal login reads China's list; an enterprise login reads its enterprise's own.

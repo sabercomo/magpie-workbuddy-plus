@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { WorkBuddyClient, RateLimited } from "../client.mjs";
-import { limits, note, forget, parseReset } from "../limits.mjs";
+import { limits, note, forget, parseReset, routingRefusals } from "../limits.mjs";
+import { routingLimits } from "../runner.mjs";
 
 const HOUR = 3600_000, DAY = 24 * HOUR;
 
@@ -53,4 +58,45 @@ test("a real chat refused with 6004 is recorded by the client; a later success c
   reply = () => Response.json({ code: 0, data: { ok: true } });
   assert.deepEqual(await client.request("/v2/chat/completions", { body: { model: "glm-5.2" } }), { ok: true });
   assert.deepEqual(memory, {});
+});
+
+test("Magpie's routing trace names the account and model a quota refusal rests", () => {
+  const event = {
+    time: "2026-11-14T00:39:32.098532+08:00",
+    provider: "workbuddy",
+    order: [{ id: "workbuddy", who: "Mercury" }, { id: "workbuddy@💤", who: "💤" }],
+    tries: [
+      { id: "workbuddy", model: "kimi-k3-1", status: 429, start: "2026-11-14T00:39:32.107661+08:00", rest: { why: "quota", by: "resets", until: "2026-11-14T05:16:39+08:00", key: "workbuddy@mercury/kimi-k3-1", model: "kimi-k3-1" } },
+      { id: "workbuddy@💤", model: "kimi-k3-1", status: 200, start: "2026-11-14T00:39:32.683859+08:00", served: "kimi-k3-1" },
+      { id: "workbuddy", model: "glm-5.3", status: 429, start: "2026-11-14T00:39:33+08:00", rest: { why: "rate", by: "cooldown", until: "2026-11-14T00:44:33+08:00", key: "workbuddy@mercury/glm-5.3" } }
+    ]
+  };
+  assert.deepEqual(routingRefusals(event), [
+    { provider: "workbuddy", account: "Mercury", model: "kimi-k3-1", until: Date.parse("2026-11-14T05:16:39+08:00"), at: Date.parse("2026-11-14T00:39:32.107661+08:00") },
+    { provider: "workbuddy", account: "💤", model: "kimi-k3-1", ok: true, at: Date.parse("2026-11-14T00:39:32.683859+08:00") }
+  ]);
+});
+
+test("routing limits are read per account from today's and yesterday's traces", () => {
+  const dir = mkdtempSync(join(tmpdir(), "wb-routing-"));
+  const routing = join(dir, "routing");
+  mkdirSync(routing);
+  const event = {
+    time: "2026-11-14T00:39:32.098532+08:00",
+    provider: "workbuddy",
+    order: [{ id: "workbuddy", who: "Mercury" }, { id: "workbuddy@💤", who: "💤" }],
+    tries: [
+      { id: "workbuddy", model: "kimi-k3-1", status: 429, start: "2026-11-14T00:39:32.107661+08:00", rest: { why: "quota", until: "2026-11-14T05:16:39+08:00", key: "workbuddy@mercury/kimi-k3-1" } },
+      { id: "workbuddy@💤", model: "kimi-k3-1", status: 429, start: "2026-11-14T00:57:41.819008+08:00", rest: { why: "quota", until: "2026-11-14T05:07:04+08:00", key: "workbuddy@💤/kimi-k3-1" } }
+    ]
+  };
+  writeFileSync(join(routing, "2026-11-14.jsonl"), `${JSON.stringify(event)}\n`);
+  writeFileSync(join(routing, "2026-11-13.jsonl.gz"), gzipSync(`${JSON.stringify({ ...event, time: "2026-11-13T23:00:00+08:00", tries: [] })}\n`));
+  const list = [{ id: "cn:m", name: "Mercury", realm: "cn" }, { id: "cn:d", name: "💤", realm: "cn" }];
+  const got = routingLimits({ magpieDir: dir, timezone: "Asia/Shanghai" }, list, Date.parse("2026-11-14T01:00:00+08:00"));
+  assert.deepEqual(got, {
+    "cn:m": { "kimi-k3-1": { checked: Date.parse("2026-11-14T00:39:32.107661+08:00"), resets: Date.parse("2026-11-14T05:16:39+08:00") } },
+    "cn:d": { "kimi-k3-1": { checked: Date.parse("2026-11-14T00:57:41.819008+08:00"), resets: Date.parse("2026-11-14T05:07:04+08:00") } }
+  });
+  rmSync(dir, { recursive: true, force: true });
 });
