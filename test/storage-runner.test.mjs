@@ -7,7 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { defaults, accounts, calendar, initialize, intlSchedules, plan, readJSON, settle, validateConfig, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
 import { EventEmitter } from "node:events";
-import { Runner, magpieBin, shifted } from "../runner.mjs";
+import { Runner, jobOutcome, magpieBin, shifted } from "../runner.mjs";
 import { createService, answering } from "../server.mjs";
 import { portOf, handoff } from "../index.mjs";
 import { newer, version } from "../storage.mjs";
@@ -238,6 +238,35 @@ test("the board lists today's slots with how each went and which is next", async
   assert.deepEqual([today.next.at, today.next.kind], ["21:00", "keepalive"]);
   config.enabled = false; writeJSON(join(p.dir, "config.json"), config);
   assert.equal(runner.today(runner.config(), new Date("2026-10-29T02:00:00Z")).next, null);
+});
+
+test("the page lists every job from today with each log line", t => {
+  const p = fixture(t), runner = new Runner(p.dir), now = new Date().toISOString();
+  runner.state.jobs = [
+    ...Array.from({ length: 7 }, (_, i) => ({
+      id: `today-${i}`, actions: ["tasks"], trigger: "page", status: "succeeded", created: now, finished: now,
+      logs: [{ at: now, account: "cn:u1", message: `今天第 ${i + 1} 条` }], results: []
+    })),
+    { id: "yesterday", actions: ["tasks"], trigger: "page", status: "succeeded", created: new Date(Date.now() - 86400_000).toISOString(), finished: new Date(Date.now() - 86400_000).toISOString(), logs: [], results: [] }
+  ];
+  const jobs = runner.boardView().jobs;
+  assert.equal(jobs.length, 7, "more than the old six-row limit");
+  assert.ok(jobs.every(job => job.id !== "yesterday"));
+  assert.deepEqual(jobs[0].logs, [{ at: now, account: "cn:u1", message: "今天第 1 条" }]);
+});
+
+test("a job with completed work and failures is partial and reports both counts", () => {
+  const outcome = jobOutcome([
+    { ok: true },
+    { ok: false },
+    { ok: false, partial: true, counts: { succeeded: 2, failed: 2, limited: 0, total: 4 } }
+  ]);
+  assert.deepEqual(outcome, {
+    status: "partial",
+    counts: { succeeded: 3, failed: 3, limited: 0, total: 6 }
+  });
+  assert.equal(jobOutcome([{ ok: false, limited: true }, { ok: false, limited: true }]).status, "deferred");
+  assert.equal(jobOutcome([{ ok: false }]).status, "failed");
 });
 
 test("add account runs Magpie's own browser sign-in once and reports how it went", async t => {

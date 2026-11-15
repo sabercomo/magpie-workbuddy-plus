@@ -3,7 +3,7 @@ const names = { all:"全部执行",checkin:"签到（旧版记录）",activity:"
 const scheduleNames = { daily:"活跃 / 旅行 / 连登福利",tasks:"成长任务",night:"夜猫子任务",keepalive:"登录续期检查" };
 const intlNames = { daily:"连登活跃 / 签到 / 连登福利",web:"网页会话（每日活跃奖励）",keepalive:"登录续期检查" };
 
-const statuses = { running:"执行中",queued:"排队中",succeeded:"已完成",failed:"有失败项目",deferred:"稍后重试",interrupted:"重启中断",cancelled:"已停止" };
+const statuses = { running:"执行中",queued:"排队中",succeeded:"已完成",partial:"部分失败",failed:"失败",deferred:"稍后重试",interrupted:"重启中断",cancelled:"已停止" };
 let current, filled = false, modelField = null;
 const selected = new Set(), opened = new Set();
 function element(tag, text, className) { const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node; }
@@ -31,7 +31,8 @@ async function refresh() {
   for(const job of current.jobs){
     const details=element("details",undefined,"job");details.open=opened.has(job.id)||job.status==="running";details.ontoggle=()=>details.open?opened.add(job.id):opened.delete(job.id);
     const summary=element("summary"),status=element("span",statuses[job.status]||job.status,`status ${job.status}`);
-    summary.append(status,element("span",`${job.actions.map(a=>names[a]).join(" / ")} · ${job.accounts.length} 个账号`,"job-name"),element("span",new Date(job.created).toLocaleString(),"muted"));
+    const counts=job.counts?.total?` · 成功 ${job.counts.succeeded} / 失败 ${job.counts.failed}${job.counts.limited?` / 限流 ${job.counts.limited}`:""}`:"";
+    summary.append(status,element("span",`${job.actions.map(a=>names[a]).join(" / ")} · ${job.accounts.length} 个账号${counts}`,"job-name"),element("span",new Date(job.created).toLocaleString(),"muted"));
     const logs=element("div",job.logs.map(log=>`${new Date(log.at).toLocaleTimeString()}  ${current.accounts.find(a=>a.id===log.account)?.name||""}  ${log.message}`).join("\n")||"等待执行…","log");
     details.append(summary,logs);
     if(job.actions.includes("inspect")&&job.results.length)details.append(element("pre",JSON.stringify(job.results,null,2),"log"));

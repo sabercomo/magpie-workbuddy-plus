@@ -28,7 +28,17 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const calls = [], status = { config: structuredClone(defaults), intlSchedules: structuredClone(defaults.intlSchedules), intlModels: ["hy3", "kimi-k3"], accounts: [
     { id: "cn:a", name: "国内测试", realm: "cn", source: "magpie", enabled: true },
     { id: "cn:b", name: "国内测试二", realm: "cn", source: "magpie", enabled: true }
-  ], jobs: [] };
+  ], jobs: [{
+    id: "partial-job",
+    actions: ["tasks"],
+    accounts: ["cn:a"],
+    status: "partial",
+    counts: { succeeded: 3, failed: 1, limited: 0, total: 4 },
+    created: "2026-11-15T08:15:00.000Z",
+    finished: "2026-11-15T08:17:30.973Z",
+    results: [],
+    logs: [{ at: "2026-11-15T08:17:26.369Z", account: "cn:a", message: "桌面端对话1次：已领奖，100 积分 / 5 能量" }]
+  }] };
   const board = { at: Date.now(), enabled: true, intlEnabled: false, signin: { status: "waiting", started: new Date().toISOString(), url: "https://www.workbuddy.cn/login?state=s" }, today: { timezone: "Asia/Shanghai", next: { kind: "daily", at: "21:00", status: "upcoming" }, slots: [
     { kind: "daily", at: "09:00", status: "succeeded", attempts: 1 }, { kind: "tasks", at: "09:10", status: "failed", attempts: 2 }, { kind: "daily", at: "21:00", status: "upcoming", attempts: 0 }, { kind: "intl-web", at: "10:30", status: "upcoming", attempts: 0, paused: true }
   ] }, accounts: [{ id: "cn:a", name: "国内测试", expires: 0, errors: {}, balance: { balance: 120, size: 300, packages: [{ name: "活动赠送", balance: 120, size: 300, expires: Date.now() + 86400_000 }] },
@@ -65,6 +75,10 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   for (const file of ["../page/board.js", "../public/app.js"]) vm.runInContext(readFileSync(new URL(file, import.meta.url), "utf8"), context);
   await setImmediate();
   const text = node => typeof node === "string" ? node : [node.textContent || "", ...node.children.map(text)].join(" ");
+  const jobRows = nodes.get("jobs").children;
+  assert.equal(jobRows.length, 1);
+  assert.equal(jobRows[0].open, false, "completed jobs start folded");
+  assert.match(text(jobRows[0]), /部分失败\s+成长任务 · 1 个账号 · 成功 3 \/ 失败 1[\s\S]*桌面端对话1次：已领奖/);
   assert.match(text(nodes.get("board")), /^\s*正在等待国内版 WorkBuddy 登录[\s\S]*https:\/\/www\.workbuddy\.cn\/login\?state=s/);
   // The list view: the account row and its expanded detail, then what needs a person.
   assert.match(text(nodes.get("board")), /国内测试 个人 · 连登 8 天 · 已签到 \+100[\s\S]*120 \/ 300[\s\S]*每日签到 已签到 \+100 \d\d:\d\d 由 Magpie 签到 · 连续签到 11 天[\s\S]*任务 1\/2[\s\S]*能量 30[\s\S]*关注公众号 需手动[\s\S]*在咖啡馆 约 \d\d:\d\d 归来[\s\S]*模型额度用完 1 个[\s\S]*需要你处理 1 件\s+120 积分（活动赠送）将作废[\s\S]*其他提醒 1 件 [\s\S]*「关注公众号」需手动完成 \+100 积分/);

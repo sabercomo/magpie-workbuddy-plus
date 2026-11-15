@@ -51,6 +51,59 @@ test("all performs domestic tasks without calling daily check-in", async t => {
   assert.ok(p.seen.every(r => !r.path.includes("daily-checkin")));
 });
 
+test("a growth-task round with completed and failed tasks carries partial counts", async t => {
+  const p = fixture(t, path => {
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: [
+      { task_code: "done", accept_status: "claimed", progress: { current: 1, target: 1 } },
+      { task_code: "create_canvas", accept_status: "accepted", progress: null }
+    ] });
+    if (path === "/activity/growth/heatmap") return ok({ cells: [] });
+    throw new Error("unexpected endpoint " + path);
+  });
+  await assert.rejects(p.run("tasks"), error => {
+    assert.equal(error.partial, true);
+    assert.deepEqual(error.counts, { succeeded: 1, failed: 1, limited: 0, total: 2 });
+    return true;
+  });
+});
+
+test("an all round with completed and failed actions carries partial counts", async t => {
+  const p = fixture(t, path => {
+    if (path === "/v2/report") return ok({});
+    if (path === "/activity/growth/streak") return ok({ streak: { days: 1 } });
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: [] });
+    if (path === "/activity/growth/buddy/travel/status") return ok({ state: "traveling" });
+    if (path === "/activity/growth/heatmap") return Response.json({ code: 500, msg: "heatmap failed" }, { status: 500 });
+    throw new Error("unexpected endpoint " + path);
+  });
+  await assert.rejects(p.run("all"), error => {
+    assert.equal(error.partial, true);
+    assert.deepEqual(error.counts, { succeeded: 3, failed: 1, limited: 0, total: 4 });
+    return true;
+  });
+});
+
+test("desktop and web task reports do not require progress fields the upstream omits", async t => {
+  const done = new Set();
+  const p = fixture(t, (path, request) => {
+    if (path.endsWith("/tasks")) return ok({ tasks: request.headers["X-Client-Platform"] ? [] : [
+      { task_code: "RichMeow_Chat", title: "桌面端对话", accept_status: done.has("chat_request_response") ? "completed" : "accepted", progress: null },
+      { task_code: "Library_read", title: "浏览资料库", accept_status: done.has("web_element_click") ? "completed" : "accepted", progress: null }
+    ] });
+    if (path === "/v2/report") { for (const event of request.body) done.add(event.eventCode); return ok({}); }
+    if (path.endsWith("/claim")) return ok({ credit: 100 });
+    throw new Error("unexpected endpoint " + path);
+  });
+  await p.run("tasks");
+  const reports = p.seen.filter(request => request.path === "/v2/report");
+  assert.deepEqual(reports.map(request => [request.host, request.body.length, request.body[0].eventCode]), [
+    ["copilot.tencent.com", 6, "agent_task_created"],
+    ["www.workbuddy.cn", 1, "web_element_click"]
+  ]);
+  assert.deepEqual(p.seen.filter(request => request.path.endsWith("/claim")).map(request => request.path.split("/").at(-2)), ["RichMeow_Chat", "Library_read"]);
+  assert.equal(p.logs.at(-1), "本次领奖 2 项");
+});
+
 test("an accepted report with zero upstream progress is never claimed", async t => {
   const task = { task_code: "create_canvas", title: "创建设计任务", task_type: "single", accept_status: "not_accepted", progress: { current: 0, target: 1 } };
   const p = fixture(t, path => {
@@ -349,7 +402,9 @@ test("a WorkBuddy AI account's web conversation runs once a day through its sand
   const create = p.seen.find(s => s.path === "/console/as/conversations/" && s.body);
   assert.deepEqual(create.body, { prompt: "只回复一个字：好", model: "hy3", conversationOrigin: "workbuddy-app", plugins: [{ name: "weixinpay", marketplace: "codebuddy-builtin" }] });
   assert.equal(create.headers.Authorization, "Bearer secret-token");
-  assert.equal(create.headers["X-IDE-Type"], undefined, "the web app sends no desktop fingerprint");
+  assert.equal(create.headers["User-Agent"], "workbuddy-ai/5.9.4 workbuddy-ai/5.9.4 CLI/2.165.0");
+  assert.deepEqual([create.headers["X-Product"], create.headers["X-Domain"], create.headers.Origin, create.headers.Referer], ["SaaS", "www.workbuddy.ai", undefined, undefined]);
+  assert.match(create.headers["X-Request-ID"], /^[0-9a-f-]{36}$/);
   const calls = p.seen.filter(s => s.path === "/acp" && s.body).map(s => s.body.method);
   assert.deepEqual(calls, ["initialize", "session/load", "session/set_model", "session/prompt"]);
   assert.equal(p.seen.find(s => s.body?.method === "session/set_model").body.params.modelId, "hy3");
@@ -377,6 +432,15 @@ test("a WorkBuddy AI account's web conversation runs once a day through its sand
   delete p.state.daily["intl:u1:web"]; p.context.config.intlWeb = false; p.seen.length = 0;
   assert.deepEqual(await p.run("web"), { skipped: true, reason: "off" });
   assert.ok(!p.seen.some(s => s.path.startsWith("/console")), "intlWeb: false skips the web turn");
+});
+
+test("a 10034 web refusal explains that OAuth is not an API key", async t => {
+  const p = fixture(t, (path, request) => {
+    if (path === "/console/as/conversations/" && request.body) return Response.json({ code: 10034, msg: "CODEBUDDY_API_KEY required" });
+    throw new Error("unexpected endpoint " + path);
+  }, "intl");
+  await assert.rejects(p.run("web"), /网页会话：需要可用的 CODEBUDDY_API_KEY。当前 OAuth 登录没有提供该 Key，免费账号也无法创建个人 API Key；请使用已有 Key 的付费账号/);
+  assert.deepEqual(p.seen.map(request => request.path), ["/console/as/conversations/"]);
 });
 
 // The server drops a buddyapp_enter_click whose isFirstPage is the string "1"

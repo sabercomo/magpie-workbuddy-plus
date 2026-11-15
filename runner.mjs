@@ -70,6 +70,27 @@ export function shifted(day, kind, at, spread, salt) {
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
+// A job mixes account/action results, and a growth-task round can itself mix
+// completed tasks with failures. Keep both levels in the row's status and counts.
+export function jobOutcome(results, aborted = false) {
+  const counts = { succeeded: 0, failed: 0, limited: 0, total: 0 };
+  for (const result of results) {
+    const add = result.counts || {
+      succeeded: result.ok ? 1 : 0,
+      failed: result.ok ? 0 : 1,
+      limited: result.ok ? 0 : Number(!!result.limited),
+      total: 1
+    };
+    for (const key of Object.keys(counts)) counts[key] += Number(add[key]) || 0;
+  }
+  const status = aborted ? "cancelled"
+    : !counts.failed ? "succeeded"
+    : counts.succeeded ? "partial"
+    : counts.limited === counts.failed ? "deferred"
+    : "failed";
+  return { status, counts };
+}
+
 export class Runner {
   // pace: the wait between accounts in a scheduled run, 5–45 s.
   constructor(dir, clientOptions = {}, { pageFile, panel = "", spawner = spawn, magpie = magpieBin, pace = () => 5000 + Math.random() * 40_000 } = {}) {
@@ -110,13 +131,20 @@ export class Runner {
   // between board refreshes.
   boardView() {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
+    const onDay = value => value && calendar(new Date(value), config.timezone).day === day;
+    const jobs = this.state.jobs
+      .filter(job => onDay(job.created) || onDay(job.started) || onDay(job.finished))
+      .map(job => {
+        const outcome = job.results?.length ? jobOutcome(job.results, job.status === "cancelled") : { status: job.status, counts: job.counts };
+        return { id: job.id, actions: job.actions, status: outcome.status, counts: outcome.counts, trigger: job.trigger, created: job.created, started: job.started, finished: job.finished, logs: job.logs };
+      });
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
       settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false },
       accounts: this.board.accounts.map(({ key, ...a }) => this.withLedger(a, key, found, day)), models: this.board.models || null,
       intl: { enabled: config.intlEnabled, web: config.intlWeb !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
-      jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
+      jobs
     };
   }
   // Magpie may load the plugin from a folder other than the one this service
@@ -383,14 +411,20 @@ export class Runner {
         try {
           result.data = await perform(action, client, context);
           result.ok = true;
-        } catch (e) { result.error = e.message; result.limited = !!e.limited; log(`${action} ${e.limited ? "被限流" : "失败"}：${e.message}`); }
+        } catch (e) {
+          result.error = e.message;
+          result.limited = !!e.limited;
+          if (e.partial) { result.partial = true; result.counts = e.counts; }
+          log(`${action} ${e.partial ? "部分失败" : e.limited ? "被限流" : "失败"}：${e.message}`);
+        }
         job.results.push(result);
         this.save();
       }
       if (controller.signal.aborted) break;
     }
-    const failed = job.results.filter(r => !r.ok);
-    job.status = controller.signal.aborted ? "cancelled" : !failed.length ? "succeeded" : failed.every(r => r.limited) ? "deferred" : "failed";
+    const outcome = jobOutcome(job.results, controller.signal.aborted);
+    job.status = outcome.status;
+    job.counts = outcome.counts;
     job.finished = new Date().toISOString();
     this.controllers.delete(job.id);
     this.boardStale = true;
@@ -418,7 +452,7 @@ export class Runner {
         const previous = this.state.slots[key];
         if (previous) {
           const old = this.state.jobs.find(j => j.id === previous.job);
-          if (old && !["failed", "deferred", "interrupted"].includes(old.status)) continue;
+          if (old && !["failed", "partial", "deferred", "interrupted"].includes(old.status)) continue;
           if (previous.attempts >= 3 || (old && now - new Date(old.finished) < 15 * 60_000)) continue;
         }
         const job = this.submit(group, ids, `schedule:${kind}:${slot}`);

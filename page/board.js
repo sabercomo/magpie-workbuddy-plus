@@ -141,7 +141,7 @@
   }
 
   const kinds = { daily: "活跃 · 旅行 · 福利", tasks: "成长任务", night: "夜猫子", keepalive: "登录续期", "intl-daily": "活跃 · 签到 · 福利", "intl-web": "网页会话", "intl-keepalive": "登录续期" };
-  const slotStates = { succeeded: ["完成", "ok"], failed: ["失败", "urgent"], deferred: ["稍后重试", "warn"], running: ["执行中", "go"], queued: ["排队中", "go"], interrupted: ["中断", "warn"], cancelled: ["已停止", ""], upcoming: ["待执行", ""], pending: ["等待补跑", "warn"], missed: ["已错过", ""] };
+  const slotStates = { succeeded: ["完成", "ok"], partial: ["部分失败", "warn"], failed: ["失败", "urgent"], deferred: ["稍后重试", "warn"], running: ["执行中", "go"], queued: ["排队中", "go"], interrupted: ["中断", "warn"], cancelled: ["已停止", ""], upcoming: ["待执行", ""], pending: ["等待补跑", "warn"], missed: ["已错过", ""] };
 
   // What the page around the board does when a schedule switch is flipped.
   let hooks = {};
@@ -184,7 +184,7 @@
         let [label, cls] = slotStates[s.status] || [s.status, ""];
         // A paused build's slots wait without running.
         if (s.paused && ["pending", "upcoming"].includes(s.status)) [label, cls] = ["已暂停", ""];
-        if (s.status === "failed" && s.attempts) label = `失败 ${s.attempts}/3`;
+        if (["partial", "failed"].includes(s.status) && s.attempts) label = `${label} ${s.attempts}/3`;
         const isNext = s === mine, chip = el("div", isNext ? "wb-slot next" : "wb-slot");
         // The moment it runs today, set ±spread minutes around its set time.
         if (s.runAt && s.runAt !== s.at) chip.title = `设定 ${s.at}，今天 ${s.runAt} 执行`;

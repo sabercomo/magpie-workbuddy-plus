@@ -9,9 +9,13 @@ import { campaign } from "./campaign.mjs";
 export const actions = ["all", "activity", "tasks", "travel", "bonus", "night", "keepalive", "web", "inspect"];
 
 // A round whose every failure was a rate limit is deferred, not failed.
-function roundError(message, errors) {
+function roundError(message, errors, counts) {
   const e = new Error(message);
   e.limited = errors.length > 0 && errors.every(x => x.limited);
+  if (counts?.succeeded && counts.failed) {
+    e.partial = true;
+    e.counts = counts;
+  }
   return e;
 }
 
@@ -165,7 +169,12 @@ export async function perform(action, client, context) {
         for (const e of got.errors || []) log(`活动领奖失败：${e}`);
       } catch (e) { log(`活动任务读取失败：${e.message}`); }
     }
-    if (failures.length) throw roundError(`部分任务失败：${failures.join("；")}`, errors);
+    if (failures.length) throw roundError(`部分任务失败：${failures.join("；")}`, errors, {
+      succeeded: list.length - failures.length,
+      failed: failures.length,
+      limited: errors.filter(e => e.limited).length,
+      total: list.length
+    });
     // The job row shows the last line, so it says what this run left undone.
     if (!onlyNight) log([`本次领奖 ${outcome.claimed} 项`, outcome.open && `${outcome.open} 项未达成`,
       outcome.manual.length && `${outcome.manual.length} 项尚未适配：${outcome.manual.join("、")}`,
@@ -303,12 +312,22 @@ export async function perform(action, client, context) {
   if (action !== "all") return handlers[action]();
   if (intl) delete handlers.travel;
   else delete handlers.web;
-  const results = {}, failures = [], errors = [];
+  const results = {}, failures = [], errors = [], counts = { succeeded: 0, failed: 0, limited: 0, total: 0 };
   for (const [name, run] of Object.entries(handlers)) {
     if (name === "night") continue;
-    try { results[name] = await run(); }
-    catch (e) { results[name] = { error: e.message }; failures.push(name); errors.push(e); log(`${name} ${e.limited ? "被限流" : "失败"}：${e.message}`); }
+    try {
+      results[name] = await run();
+      counts.succeeded++;
+      counts.total++;
+    } catch (e) {
+      results[name] = { error: e.message };
+      failures.push(name);
+      errors.push(e);
+      const add = e.partial ? e.counts : { succeeded: 0, failed: 1, limited: e.limited ? 1 : 0, total: 1 };
+      for (const key of Object.keys(counts)) counts[key] += add[key] || 0;
+      log(`${name} ${e.partial ? "部分失败" : e.limited ? "被限流" : "失败"}：${e.message}`);
+    }
   }
-  if (failures.length) throw roundError(`本轮有${errors.every(e => e.limited) ? "被限流的" : "失败"}项目：${failures.join("、")}；详见执行记录`, errors);
+  if (failures.length) throw roundError(`本轮有${counts.succeeded ? "部分" : ""}${counts.limited === counts.failed ? "被限流的" : "失败"}项目：${failures.join("、")}；详见执行记录`, errors, counts);
   return results;
 }

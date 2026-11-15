@@ -19,10 +19,10 @@ export const specs = {
   // Counted only from the desktop client's own reports: a whole chat as it
   // logs one, and the five steps of entering a Buddy app (企鹅教师助手, which
   // lights both tasks).
-  RichMeow_Chat: { kind: "deskchat", via: "desktop" },
+  RichMeow_Chat: { kind: "deskchat", via: "desktop", target: 1 },
   Buddy_App: { kind: "buddyapp", via: "desktop" }, Buddy_App_QQ: { kind: "buddyapp", via: "desktop" },
   // A click on the library's introduction, as the web app reports it.
-  Library_read: { kind: "library", via: "web" },
+  Library_read: { kind: "library", via: "web", target: 1 },
   // The mini program's own tasks, listed only to a mini-program client. Its
   // chats must come at a person's pace: a burst is counted, then rolled back.
   Sequential_Tasks_1: { kind: "minichat", via: "mp", target: 1, pace: 45_000 },

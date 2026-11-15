@@ -19,10 +19,12 @@
 // about half a credit. The prompt asks for one word: a "Hi" drew 150 pieces
 // of reply, all charged.
 
+import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 
 const web = "https://www.workbuddy.ai", conversations = web + "/console/as/conversations/";
 const agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0";
+const rpcAgent = "workbuddy-ai/5.9.4 workbuddy-ai/5.9.4 CLI/2.165.0";
 
 export const fallback = "deepseek-v4.1-flash";
 
@@ -40,16 +42,21 @@ export function pickModel(list, wanted = "auto") {
 export async function webActivity(client, { model = fallback, prompt = "只回复一个字：好", wait = 120_000, poll = 3000, sleep = delay } = {}) {
   await client.refresh();
   const a = client.account.auth, started = Date.now();
-  const headers = { Authorization: `Bearer ${a.access}`, "X-User-Id": a.uid, "Content-Type": "application/json", Accept: "application/json, text/plain, */*", Origin: web, Referer: web + "/app", "User-Agent": agent };
+  const headers = body => ({
+    Authorization: `Bearer ${a.access}`, "X-User-Id": a.uid, Accept: "application/json, text/plain, */*",
+    "User-Agent": rpcAgent, "X-Product": "SaaS", "X-Request-ID": randomUUID(), "X-Domain": "www.workbuddy.ai",
+    ...(body === undefined ? {} : { "Content-Type": "application/json" })
+  });
   const call = async (url, body) => {
-    const response = await client.fetch(url, body === undefined ? { headers } : { method: "POST", headers, body: JSON.stringify(body) });
+    const response = await client.fetch(url, body === undefined ? { headers: headers() } : { method: "POST", headers: headers(body), body: JSON.stringify(body) });
     const text = await response.text();
     let payload;
     try { payload = JSON.parse(text); } catch { throw new Error(`网页会话：HTTP ${response.status}，不是 JSON`); }
     if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
       if (body?.model) client.recordLimit(body.model, payload);
-      const full = payload.code === 10105 || /active conversation|会话.*上限/i.test(payload.msg || "");
-      throw new Error(full ? "网页会话：活跃会话已满 10 条，请到 workbuddy.ai 网页端结束几条旧对话" : `网页会话：HTTP ${response.status}，${payload.msg || `code=${payload.code}`}`);
+      const full = payload.code === 10105;
+      const needsKey = payload.code === 10034;
+      throw new Error(needsKey ? "网页会话：需要可用的 CODEBUDDY_API_KEY。当前 OAuth 登录没有提供该 Key，免费账号也无法创建个人 API Key；请使用已有 Key 的付费账号" : full ? "网页会话：活跃会话已满 10 条，请到 workbuddy.ai 网页端结束几条旧对话" : `网页会话：HTTP ${response.status}，${payload.msg || `code=${payload.code}`}`);
     }
     if (body?.model) client.clearLimit(body.model);
     return payload.data;

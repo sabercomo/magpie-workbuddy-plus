@@ -3,8 +3,9 @@
 // the plugin's options (see index.mjs).
 const $ = id => document.getElementById(id);
 const names = { all: "全部跑一遍", activity: "连登活跃", tasks: "成长任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", keepalive: "登录续期", inspect: "查询状态", web: "国际版网页会话", refresh: "刷新余额", login: "添加国内版账号", "login-intl": "添加国际版账号", pause: "暂停国内版定时", resume: "开启国内版定时", "intl-on": "开启国际版定时", "intl-off": "暂停国际版定时", config: "保存设置" };
-const statuses = { running: "执行中", queued: "排队中", succeeded: "已完成", failed: "有失败", deferred: "稍后重试", interrupted: "中断", cancelled: "已停止" };
+const statuses = { running: "执行中", queued: "排队中", succeeded: "已完成", partial: "部分失败", failed: "失败", deferred: "稍后重试", interrupted: "中断", cancelled: "已停止" };
 let pending = null;
+const opened = new Set();
 const build = globalThis.WBPLUS?.build;
 
 function note(text, bad) { $("note").textContent = text; $("note").className = bad ? "note bad" : "note"; $("note").hidden = !text; }
@@ -24,11 +25,33 @@ function paint() {
   WBBoard.render($("board"), view, Date.now(), { onSchedule: (intl, on) => ask(intl ? (on ? "intl-on" : "intl-off") : (on ? "resume" : "pause")).catch(e => note(`提交失败：${e.message}`, true)) });
   fill(view);
   $("jobs").replaceChildren();
-  if (view && !view.jobs?.length) $("jobs").append(Object.assign(document.createElement("p"), { className: "muted", textContent: "还没有执行记录" }));
+  if (view && !view.jobs?.length) $("jobs").append(Object.assign(document.createElement("p"), { className: "muted", textContent: "今天还没有执行记录" }));
   for (const job of view?.jobs || []) {
-    const row = document.createElement("div"), cells = [[statuses[job.status] || job.status, job.status], [job.actions.map(a => names[a] || a).join(" / ")], [WBBoard.when(Date.parse(job.created))], [job.last, "last"]];
+    const row = document.createElement("details"), head = document.createElement("summary"), log = document.createElement("div");
+    const add = (parent, text, className) => { const span = document.createElement("span"); span.textContent = text; if (className) span.className = className; parent.append(span); return span; };
     row.className = "job";
-    for (const [text, className] of cells) { const span = document.createElement("span"); span.textContent = text; if (className) span.className = className; row.append(span); }
+    row.open = opened.has(job.id) || job.status === "running";
+    row.ontoggle = () => row.open ? opened.add(job.id) : opened.delete(job.id);
+    head.className = "job-head";
+    add(head, statuses[job.status] || job.status, job.status);
+    const name = add(head, job.actions.map(a => names[a] || a).join(" / "), "job-name");
+    if (job.counts?.total) {
+      const counts = add(name, `成功 ${job.counts.succeeded} / 失败 ${job.counts.failed}`, "job-counts");
+      if (job.counts.limited) counts.textContent += ` / 限流 ${job.counts.limited}`;
+    }
+    add(head, WBBoard.when(Date.parse(job.finished || job.created)), "job-when");
+    add(head, "", "job-chevron");
+    log.className = "job-log";
+    if (!job.logs?.length) add(log, job.status === "queued" ? "等待执行…" : "暂无执行明细", "job-empty");
+    for (const entry of job.logs || []) {
+      const line = document.createElement("div"), at = new Date(entry.at), account = view.accounts.find(a => a.id === entry.account);
+      line.className = "job-line";
+      add(line, at.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }), "job-time");
+      add(line, account?.name || "系统", "job-account");
+      add(line, entry.message, "job-message");
+      log.append(line);
+    }
+    row.append(head, log);
     $("jobs").append(row);
   }
   const done = view?.request;
