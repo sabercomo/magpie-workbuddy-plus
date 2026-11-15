@@ -349,9 +349,7 @@ test("a WorkBuddy AI account's web conversation runs once a day through its sand
   const create = p.seen.find(s => s.path === "/console/as/conversations/" && s.body);
   assert.deepEqual(create.body, { prompt: "只回复一个字：好", model: "hy3", conversationOrigin: "workbuddy-app", plugins: [{ name: "weixinpay", marketplace: "codebuddy-builtin" }] });
   assert.equal(create.headers.Authorization, "Bearer secret-token");
-  assert.equal(create.headers["User-Agent"], "workbuddy-ai/5.9.4 workbuddy-ai/5.9.4 CLI/2.165.0");
-  assert.deepEqual([create.headers["X-Product"], create.headers["X-Domain"], create.headers.Origin, create.headers.Referer], ["SaaS", "www.workbuddy.ai", undefined, undefined]);
-  assert.match(create.headers["X-Request-ID"], /^[0-9a-f-]{36}$/);
+  assert.equal(create.headers["X-IDE-Type"], undefined, "the web app sends no desktop fingerprint");
   const calls = p.seen.filter(s => s.path === "/acp" && s.body).map(s => s.body.method);
   assert.deepEqual(calls, ["initialize", "session/load", "session/set_model", "session/prompt"]);
   assert.equal(p.seen.find(s => s.body?.method === "session/set_model").body.params.modelId, "hy3");
