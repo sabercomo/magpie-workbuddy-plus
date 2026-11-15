@@ -240,6 +240,21 @@ test("the board lists today's slots with how each went and which is next", async
   assert.equal(runner.today(runner.config(), new Date("2026-10-29T02:00:00Z")).next, null);
 });
 
+test("the page lists every job from today with each log line", t => {
+  const p = fixture(t), runner = new Runner(p.dir), now = new Date().toISOString();
+  runner.state.jobs = [
+    ...Array.from({ length: 7 }, (_, i) => ({
+      id: `today-${i}`, actions: ["tasks"], trigger: "page", status: "succeeded", created: now, finished: now,
+      logs: [{ at: now, account: "cn:u1", message: `今天第 ${i + 1} 条` }], results: []
+    })),
+    { id: "yesterday", actions: ["tasks"], trigger: "page", status: "succeeded", created: new Date(Date.now() - 86400_000).toISOString(), finished: new Date(Date.now() - 86400_000).toISOString(), logs: [], results: [] }
+  ];
+  const jobs = runner.boardView().jobs;
+  assert.equal(jobs.length, 7, "more than the old six-row limit");
+  assert.ok(jobs.every(job => job.id !== "yesterday"));
+  assert.deepEqual(jobs[0].logs, [{ at: now, account: "cn:u1", message: "今天第 1 条" }]);
+});
+
 test("add account runs Magpie's own browser sign-in once and reports how it went", async t => {
   const p = fixture(t), spawned = [];
   const spawner = (bin, args) => {

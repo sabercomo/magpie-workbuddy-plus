@@ -110,13 +110,17 @@ export class Runner {
   // between board refreshes.
   boardView() {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
+    const onDay = value => value && calendar(new Date(value), config.timezone).day === day;
+    const jobs = this.state.jobs
+      .filter(job => onDay(job.created) || onDay(job.started) || onDay(job.finished))
+      .map(job => ({ id: job.id, actions: job.actions, status: job.status, trigger: job.trigger, created: job.created, started: job.started, finished: job.finished, logs: job.logs }));
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
       settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false },
       accounts: this.board.accounts.map(({ key, ...a }) => this.withLedger(a, key, found, day)), models: this.board.models || null,
       intl: { enabled: config.intlEnabled, web: config.intlWeb !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
-      jobs: this.state.jobs.slice(0, 6).map(j => ({ id: j.id, actions: j.actions, status: j.status, trigger: j.trigger, created: j.created, finished: j.finished, last: j.logs.at(-1)?.message || "" }))
+      jobs
     };
   }
   // Magpie may load the plugin from a folder other than the one this service
