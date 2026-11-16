@@ -109,6 +109,30 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 
 ## Features
 
+The plugin does three things: **run tasks on schedule**, **explain every account**, and **collect what needs you at the bottom**.
+
+```mermaid
+flowchart LR
+  A["Schedule / manual run"] --> B{"Account type"}
+  B -->|China| C["Activity · tasks · campaigns · travel"]
+  B -->|WorkBuddy AI| D["Activity · check-in · web session"]
+  C --> E["Verify upstream → claim"]
+  D --> E
+  E --> F["Board · run history · alerts"]
+```
+
+| Layer | What you see / get |
+| --- | --- |
+| **Automatic tasks** | China runs activity, growth tasks, campaigns, claim-only sweeps, Buddy travel and streak rewards; WorkBuddy AI runs activity, check-in and the web session. Each side keeps its own schedule and retries failures. |
+| **Account board** | Five views — list, tasks, rings, widgets, models — plus credit history, deductions, model limits/queues, check-in and campaigns in one place. Read only, refreshed every 3 minutes. |
+| **Entry points** | Magpie sidebar, local panel `127.0.0.1:3439`, CLI and MCP; settings split into Schedule, WorkBuddy AI, Tasks, and Network & time zone. |
+| **Guardrails** | Three days of format failures pause reporting; three network errors pause for 10 minutes; login renewal, post-sleep catch-up and restart dedupe. Manual runs always work. |
+
+To see the UI, jump to [Screenshots](#screenshots); for exact times see [Default schedule](#default-schedule).
+
+<details>
+<summary><b>Expand: full automatic-task rules</b></summary>
+
 **Automatic tasks**
 
 - Login-streak activity and reward checks in the China growth center.
@@ -121,6 +145,11 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 - **WorkBuddy AI (international)**, with its own schedule switch (on its row in 「今日定时」) and times: daily activity that lights the heatmap and builds the streak; the 14-day (+50 credits) and 28-day (+150) tiers redeemed automatically; and the daily check-in whenever WorkBuddy AI runs a campaign (Magpie checks in on China only; as of 2026-11 WorkBuddy AI answers 「签到活动未开启或已过期」, no campaign running, and the plugin starts claiming once one does). WorkBuddy AI's **daily activity reward** (a Bonus Pack of 30 or 50 credits) counts only a finished conversation on its web app, not the desktop activity report, so WorkBuddy AI has a web conversation slot of its own (10:30 by default) that does what workbuddy2api does: it opens a conversation through the workbuddy.ai web channel, asks for a one-word reply, waits for it to finish and ends it, once a day. The model is picked automatically from those free right now (such as Hy3 while it's free, which cost nothing when measured); with none free, or if the free one turns it down (its daily free allowance spent, say), DeepSeek-V4.1-Flash runs it instead (about 0.6 credits). A model can also be set in 「设置」. Turn off 「每天跑一次网页会话」 there (the streak carries on, without this reward), or clear the slot, to stop it. WorkBuddy's usage list usually shows one web conversation as two requests a few seconds apart. The reward does not land when the conversation ends: it has arrived the night after the active day (02:00 to 07:00 Beijing time). The board shows 「每日活跃奖励 今日到账 +30」 or 「今日未到账」 for WorkBuddy AI accounts, and the credit history names that grant 「每日活跃奖励」. WorkBuddy AI's growth tasks (its 「养虾」 levels) count real use of its client and can't be simulated, so the board and the reminders no longer list them; with no check-in campaign running, no check-in is shown; it has no Buddy travel, so none is asked for, logged or shown, and its board rings are just activity and growth tasks.
 - The night-owl task runs inside its valid window in Beijing time, at most once per account per day.
 - Login renewal checks (China and WorkBuddy AI alike, under the file locks Magpie uses, so neither overwrites the other), retries, catch-up after sleep for the day's slots, and no double runs after a restart.
+
+</details>
+
+<details>
+<summary><b>Expand: what each board view shows</b></summary>
 
 **Account board** (read only; refreshes with the service every 3 minutes, and shows China accounts signed in or out in Magpie within half a minute; claims or spends nothing)
 
@@ -140,11 +169,18 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 - Each personal account shows today's daily check-in: for China, Magpie's record (checked in +100, not yet, needs the WorkBuddy client…), with a switched-off or missed check-in in the alerts; for WorkBuddy AI, this plugin's own result, or 「暂无签到活动」 (no campaign) while none runs. Enterprise accounts have no daily check-in credits and show none. WorkBuddy AI accounts are tagged 「国际版」 in the list.
 - Enterprise accounts show their monthly allowance, usage and reset time.
 
+</details>
+
+<details>
+<summary><b>Expand: entry points and settings</b></summary>
+
 **Entry points**
 
 - Magpie's sidebar page: 「添加账号」 (add account, China or WorkBuddy AI) at the top right; 「刷新」 (refresh) beside the update time; in the board's 「今日定时」, a China row and a WorkBuddy AI row, each with a switch that pauses or starts that build's schedule (it only stops schedules; manual runs still work); and 「立即执行」 (run now) beside the run history, with 「执行所有任务」 (everything), 「猫猫旅行」 (Buddy travel), 「成长任务」 (growth tasks) and 「补领奖励」 (claim only). 「设置」 at the top right opens a settings view of its own in four groups: 「定时」, each build's times and the random offset; 「国际版」, the web conversation's switch and model; 「任务」, whether skill sharing runs automatically; 「网络与时区」, the time zone and the proxy (for setups such as Docker where the local panel can't be reached).
 - The local panel at http://127.0.0.1:3439 (local access only, so not from outside when Magpie runs in Docker): the same board, plus running selected accounts, the last 100 runs, and editing schedules and the proxy.
 - Add account (「添加账号」) offers China or WorkBuddy AI and runs Magpie's own `magpie plugin login workbuddy` or `magpie plugin login workbuddy-ai`, which opens the official browser sign-in; signing in to an account again replaces its old login. This plugin never touches login tokens and offers no account file import or export.
+
+</details>
 
 > [!IMPORTANT]
 > Growth tasks include simulated client event reports; they don't mean the action was really done in the desktop client. Whether they count, pay out, or get an account restricted is up to WorkBuddy, and not every task can be completed. Following the official account and real donations need you and are no longer listed (nor counted in the task total); sharing a skill creates a real share channel and reports the link-copy actions, so it runs automatically; once a task is reached it is still claimed. Besides the ordinary tasks, three kinds are reported as another client would: the desktop client's (a desktop chat, entering a Buddy app, 企鹅教师助手), the web app's (reading the library's introduction) and the mini program's own (`Sequential_Tasks_1` to `7`: chats, an expert, GLM5.2, a scheduled task, ten chats and the PC playbook task). The mini program's tasks unlock one a day, each after the one before it is claimed, and its chats are reported at a person's pace (about 45 seconds apart, since a burst is rolled back). Their event shapes follow [workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel) and [WorkBuddy-Daily](https://github.com/L0NE-6/WorkBuddy-Daily).
