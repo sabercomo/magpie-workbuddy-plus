@@ -37,19 +37,20 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/alerts.png" alt="底部提醒"><br><sub><b>底部提醒</b>：模型额度、登录过期、临期积分和网络暂停按原因分组列出，其他提醒默认收起</sub></td>
-    <td width="50%"><img src="docs/images/models-cn.png" alt="模型视图：国内版"><br><sub><b>模型 · 国内版</b>：每个模型的 ID、原生推理档位、上下文和倍率，标出订阅优先、限时免费和夜间折扣</sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/images/models-intl.png" alt="模型视图：国际版"><br><sub><b>模型 · 国际版</b>：Free 账号能用的模型在前，Pro-only 模型变灰收在下面</sub></td>
-    <td width="50%"><img src="docs/images/models-ent.png" alt="模型视图：企业"><br><sub><b>模型 · 企业</b>：添加了企业账号才出现，列出企业自己能用的模型</sub></td>
+    <td width="50%"><img src="docs/images/list.png" alt="主页面：账号列表视图"><br><sub><b>主页面 · 列表</b>：国内版、国际版分组展示积分、今日圆环和近 7 天走势，点开账号看完整详情</sub></td>
+    <td width="50%"><img src="docs/images/tasks.png" alt="任务中心"><br><sub><b>任务</b>：跨账号列出未完成成长任务，可自动执行的单项可「执行」或「领奖」</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/rings.png" alt="圆环视图"><br><sub><b>圆环</b>：每个账号今日活跃、旅行、任务三环，点开看一个账号的积分作废时间线和用量</sub></td>
     <td width="50%"><img src="docs/images/widgets.png" alt="小组件视图"><br><sub><b>小组件</b>：按一件事一块汇总所有账号</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/images/tasks.png" alt="任务中心"><br><sub><b>任务</b>：跨账号列出未完成成长任务，可自动执行的单项可「执行」或「领奖」</sub></td>
+    <td width="50%"><img src="docs/images/models-cn.png" alt="模型视图：国内版"><br><sub><b>模型 · 国内版</b>：每个模型的 ID、原生推理档位、上下文和倍率，标出订阅优先、限时免费和夜间折扣</sub></td>
+    <td width="50%"><img src="docs/images/models-intl.png" alt="模型视图：国际版"><br><sub><b>模型 · 国际版</b>：Free 账号能用的模型在前，Pro-only 模型变灰收在下面</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/models-ent.png" alt="模型视图：企业"><br><sub><b>模型 · 企业</b>：添加了企业账号才出现，列出企业自己能用的模型</sub></td>
+    <td width="50%"><img src="docs/images/alerts.png" alt="底部提醒"><br><sub><b>底部提醒</b>：模型额度、登录过期、临期积分和网络暂停按原因分组列出，其他提醒默认收起</sub></td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/images/dark.png" alt="深色模式" width="49%"><br><sub><b>深色模式</b>：跟随 Magpie 的主题</sub></td>
@@ -267,4 +268,10 @@ README 截图由 `sh docs/screenshots.sh` 生成：`docs/demo-data.mjs` 写入�
 
 ## 许可与来源
 
-MIT。积分包合并与用量分页改编自 [zseeu1/wbkit](https://github.com/zseeu1/wbkit)（MIT），企业额度的读取方式参考 Magpie 的 WorkBuddy 插件；沿用的任务编号、接口与登录字段实现来源及许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+MIT。积分包合并与用量分页改编自 [zseeu1/wbkit](https://github.com/zseeu1/wbkit)（MIT），企业额度的读取方式参考 Magpie 的 WorkBuddy 插件。任务与活动相关实现还参考了：
+
+- [ardeyouxipianyi/workbuddy2api-hub](https://github.com/ardeyouxipianyi/workbuddy2api-hub)：成长任务编号与事件形状、旅行/连登、签到结果和技能分享渠道。
+- [misakano7545/workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel)：桌面端、网页端和小程序上报通道，任务中心、补领清扫，以及活动和技能分享流程。
+- [L0NE-6/WorkBuddy-Daily](https://github.com/L0NE-6/WorkBuddy-Daily)：`Sequential_Tasks_4`～`7` 的事件形状和活动 App 会话流程。
+
+具体版本、文件与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

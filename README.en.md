@@ -39,19 +39,20 @@ The plugin's page in Magpie's light and dark theme; every account and figure is 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/alerts.png" alt="Alert footer"><br><sub><b>Alert footer</b>: spent or queued models, expiring logins, lapsing credits and network pauses grouped by reason; other reminders stay folded</sub></td>
-    <td width="50%"><img src="docs/images/models-cn.png" alt="Models view: WorkBuddy China"><br><sub><b>Models · China</b>: each model's id, native reasoning levels, context and multiplier, with subscriber priority, limited-time free and night discounts marked</sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/images/models-intl.png" alt="Models view: WorkBuddy AI"><br><sub><b>Models · WorkBuddy AI</b>: what a Free account can use first, Pro-only models dimmed below</sub></td>
-    <td width="50%"><img src="docs/images/models-ent.png" alt="Models view: enterprise"><br><sub><b>Models · Enterprise</b>: shown once an enterprise account is added, with the models its enterprise allows</sub></td>
+    <td width="50%"><img src="docs/images/list.png" alt="Main page: account list"><br><sub><b>Main page · List</b>: China and WorkBuddy AI groups with credits, today's rings and the 7-day trend; open an account for its full detail</sub></td>
+    <td width="50%"><img src="docs/images/tasks.png" alt="Tasks view"><br><sub><b>Tasks</b>: open growth tasks across accounts, each runnable or claimable on its own</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/rings.png" alt="Rings view"><br><sub><b>Rings</b>: each account's activity, travel and task rings; open one for its credit lapse timeline and usage</sub></td>
     <td width="50%"><img src="docs/images/widgets.png" alt="Widgets view"><br><sub><b>Widgets</b>: one fact per tile, summed across accounts</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/images/tasks.png" alt="Tasks view"><br><sub><b>Tasks</b>: open growth tasks across accounts, each runnable or claimable on its own</sub></td>
+    <td width="50%"><img src="docs/images/models-cn.png" alt="Models view: WorkBuddy China"><br><sub><b>Models · China</b>: each model's id, native reasoning levels, context and multiplier, with subscriber priority, limited-time free and night discounts marked</sub></td>
+    <td width="50%"><img src="docs/images/models-intl.png" alt="Models view: WorkBuddy AI"><br><sub><b>Models · WorkBuddy AI</b>: what a Free account can use first, Pro-only models dimmed below</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/models-ent.png" alt="Models view: enterprise"><br><sub><b>Models · Enterprise</b>: shown once an enterprise account is added, with the models its enterprise allows</sub></td>
+    <td width="50%"><img src="docs/images/alerts.png" alt="Alert footer"><br><sub><b>Alert footer</b>: spent or queued models, expiring logins, lapsing credits and network pauses grouped by reason; other reminders stay folded</sub></td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/images/dark.png" alt="Dark mode" width="49%"><br><sub><b>Dark mode</b>: follows Magpie's theme</sub></td>
@@ -269,4 +270,10 @@ The repository carries the `magpie-plugin` GitHub topic so Magpie's unofficial D
 
 ## License and credits
 
-MIT. Credit package merging and usage paging are adapted from [zseeu1/wbkit](https://github.com/zseeu1/wbkit) (MIT); reading the enterprise allowance follows Magpie's WorkBuddy plugin. Where the task codes, endpoints and login fields come from, and their licenses, are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+MIT. Credit package merging and usage paging are adapted from [zseeu1/wbkit](https://github.com/zseeu1/wbkit) (MIT); reading the enterprise allowance follows Magpie's WorkBuddy plugin. Task and campaign work also references:
+
+- [ardeyouxipianyi/workbuddy2api-hub](https://github.com/ardeyouxipianyi/workbuddy2api-hub): growth-task codes and event shapes, travel/streak, check-in results and skill-share channels.
+- [misakano7545/workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel): desktop, web and mini-program report channels, the task center, claim-only sweep, and campaign and skill-share flows.
+- [L0NE-6/WorkBuddy-Daily](https://github.com/L0NE-6/WorkBuddy-Daily): the event shapes for `Sequential_Tasks_4` to `7`, and the App campaign conversation flow.
+
+Exact revisions, files and licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
