@@ -92,7 +92,9 @@ body.in-settings #main-view,body.in-settings footer,body.in-settings .header-act
 .toggle input:checked+.knob{background:var(--wb-accent)}.toggle input:checked+.knob::after{transform:translateX(12px)}
 .toggle input:focus-visible+.knob{outline:2px solid var(--wb-accent);outline-offset:2px}
 .save{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.save .bad{color:var(--wb-urgent)}
 .save button{font-size:12.5px;padding:5px 16px;border-radius:7px;cursor:pointer;background:var(--wb-accent);border:1px solid var(--wb-accent);color:#fff}
+.save button:disabled{cursor:wait;opacity:.6}
 @media (max-width:520px){.fields{grid-template-columns:1fr}.group label.short{max-width:none}}
 @media (max-width:520px){.job-head{grid-template-columns:52px minmax(0,1fr) 10px}.job-when{grid-column:2}.job-chevron{grid-column:3;grid-row:1}.job-log{margin-left:0}.job-line{grid-template-columns:54px minmax(0,1fr)}.job-account{grid-column:1}.job-message{grid-column:2}}
 @media (prefers-reduced-motion:reduce){header .quiet:active,.run-menu summary:active{transform:none}.run-menu .chev{transition:none}.run-menu .menu{animation:none}.job-chevron,.toggle .knob,.toggle .knob::after{transition:none}}

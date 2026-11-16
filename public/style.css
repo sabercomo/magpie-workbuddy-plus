@@ -109,6 +109,7 @@ body.in-settings #main-view,body.in-settings footer,body.in-settings .header-act
 .save{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .save button.primary{font:inherit;font-size:12.5px;padding:6px 16px;border-radius:8px;cursor:pointer;background:var(--wb-accent);border:1px solid var(--wb-accent);color:#fff;font-weight:600}
 #saved{color:var(--wb-accent);font-size:12.5px}
+#saved.bad{color:var(--wb-urgent)}
 footer{padding-top:18px}
 @media(max-width:600px){main{padding:16px}header{align-items:flex-start}.accounts,.fields{grid-template-columns:1fr}.group label.short{max-width:none}}
 @media(prefers-reduced-motion:reduce){header .quiet:active,.run-menu summary:active,.actions button,.toggle .knob,.toggle .knob::after{transition:none}.run-menu .chev{transition:none}.run-menu .menu{animation:none}}

@@ -12,6 +12,7 @@ async function api(path, body) {
   const result = await response.json(); if (!response.ok) throw new Error(result.error); return result;
 }
 function failure(error) { $("error").textContent = error.message; $("error").hidden = false; }
+function saveStatus(text, bad) { const status = $("saved"); status.textContent = text; status.classList.toggle("bad", !!bad); }
 async function save(config) { await api("/api/config", config); await refresh(); }
 
 function updateScopeNote() {
@@ -159,17 +160,23 @@ for (const button of document.querySelectorAll("[data-action]")) button.onclick 
 
 $("config-form").onsubmit = async event => {
   event.preventDefault();
-  const form = event.currentTarget, config = { ...current.config, schedules: {} };
-  const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
-  for (const key of Object.keys(scheduleNames)) config.schedules[key] = times(form.elements[`schedule-${key}`].value);
-  config.intlSchedules = {}; for (const key of Object.keys(intlNames)) config.intlSchedules[key] = times(form.elements[`intl-${key}`].value);
-  config.intlWebModel = form.elements["intl-model"].value || "auto";
-  for (const key of ["timezone", "proxy"]) config[key] = form.elements[key].value.trim();
-  config.spread = Number(form.elements.spread.value || 0);
-  config.intlWeb = form.elements.intlWeb.checked;
-  config.campaignApp = form.elements.campaignApp.checked;
-  config.skillShare = form.elements.skillShare.checked;
-  try { await save(config); $("saved").textContent = "已保存"; } catch (e) { failure(e); }
+  const form = event.currentTarget;
+  try {
+    if (!current) throw new Error("还没有读到后台状态，请稍等再试");
+    const config = { ...current.config, schedules: {} };
+    const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
+    for (const key of Object.keys(scheduleNames)) config.schedules[key] = times(form.elements[`schedule-${key}`].value);
+    config.intlSchedules = {}; for (const key of Object.keys(intlNames)) config.intlSchedules[key] = times(form.elements[`intl-${key}`].value);
+    config.intlWebModel = form.elements["intl-model"].value || "auto";
+    for (const key of ["timezone", "proxy"]) config[key] = form.elements[key].value.trim();
+    config.spread = Number(form.elements.spread.value || 0);
+    config.intlWeb = form.elements.intlWeb.checked;
+    config.campaignApp = form.elements.campaignApp.checked;
+    config.skillShare = form.elements.skillShare.checked;
+    saveStatus("正在保存…");
+    await save(config);
+    saveStatus("已保存");
+  } catch (e) { saveStatus(`保存失败：${e.message}`, true); }
 };
 
 refresh().catch(failure); board().catch(failure);

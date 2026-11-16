@@ -73,9 +73,10 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
         { id: "primary-model", name: "Primary", desc: "", rate: 3.31, context: 272000 },
         { id: "gpt-6-luna", name: "GPT-6-Luna", desc: "", rate: 0.07, context: 1000000, tier: { label: "Pro Only", note: "模型仅面向 Pro 用户开放。", exclusive: true } }] } } };
   const bodyEl = new Element("body");
+  let failConfig = false;
   const context = vm.createContext({
     document: { body: bodyEl, getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: selector => selector === "[data-action]" ? buttons : [], querySelector: () => null, addEventListener() {} },
-    fetch: async (path, init) => { calls.push({ path, body: init.body ? JSON.parse(init.body) : undefined }); return { ok: true, json: async () => path === "/api/status" ? structuredClone(status) : path === "/api/board" ? structuredClone(board) : {} }; },
+    fetch: async (path, init) => { calls.push({ path, body: init.body ? JSON.parse(init.body) : undefined }); if (path === "/api/config" && failConfig) return { ok: false, json: async () => ({ error: "配置无效" }) }; return { ok: true, json: async () => path === "/api/status" ? structuredClone(status) : path === "/api/board" ? structuredClone(board) : {} }; },
     setInterval() {}, console
   });
   context.globalThis = context;
@@ -226,6 +227,10 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   await form.onsubmit({ preventDefault() {}, currentTarget: form });
   const saved = calls.filter(c => c.path === "/api/config").at(-1).body;
   assert.deepEqual([saved.schedules.daily, saved.schedules.sweep, saved.intlSchedules.web, saved.intlSchedules.daily, saved.intlWebModel, saved.intlWeb, saved.campaignApp], [["09:00", "21:00"], ["10:01", "22:11"], ["10:30", "11:00"], ["09:01", "21:01"], "hy3", false, true]);
+  assert.equal(nodes.get("saved").textContent, "已保存", "the save result sits beside the button");
+  failConfig = true;
+  await form.onsubmit({ preventDefault() {}, currentTarget: form });
+  assert.match(nodes.get("saved").textContent, /^保存失败：配置无效/, "a failed save stays beside the button, not above the fold");
 
   // Back to board list view: enterprise login hides check-in and locked unlockAt renders properly.
   findNode(nodes.get("board"), n => n.dataset?.tab === "board").onclick();
@@ -251,7 +256,7 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
     get lastChild() { return this.children.at(-1); }
   }
   const nodes = new Map(), requests = [];
-  for (const id of ["state", "note", "board", "jobs", "panel", "cn-state", "intl-state", "sched-pill", "intl-model-pick", "settings", "settings-form", "open-settings", "close-settings"]) nodes.set(id, new Element("div"));
+  for (const id of ["state", "note", "board", "jobs", "panel", "cn-state", "intl-state", "sched-pill", "intl-model-pick", "settings", "settings-form", "open-settings", "close-settings", "save-status"]) nodes.set(id, new Element("div"));
   const form = nodes.get("settings-form");
   form.elements = Object.fromEntries(["daily", "tasks", "sweep", "night", "keepalive", "intl-daily", "intl-web", "intl-keepalive", "intl-model", "intl-web-on", "campaign-app", "skill-share", "spread", "timezone", "proxy"].map(k => [k, new Element("input")]));
   form.querySelector = () => new Element("button");
@@ -287,7 +292,18 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   // The App conversation setting is saved by Magpie's page too.
   assert.equal(form.elements["campaign-app"].checked, false);
   form.elements["campaign-app"].checked = true;
-  await form.onsubmit({ preventDefault() {}, target: form });
+  const submitter = new Element("button");
+  await form.onsubmit({ preventDefault() {}, target: form, submitter });
   const savedPage = requests.filter(r => r.action === "config").at(-1);
   assert.equal(savedPage.config.campaignApp, true);
+  assert.equal(submitter.disabled, true, "the submit button, not the model menu's first button, shows the save");
+
+  // A malformed time keeps the settings open and says so beside the button.
+  form.elements.daily.value = "9:00";
+  const badSubmitter = new Element("button");
+  await form.onsubmit({ preventDefault() {}, target: form, submitter: badSubmitter });
+  assert.equal(nodes.get("save-status").textContent, "时间「9:00」不对，应为 HH:MM，例如 09:00");
+  assert.equal(nodes.get("save-status").classList._on, true);
+  assert.equal(badSubmitter.disabled, undefined, "a rejected save does not disable the button");
+  assert.equal(requests.filter(r => r.action === "config").length, 1, "nothing is sent for an invalid time");
 });

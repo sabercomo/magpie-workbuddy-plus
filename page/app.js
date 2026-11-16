@@ -9,6 +9,13 @@ const opened = new Set();
 const build = globalThis.WBPLUS?.build;
 
 function note(text, bad) { $("note").textContent = text; $("note").className = bad ? "note bad" : "note"; $("note").hidden = !text; }
+const saveHint = "保存后由 Magpie 重载插件交给后台服务。";
+function saveNote(text, bad) {
+  const status = $("save-status");
+  if (!status) return;
+  status.textContent = text || saveHint;
+  status.classList.toggle("bad", !!bad);
+}
 
 function updateSchedPill(view) {
   const pill = $("sched-pill");
@@ -102,7 +109,7 @@ $("settings-form").oninput = $("settings-form").onchange = () => { edited = true
 function settings(open) {
   document.body.classList.toggle("in-settings", open);
   $("settings").hidden = !open;
-  if (!open && edited) { edited = false; fill(globalThis.WBPLUS); }
+  if (!open) { if (edited) { edited = false; fill(globalThis.WBPLUS); } saveNote(""); }
   (open ? $("close-settings") : $("open-settings")).focus();
 }
 $("open-settings").onclick = () => settings(true);
@@ -111,8 +118,11 @@ if ($("sched-pill")) $("sched-pill").onclick = () => { settings(false); WBBoard.
 
 async function ask(action, extra = {}) {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const options = (await magpie.options.get()) || {};
-  await magpie.options.set({ ...options, request: { id, action, at: Date.now(), ...extra } });
+  const guard = new Promise((_, reject) => setTimeout(() => reject(new Error("Magpie 没有响应，请重试")), 10_000));
+  await Promise.race([(async () => {
+    const options = (await magpie.options.get()) || {};
+    await magpie.options.set({ ...options, request: { id, action, at: Date.now(), ...extra } });
+  })(), guard]);
   pending = id;
   note(`${names[action]}：已提交，等待 Magpie 重载插件…`);
   setTimeout(reload, 2000);
@@ -120,14 +130,15 @@ async function ask(action, extra = {}) {
 
 $("settings-form").onsubmit = async event => {
   event.preventDefault();
-  const form = event.target, button = form.querySelector("button");
+  const form = event.target, button = event.submitter || form.querySelector('button[type="submit"]');
   const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
   const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), intlSchedules: Object.fromEntries(intlKinds.map(k => [k, times(form.elements[`intl-${k}`].value)])), intlWebModel: form.elements["intl-model"].value || "auto", intlWeb: form.elements["intl-web-on"].checked, campaignApp: form.elements["campaign-app"].checked, skillShare: form.elements["skill-share"].checked, spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
   const bad = [...Object.values(config.schedules), ...Object.values(config.intlSchedules)].flat().find(t => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t));
-  if (bad) return note(`时间「${bad}」不对，应为 HH:MM，例如 09:00`, true);
+  if (bad) return saveNote(`时间「${bad}」不对，应为 HH:MM，例如 09:00`, true);
   button.disabled = true;
+  saveNote("正在保存…");
   try { await ask("config", { config }); edited = false; settings(false); }
-  catch (e) { note(`提交失败：${e.message}`, true); }
+  catch (e) { saveNote(`提交失败：${e.message}`, true); }
   finally { setTimeout(() => { button.disabled = false; }, 3000); }
 };
 
