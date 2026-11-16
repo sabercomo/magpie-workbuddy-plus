@@ -74,20 +74,26 @@ body[data-wb-tab="schedule"] #schedule-extras{display:flex}
 
 /* Settings view */
 body.in-settings #main-view,body.in-settings footer,body.in-settings .header-actions{display:none}
-.settings-head{display:flex;align-items:center;gap:8px;margin:4px 0 12px}.settings-head h2{margin:0;font-size:15px}
+.settings-head{display:flex;align-items:center;gap:8px;margin:4px 0 12px}
 .back{all:unset;display:inline-flex;align-items:center;gap:2px;cursor:pointer;font-size:12.5px;color:var(--wb-accent);padding:3px 8px 3px 4px;border-radius:7px}
+.settings-head .back{font-size:15px;font-weight:500;gap:4px;padding:4px 10px 4px 4px}
 .back:hover{background:var(--wb-soft)}.back:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
 .back svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.settings-head .back svg{width:17px;height:17px}
 #config-form{display:flex;flex-direction:column;gap:12px}
 .group{border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px;align-items:stretch}
 .group h3{margin:0;font-size:13px;font-weight:600}
 .hint,.toggle small{font-size:11.5px;color:var(--wb-muted);line-height:1.5;margin:0}
-.realms{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;width:100%}
-.realms fieldset{margin:0;border:1px solid var(--wb-line);border-radius:10px;padding:8px 12px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.realms legend{font-size:12.5px;font-weight:600;padding:0 4px}
-.realms .fields{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
-.realms .field{font-size:12px;color:var(--wb-muted);display:flex;flex-direction:column;gap:4px;grid-column:1/-1}
-.realms .wb-pick summary{font-size:12.5px;padding:6px 8px;border-radius:7px;background:var(--wb-card);border-color:var(--wb-line)}
+.settings-schedules{border-top:1px solid var(--wb-line)}
+.settings-schedule{display:grid;grid-template-columns:150px minmax(0,1fr);gap:16px;padding:14px 0;border-bottom:1px solid var(--wb-line)}
+.settings-schedule h4{font-size:12.5px;font-weight:600;margin:5px 0}
+.settings-time-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 12px}
+.settings-conversation{margin-top:3px;padding-top:13px;border-top:1px solid var(--wb-line);display:flex;flex-direction:column;gap:10px}
+.settings-model-field{margin-left:38px;max-width:520px}
+.settings-model-field .wb-pick{min-width:0}
+.settings-general-grid{display:grid;grid-template-columns:minmax(160px,.7fr) minmax(160px,.8fr) minmax(240px,1.5fr);gap:12px}
+@media(max-width:820px){.settings-schedule{grid-template-columns:1fr;gap:8px}.settings-time-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.settings-general-grid{grid-template-columns:1fr 1fr}.settings-proxy{grid-column:1/-1}}
+@media(max-width:520px){.settings-time-grid,.settings-general-grid{grid-template-columns:1fr}.settings-proxy{grid-column:auto}.settings-model-field{margin-left:0}}
 .group label:not(.toggle){display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--wb-muted)}
 .group label.short{max-width:220px}
 .group input:not([type=checkbox]){font:inherit;font-size:12.5px;padding:6px 9px;border-radius:7px;border:1px solid var(--wb-line);background:transparent;color:inherit}

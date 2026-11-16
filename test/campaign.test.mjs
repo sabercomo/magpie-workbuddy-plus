@@ -201,6 +201,24 @@ test("campaign tasks are advanced with the client events the mini program sends,
   assert.deepEqual([again.claimed, again.earned, again.ready, reports.length], [0, 0, 0, before]);
 });
 
+test("the app campaign conversation is skipped while disabled and shown as disabled on the board", async () => {
+  let bootstraps = 0;
+  const c = client(path => {
+    if (path.startsWith("/portal/activity/config?activity_code=campaign_starbucks")) return { config: { in_period: true } };
+    if (path.startsWith("/portal/activity/config?")) return { config: { in_period: false } };
+    if (path.startsWith("/portal/activity/tasks?")) return {
+      tasks: [{ task_code: "app", target_count: 1, reward_credit: 100, need_view: true }], progress: []
+    };
+    throw new Error(`unexpected ${path}`);
+  }, [], async () => { bootstraps++; throw new Error("the App conversation must not start"); });
+  const result = await campaign(c, { includeApp: false, poll: 0, sleep: async () => {} });
+  assert.deepEqual([result.tasks, result.ready, result.claimed, result.appSkipped, result.errors.length], [1, 0, 0, 1, 0]);
+  assert.equal(bootstraps, 0);
+  assert.ok(!c.calls.some(x => x.path.includes("/app/viewed") || x.path.includes("/app/claim")));
+  assert.equal((await campaignStatus(c, { appEnabled: false }))[0].tasks[0].disabled, true);
+  assert.equal("disabled" in (await campaignStatus(c, { appEnabled: true }))[0].tasks[0], false);
+});
+
 test("the app campaign never sends its sandbox token to a non-official host", async () => {
   const c = client(path => {
     if (path.startsWith("/portal/activity/config?activity_code=campaign_starbucks")) return { config: { in_period: true } };

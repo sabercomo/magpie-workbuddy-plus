@@ -42,7 +42,8 @@ function toggleSettings(open) {
 
 async function refresh() {
   current = await api("/api/status");
-  $("intl-fields").hidden = !current.accounts.some(a => a.realm === "intl");
+  const hasIntl = current.accounts.some(a => a.realm === "intl");
+  $("intl-fields").hidden = $("intl-conversation").hidden = !hasIntl;
   $("cn-state").textContent = `· 定时${current.config.enabled ? "已开启" : "已暂停"}`;
   $("intl-state").textContent = `· 定时${current.config.intlEnabled ? "已开启" : "已暂停"}`;
   $("accounts").replaceChildren();
@@ -98,13 +99,14 @@ async function refresh() {
       input.name = `intl-${key}`; input.value = times.join(", "); input.placeholder = "HH:MM, HH:MM";
       label.append(input); $("intl-schedule-fields").append(label);
     }
-    const model = element("div", undefined, "field"), pick = element("input"), wanted = current.config.intlWebModel || "auto";
+    const model = $("intl-model-pick"), pick = element("input"), wanted = current.config.intlWebModel || "auto";
     pick.type = "hidden"; pick.name = "intl-model"; pick.value = wanted;
-    model.append(pick, element("span", "网页会话用的模型"), WBBoard.picker(pick, WBBoard.modelChoices(current.intlModels, wanted)));
-    $("intl-schedule-fields").append(model); modelField = { host: model, pick, count: (current.intlModels || []).length };
+    model.append(pick, WBBoard.picker(pick, WBBoard.modelChoices(current.intlModels, wanted)));
+    modelField = { host: model, pick, count: (current.intlModels || []).length };
     for (const key of ["timezone", "proxy"]) $("config-form").elements[key].value = current.config[key];
     $("config-form").elements.spread.value = Number.isInteger(current.config.spread) ? current.config.spread : 10;
     $("config-form").elements.intlWeb.checked = current.config.intlWeb !== false;
+    $("config-form").elements.campaignApp.checked = current.config.campaignApp === true;
     $("config-form").elements.skillShare.checked = current.config.skillShare !== false;
     filled = true;
   }
@@ -165,6 +167,7 @@ $("config-form").onsubmit = async event => {
   for (const key of ["timezone", "proxy"]) config[key] = form.elements[key].value.trim();
   config.spread = Number(form.elements.spread.value || 0);
   config.intlWeb = form.elements.intlWeb.checked;
+  config.campaignApp = form.elements.campaignApp.checked;
   config.skillShare = form.elements.skillShare.checked;
   try { await save(config); $("saved").textContent = "已保存"; } catch (e) { failure(e); }
 };

@@ -40,42 +40,49 @@
       <div id="jobs"></div>
     </section>
   </div>
-  <section id="settings" hidden aria-labelledby="settings-title">
-    <div class="settings-head"><button type="button" class="back" id="close-settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>返回</button><h2 id="settings-title">设置</h2></div>
+  <section id="settings" hidden aria-label="设置">
+    <div class="settings-head"><button type="button" class="back" id="close-settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>返回</button></div>
     <form id="settings-form">
       <div class="group">
-        <h3>定时</h3>
+        <h3>定时安排</h3>
         <p class="hint">同类多个时段用逗号分隔，清空可关闭该类定时。国内版和国际版各自的开关在「定时与记录」页面里，暂停只停定时，手动执行照样能用。</p>
-        <div class="realms">
-          <fieldset><legend>国内版 <span class="muted" id="cn-state"></span></legend>
-            <label>活跃 / 旅行 / 连登福利<input name="daily" placeholder="09:00, 21:00"></label>
-            <label>成长任务<input name="tasks" placeholder="09:10, 21:10"></label>
-            <label>补领清扫<input name="sweep" placeholder="10:00, 22:10"></label>
-            <label>夜猫子任务<input name="night" placeholder="01:00"></label>
-            <label>登录续期检查<input name="keepalive" placeholder="22:00"></label>
-          </fieldset>
-          <fieldset class="intl-only"><legend>国际版 <span class="muted" id="intl-state"></span></legend>
-            <label>连登活跃 / 签到 / 连登福利<input name="intl-daily" placeholder="09:00, 21:00"></label>
-            <label>网页会话<input name="intl-web" placeholder="10:30"></label>
-            <label>登录续期检查<input name="intl-keepalive" placeholder="22:00"></label>
-          </fieldset>
+        <div class="settings-schedules">
+          <section class="settings-schedule" aria-label="国内版定时">
+            <h4>国内版 <span class="muted" id="cn-state"></span></h4>
+            <div class="settings-time-grid">
+              <label>活跃 / 旅行 / 连登福利<input name="daily" placeholder="09:01, 21:01"></label>
+              <label>成长任务<input name="tasks" placeholder="09:11, 21:11"></label>
+              <label>补领清扫<input name="sweep" placeholder="10:01, 22:11"></label>
+              <label>夜猫子任务<input name="night" placeholder="01:01"></label>
+              <label>登录续期检查<input name="keepalive" placeholder="22:01"></label>
+            </div>
+          </section>
+          <section class="settings-schedule intl-only" id="preview-intl-schedule" aria-label="国际版定时">
+            <h4>国际版 <span class="muted" id="intl-state"></span></h4>
+            <div class="settings-time-grid">
+              <label>连登活跃 / 签到 / 连登福利<input name="intl-daily" placeholder="09:01, 21:01"></label>
+              <label>网页会话<input name="intl-web" placeholder="10:31"></label>
+              <label>登录续期检查<input name="intl-keepalive" placeholder="22:01"></label>
+            </div>
+          </section>
         </div>
-        <label class="short">随机错开（分钟，0 关闭）<input name="spread" type="number" min="0" max="60" step="1"></label>
-      </div>
-      <div class="group intl-only">
-        <h3>国际版</h3>
-        <label class="toggle"><input type="checkbox" name="intl-web-on"><span class="knob" aria-hidden="true"></span><span>每天跑一次网页会话<small>WorkBuddy AI 的每日活跃奖励（30/50 积分）只认网页端跑完的会话。关掉后只上报本地活跃，连登照常，但拿不到这份奖励。</small></span></label>
-        <div class="field"><span>网页会话用的模型</span><input type="hidden" name="intl-model" value="auto"><div id="intl-model-pick"></div><small>自动时用当前免费的模型，没有免费的或它跑不了时用 DeepSeek-V4.1-Flash。</small></div>
       </div>
       <div class="group">
-        <h3>任务</h3>
+        <h3>任务与对话</h3>
+        <p class="hint">这些开关控制会实际创建内容或调用模型的操作；普通成长任务的上报不受影响。</p>
+        <label class="toggle"><input type="checkbox" name="campaign-app"><span class="knob" aria-hidden="true"></span><span>自动完成活动 App 对话<small>国内版活动的「解锁 App 强大能力」会创建真实云端会话，调用模型并可能扣除积分；模型由上游选择。默认关闭，关闭后定时和「执行所有任务」跳过此项，其他活动任务照常执行。</small></span></label>
         <label class="toggle"><input type="checkbox" name="skill-share"><span class="knob" aria-hidden="true"></span><span>自动分享技能给好友<small>开启后会在 WorkBuddy 创建真实分享链接并上报复制动作。关掉后定时和「执行所有任务」会跳过这一项；需要时可在「任务」页单独执行。</small></span></label>
+        <div class="settings-conversation intl-only" id="preview-intl-conversation">
+          <label class="toggle"><input type="checkbox" name="intl-web-on"><span class="knob" aria-hidden="true"></span><span>每天跑一次国际版网页会话<small>WorkBuddy AI 的每日活跃奖励（30/50 积分）只认网页端跑完的会话。关掉后连登照常，但拿不到这份奖励。</small></span></label>
+          <div class="field settings-model-field"><span>网页会话用的模型</span><input type="hidden" name="intl-model" value="auto"><div id="intl-model-pick"></div><small>自动时优先当前免费模型；没有免费模型或运行失败时，改用 DeepSeek-V4.1-Flash，可能扣除积分。</small></div>
+        </div>
       </div>
       <div class="group">
-        <h3>网络与时区</h3>
-        <div class="fields">
+        <h3>通用设置</h3>
+        <div class="settings-general-grid">
+          <label>随机错开（分钟，0 关闭）<input name="spread" type="number" min="0" max="60" step="1"></label>
           <label>时区<input name="timezone" placeholder="Asia/Shanghai"></label>
-          <label class="wide">HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label>
+          <label class="settings-proxy">HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label>
         </div>
       </div>
       <div class="save"><button type="submit">保存设置</button><span class="muted">保存后由 Magpie 重载插件交给后台服务。</span></div>

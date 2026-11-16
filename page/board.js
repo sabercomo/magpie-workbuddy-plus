@@ -943,7 +943,7 @@
     const cnPersonal = rows.filter(a => !a.enterprise && !abroad(a));
     const growthOpen = cnPersonal.reduce((s, a) => s + (a.tasks?.open?.length || 0), 0);
     const catsReady = cnPersonal.filter(a => trip(a.travel, now, a)?.arrived).length;
-    const campReady = cnPersonal.reduce((s, a) => s + (a.campaigns || []).reduce((cs, c) => cs + (c.tasks || []).filter(t => !t.claimed && !t.manual).length, 0), 0);
+    const campReady = cnPersonal.reduce((s, a) => s + (a.campaigns || []).reduce((cs, c) => cs + (c.tasks || []).filter(t => !t.claimed && !t.manual && !t.disabled).length, 0), 0);
     return growthOpen + catsReady + campReady;
   }
 
@@ -999,7 +999,7 @@
     const credit = auto.reduce((sum, { task }) => sum + (task.credit || 0), 0);
 
     const catsReady = mine.filter(a => trip(a.travel, now, a)?.arrived).length;
-    const campReady = mine.reduce((s, a) => s + (a.campaigns || []).reduce((cs, c) => cs + (c.tasks || []).filter(t => !t.claimed && !t.manual).length, 0), 0);
+    const campReady = mine.reduce((s, a) => s + (a.campaigns || []).reduce((cs, c) => cs + (c.tasks || []).filter(t => !t.claimed && !t.manual && !t.disabled).length, 0), 0);
     const summary = el("div", "wb-task-summary"), sLeft = el("div", "wb-task-summary-l"), sRight = el("div", "wb-task-summary-r");
     sLeft.append(
       el("strong", undefined, auto.length ? `${auto.length} 项可以自动做` : "没有可自动执行的任务"),
@@ -1111,15 +1111,16 @@
           for (const t of c.tasks || []) {
             if (t.claimed) continue;
             const row = el("div", "wb-task"), main = el("div", "wb-task-main");
-            const [lbl, cls] = t.done ? ["可领奖", "ok"] : t.manual ? ["需手动", "warn"] : ["定时会完成", "go"];
+            const [lbl, cls] = t.done ? ["可领奖", "ok"] : t.manual ? ["需手动", "warn"] : t.disabled ? ["设置已关闭", "warn"] : ["定时会完成", "go"];
             main.append(el("div", "wb-name", `${c.label} · ${t.label}`), el("div", "wb-sub", [`${a.name}`, `${t.progress}/${t.target}`, t.credit ? `+${num(t.credit)} 积分` : ""].filter(Boolean).join(" · ")));
             row.append(main, el("span", `wb-pill ${cls}`, lbl));
-            if (!t.manual && hooks.onRunAction) {
+            if (!t.manual && !t.disabled && hooks.onRunAction) {
               const btn = el("button", `wb-task-run${t.done ? " claim" : ""}`, t.done ? "领奖" : "执行");
               btn.type = "button";
               btn.onclick = async () => { btn.disabled = true; btn.textContent = "已提交"; try { await hooks.onRunAction(t.done ? "sweep" : "tasks", [a.id]); } catch (e) { btn.disabled = false; btn.textContent = "重试"; btn.title = e.message; } };
               row.append(btn);
             } else if (t.manual) row.append(el("span", "wb-sub wb-task-why", "官方客户端"));
+            else if (t.disabled) row.append(el("span", "wb-sub wb-task-why", "设置 › 任务与对话"));
             card.append(row);
           }
           if ((c.tasks || []).every(t => t.claimed)) card.append(el("div", "wb-task-done", `${a.name} · ${c.label}：已全部领取`));

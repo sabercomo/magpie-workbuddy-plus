@@ -254,7 +254,7 @@ export { dropped };
 export async function collect(account, client, config, memory, pause = ms => new Promise(r => setTimeout(r, ms))) {
   const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {} };
   const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone, 7, new Date(), 50, account.enterprise) };
-  if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client), campaigns: () => campaignStatus(client) }), streak: () => streak(client), tasks: () => tasks(client, account), growth: () => growth(client) });
+  if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client), campaigns: () => campaignStatus(client, { appEnabled: config.campaignApp === true }) }), streak: () => streak(client), tasks: () => tasks(client, account), growth: () => growth(client) });
   if (!account.enterprise && account.realm === "intl") parts.checkin = () => intlCheckin(client);
   for (const [name, run] of Object.entries(parts)) {
     try { row[name] = await run(); }

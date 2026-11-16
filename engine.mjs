@@ -204,10 +204,11 @@ export async function perform(action, client, context) {
     // client can report, then claim whatever is ready.
     if (!intl && !onlyNight) {
       try {
-        const got = await campaign(client, { poll: context.campaignPoll ?? 3000, sleep: context.campaignSleep ?? delay });
+        const got = await campaign(client, { includeApp: config.campaignApp === true, poll: context.campaignPoll ?? 3000, sleep: context.campaignSleep ?? delay });
         if (!got.tasks && !got.errors.length) log("活动：当前不在活动期");
         else log([`活动：完成 ${got.ready} 项`, `领取 ${got.claimed} 项${got.earned ? ` +${got.earned} 积分` : ""}`,
-          got.pending && `${got.pending} 项待上游落账`, got.manual && `${got.manual} 项需手动`].filter(Boolean).join("，"));
+          got.pending && `${got.pending} 项待上游落账`, got.manual && `${got.manual} 项需手动`,
+          got.appSkipped && `${got.appSkipped} 项 App 对话按设置跳过`].filter(Boolean).join("，"));
         for (const e of got.errors || []) log(`活动执行失败：${e}`);
       } catch (e) {
         if (e.restricted || dropped(e)) throw e;

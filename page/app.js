@@ -91,6 +91,7 @@ function fill(view) {
     host.replaceChildren(WBBoard.picker(pick, WBBoard.modelChoices(view.models?.intl?.models, wanted), () => { edited = true; }));
   }
   form.elements["intl-web-on"].checked = view.settings.intlWeb !== false;
+  form.elements["campaign-app"].checked = view.settings.campaignApp === true;
   form.elements["skill-share"].checked = view.settings.skillShare !== false;
   form.elements.spread.value = view.settings.spread;
   form.elements.timezone.value = view.settings.timezone || "";
@@ -121,7 +122,7 @@ $("settings-form").onsubmit = async event => {
   event.preventDefault();
   const form = event.target, button = form.querySelector("button");
   const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
-  const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), intlSchedules: Object.fromEntries(intlKinds.map(k => [k, times(form.elements[`intl-${k}`].value)])), intlWebModel: form.elements["intl-model"].value || "auto", intlWeb: form.elements["intl-web-on"].checked, skillShare: form.elements["skill-share"].checked, spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
+  const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), intlSchedules: Object.fromEntries(intlKinds.map(k => [k, times(form.elements[`intl-${k}`].value)])), intlWebModel: form.elements["intl-model"].value || "auto", intlWeb: form.elements["intl-web-on"].checked, campaignApp: form.elements["campaign-app"].checked, skillShare: form.elements["skill-share"].checked, spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
   const bad = [...Object.values(config.schedules), ...Object.values(config.intlSchedules)].flat().find(t => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t));
   if (bad) return note(`时间「${bad}」不对，应为 HH:MM，例如 09:00`, true);
   button.disabled = true;

@@ -15,27 +15,33 @@ export const defaults = {
   // on a model free right now ("auto") or the one named.
   intlWeb: true,
   intlWebModel: "auto",
+  // An App conversation is a real model call, so it stays off unless asked for.
+  campaignApp: false,
   // Sharing a skill creates a real link on WorkBuddy's side; off, only the
   // task center's one-task button runs it.
   skillShare: true,
+  // Marks schedules already moved to the minute-01 defaults of 0.7.2.
+  scheduleDefaults: 2,
   // Scheduled slots run within ±spread minutes of their set time.
   spread: 10,
   timezone: "Asia/Shanghai",
   magpieDir,
   proxy: "",
-  // China's slots; WorkBuddy AI keeps its own below.
+  // China's slots; WorkBuddy AI keeps its own below. Every default minute is
+  // 01, so scheduled work does not start on the hour. Entries that need their
+  // own place keep 10 minutes between them.
   schedules: {
-    daily: ["09:00", "21:00"],
-    tasks: ["09:10", "21:10"],
-    sweep: ["10:00", "22:10"],
-    night: ["01:00"],
-    keepalive: ["22:00"]
+    daily: ["09:01", "21:01"],
+    tasks: ["09:11", "21:11"],
+    sweep: ["10:01", "22:11"],
+    night: ["01:01"],
+    keepalive: ["22:01"]
   },
   // No growth-task slot: WorkBuddy AI's tasks count real use of its client.
   intlSchedules: {
-    daily: ["09:00", "21:00"],
-    web: ["10:30"],
-    keepalive: ["22:00"]
+    daily: ["09:01", "21:01"],
+    web: ["10:31"],
+    keepalive: ["22:01"]
   },
   disabledAccounts: []
 };
@@ -59,6 +65,24 @@ export function initialize(dir = dataDir) {
   })) {
     if (!existsSync(join(dir, name))) writeJSON(join(dir, name), value);
   }
+  const file = join(dir, "config.json"), config = readJSON(file), migrated = migrateSchedules(config);
+  if (JSON.stringify(migrated) !== JSON.stringify(config)) writeJSON(file, migrated);
+}
+
+// The 0.7.2 defaults put every slot at minute 01. An install that never changed
+// its saved defaults is moved with it; a custom schedule is left exactly as it
+// is, and is marked so a later rollback of the minutes stays custom too.
+export const legacySchedules = {
+  schedules: { daily: ["09:00", "21:00"], tasks: ["09:10", "21:10"], sweep: ["10:00", "22:10"], night: ["01:00"], keepalive: ["22:00"] },
+  intlSchedules: { daily: ["09:00", "21:00"], web: ["10:30"], keepalive: ["22:00"] }
+};
+
+export function migrateSchedules(config) {
+  if (config.scheduleDefaults === 2) return config;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b), next = { ...config, scheduleDefaults: 2 };
+  if (same(config.schedules, legacySchedules.schedules)) next.schedules = defaults.schedules;
+  if (config.intlSchedules && same(config.intlSchedules, legacySchedules.intlSchedules)) next.intlSchedules = defaults.intlSchedules;
+  return next;
 }
 
 // Uses Magpie's own lock filenames. A refresh and the following merge must
@@ -156,7 +180,7 @@ export function intlSchedules(config) {
 export function settle(config) {
   const { intl: _, ...rest } = config;
   const schedules = { ...defaults.schedules, ...(rest.schedules || {}) };
-  return { ...rest, skillShare: rest.skillShare !== false, schedules, intlEnabled: intlOn(config), intlSchedules: intlSchedules({ ...rest, schedules }) };
+  return { ...rest, campaignApp: rest.campaignApp === true, skillShare: rest.skillShare !== false, schedules, intlEnabled: intlOn(config), intlSchedules: intlSchedules({ ...rest, schedules }) };
 }
 
 // Every kind of slot, the build it serves and what it runs. WorkBuddy AI's
@@ -194,6 +218,7 @@ export function validateConfig(value) {
   new Intl.DateTimeFormat("en", { timeZone: value.timezone });
   if (value.intlEnabled !== undefined && typeof value.intlEnabled !== "boolean") throw new Error("国际版定时开关无效");
   if (value.intlWeb !== undefined && typeof value.intlWeb !== "boolean") throw new Error("国际版网页会话开关无效");
+  if (value.campaignApp !== undefined && typeof value.campaignApp !== "boolean") throw new Error("活动 App 对话开关无效");
   if (value.skillShare !== undefined && typeof value.skillShare !== "boolean") throw new Error("自动分享技能开关无效");
   if (value.spread !== undefined && !(Number.isInteger(value.spread) && value.spread >= 0 && value.spread <= 60)) throw new Error("随机错开应为 0–60 分钟");
   if (!Array.isArray(value.disabledAccounts) || value.disabledAccounts.some(a => typeof a !== "string")) throw new Error("账号停用列表无效");

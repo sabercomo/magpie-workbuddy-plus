@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { defaults, accounts, calendar, initialize, intlSchedules, plan, readJSON, settle, validateConfig, writeJSON } from "../storage.mjs";
+import { defaults, accounts, calendar, initialize, intlSchedules, legacySchedules, plan, readJSON, settle, validateConfig, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient, isRestricted } from "../client.mjs";
 import { dropped } from "../network.mjs";
 import { EventEmitter } from "node:events";
@@ -34,6 +34,21 @@ async function settled(runner) {
   }
   throw new Error("fixture job did not settle");
 }
+
+test("0.7.2 defaults start at minute 01 and only untouched old defaults move", t => {
+  const p = fixture(t), file = join(p.dir, "config.json");
+  assert.deepEqual(defaults.schedules, { daily: ["09:01", "21:01"], tasks: ["09:11", "21:11"], sweep: ["10:01", "22:11"], night: ["01:01"], keepalive: ["22:01"] });
+  assert.deepEqual(defaults.intlSchedules, { daily: ["09:01", "21:01"], web: ["10:31"], keepalive: ["22:01"] });
+  assert.equal(defaults.campaignApp, false);
+  const { scheduleDefaults: _, ...oldDefaults } = defaults;
+  writeJSON(file, { ...oldDefaults, ...legacySchedules });
+  initialize(p.dir);
+  assert.deepEqual([readJSON(file).schedules, readJSON(file).intlSchedules, readJSON(file).scheduleDefaults], [defaults.schedules, defaults.intlSchedules, 2]);
+  const custom = { ...legacySchedules.schedules, daily: ["08:07"] };
+  writeJSON(file, { ...oldDefaults, schedules: custom, intlSchedules: legacySchedules.intlSchedules });
+  initialize(p.dir);
+  assert.deepEqual([readJSON(file).schedules.daily, readJSON(file).intlSchedules, readJSON(file).scheduleDefaults], [["08:07"], defaults.intlSchedules, 2]);
+});
 
 test("China and WorkBuddy AI logins are read, each build's schedule on its own switch; status never reveals credentials", t => {
   const p = fixture(t);
@@ -120,10 +135,10 @@ test("each build runs its own slots; settings from before the split carry on fro
   const p = fixture(t), authFile = join(p.magpieDir, "plugin-auth.json"), auths = readJSON(authFile);
   auths["workbuddy-ai"] = { type: "oauth", uid: "u9", accountId: "abroad", access: "intl-access", expires: Date.now() + 86400_000 };
   writeJSON(authFile, auths);
-  // Saved by 0.5.6: no intlSchedules. WorkBuddy AI takes China's times, its web conversation at 10:30.
+  // Saved by 0.5.6: no intlSchedules. WorkBuddy AI takes China's times, its web conversation at the new 10:31 default.
   const { intlSchedules: _, intlEnabled: __, ...old } = { ...p.config(), enabled: true, schedules: { daily: ["09:00"], tasks: [], night: [], keepalive: ["22:00"] } };
   writeJSON(join(p.dir, "config.json"), old);
-  assert.deepEqual(intlSchedules(old), { daily: ["09:00"], web: ["10:30"], keepalive: ["22:00"] });
+  assert.deepEqual(intlSchedules(old), { daily: ["09:00"], web: ["10:31"], keepalive: ["22:00"] });
   // Saved by 0.5.7 or 0.5.8: WorkBuddy AI's growth-task slot is dropped, the rest kept.
   assert.deepEqual(intlSchedules({ intlSchedules: { daily: ["08:00"], tasks: ["09:10"], web: [], keepalive: ["22:00"] } }), { daily: ["08:00"], web: [], keepalive: ["22:00"] });
   assert.ok(!plan({ ...old, intlSchedules: { daily: [], tasks: ["09:10"], web: [], keepalive: [] } }).some(s => s.kind === "intl-tasks"));
@@ -136,8 +151,8 @@ test("each build runs its own slots; settings from before the split carry on fro
   runner.tick(new Date("2026-10-29T01:00:30Z")); await settled(runner);
   const jobs = () => runner.state.jobs.map(j => `${j.trigger}=${j.accounts.join(",")}:${j.actions.join("+")}`).sort();
   assert.deepEqual(jobs(), ["schedule:daily:09:00=cn:u1:activity+travel+bonus", "schedule:intl-daily:09:00=intl:u9:activity+bonus"]);
-  runner.tick(new Date("2026-10-29T02:30:00Z")); await settled(runner);
-  assert.ok(jobs().includes("schedule:intl-web:10:30=intl:u9:web"));
+  runner.tick(new Date("2026-10-29T02:31:00Z")); await settled(runner);
+  assert.ok(jobs().includes("schedule:intl-web:10:31=intl:u9:web"));
   assert.equal(runner.state.jobs.length, 4);
   assert.deepEqual(runner.today(runner.config(), new Date("2026-10-29T03:00:00Z")).slots.map(s => s.kind), ["daily", "intl-daily", "sweep", "intl-web", "intl-keepalive", "keepalive", "sweep"]);
 
@@ -594,9 +609,9 @@ test("the page saves the web conversation switch; anything but a boolean is refu
     initialize(dir);
     const runner = new Runner(dir);
     assert.equal(runner.pageRequest({ id: "s1", action: "config", at: Date.now(), config: { intlWeb: false } }).ok, true);
-    assert.equal(runner.pageRequest({ id: "s2", action: "config", at: Date.now(), config: { skillShare: false } }).ok, true);
+    assert.equal(runner.pageRequest({ id: "s2", action: "config", at: Date.now(), config: { campaignApp: true, skillShare: false } }).ok, true);
     const saved = readJSON(join(dir, "config.json"));
-    assert.deepEqual([saved.intlWeb, saved.skillShare], [false, false]);
+    assert.deepEqual([saved.intlWeb, saved.campaignApp, saved.skillShare], [false, true, false]);
     assert.throws(() => validateConfig({ ...defaults, intlWeb: "no" }), /国际版网页会话开关无效/);
     assert.throws(() => validateConfig({ ...defaults, skillShare: "no" }), /自动分享技能开关无效/);
   } finally { rmSync(dir, { recursive: true, force: true }); }

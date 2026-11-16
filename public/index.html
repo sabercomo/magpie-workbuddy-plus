@@ -75,32 +75,37 @@
     </div>
   </div>
 
-  <section id="settings" hidden aria-labelledby="settings-title">
-    <div class="settings-head"><button type="button" class="back" id="close-settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>返回</button><h2 id="settings-title">定时与设置</h2></div>
+  <section id="settings" hidden aria-label="设置">
+    <div class="settings-head"><button type="button" class="back" id="close-settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>返回</button></div>
     <form id="config-form">
       <div class="group">
-        <h3>定时</h3>
+        <h3>定时安排</h3>
         <p class="hint">同类多个时段用逗号分隔，清空可关闭该类定时。国内版和国际版的开关在「定时与记录」页面，暂停只停定时，手动执行照样能用。</p>
-        <div class="realms">
-          <fieldset><legend>国内版 <span class="muted" id="cn-state"></span></legend><div id="schedule-fields" class="fields"></div></fieldset>
-          <fieldset id="intl-fields"><legend>国际版 <span class="muted" id="intl-state"></span></legend><div id="intl-schedule-fields" class="fields"></div></fieldset>
+        <div class="settings-schedules">
+          <section class="settings-schedule" aria-label="国内版定时"><h4>国内版 <span class="muted" id="cn-state"></span></h4><div id="schedule-fields" class="settings-time-grid"></div></section>
+          <section class="settings-schedule" id="intl-fields" aria-label="国际版定时"><h4>国际版 <span class="muted" id="intl-state"></span></h4><div id="intl-schedule-fields" class="settings-time-grid"></div></section>
         </div>
-        <label class="short">随机错开（分钟，0 关闭）<input name="spread" type="number" min="0" max="60" step="1"></label>
       </div>
 
       <div class="group">
-        <h3>策略开关</h3>
+        <h3>任务与对话</h3>
+        <p class="hint">这些开关控制会实际创建内容或调用模型的操作；普通成长任务的上报不受影响。</p>
         <div class="switches">
-          <label class="toggle"><input type="checkbox" name="intlWeb"><span class="knob" aria-hidden="true"></span><span>国际版每天跑一次网页会话<small>每日活跃奖励只认网页端会话；关掉后连登照常，但拿不到这份奖励。</small></span></label>
+          <label class="toggle"><input type="checkbox" name="campaignApp"><span class="knob" aria-hidden="true"></span><span>自动完成活动 App 对话<small>国内版活动的「解锁 App 强大能力」会创建真实云端会话，调用模型并可能扣除积分；模型由上游选择。默认关闭，关闭后定时和「执行所有任务」跳过此项。</small></span></label>
           <label class="toggle"><input type="checkbox" name="skillShare"><span class="knob" aria-hidden="true"></span><span>自动分享技能给好友<small>会在 WorkBuddy 创建真实分享链接；关掉后批量任务跳过，可在「任务」页单项执行。</small></span></label>
         </div>
+        <div id="intl-conversation" class="settings-conversation">
+          <label class="toggle"><input type="checkbox" name="intlWeb"><span class="knob" aria-hidden="true"></span><span>国际版每天跑一次网页会话<small>每日活跃奖励只认网页端会话；关掉后连登照常，但拿不到这份奖励。</small></span></label>
+          <div class="field settings-model-field"><span>网页会话用的模型</span><div id="intl-model-pick"></div><small>自动时优先当前免费模型；没有免费模型或运行失败时，改用 DeepSeek-V4.1-Flash，可能扣除积分。</small></div>
+        </div>
       </div>
 
       <div class="group">
-        <h3>网络与时区</h3>
-        <div class="fields">
+        <h3>通用设置</h3>
+        <div class="settings-general-grid">
+          <label>随机错开（分钟，0 关闭）<input name="spread" type="number" min="0" max="60" step="1"></label>
           <label>时区<input name="timezone" required></label>
-          <label>HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label>
+          <label class="settings-proxy">HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label>
         </div>
       </div>
 

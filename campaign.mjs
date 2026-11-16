@@ -219,8 +219,8 @@ async function fire(client, campaign, task, row, options) {
   return row;
 }
 
-export async function campaign(client, { execute = true, poll: gap = 3000, sleep = delay } = {}) {
-  let tasks = 0, ready = 0, claimed = 0, earned = 0, manual = 0, skipped = 0, pending = 0;
+export async function campaign(client, { execute = true, includeApp = true, poll: gap = 3000, sleep = delay } = {}) {
+  let tasks = 0, ready = 0, claimed = 0, earned = 0, manual = 0, skipped = 0, pending = 0, appSkipped = 0;
   const errors = [];
   const take = async (spec, task, credit) => {
     try { await claim(client, spec, task.code, credit); claimed++; earned += credit; }
@@ -252,6 +252,7 @@ export async function campaign(client, { execute = true, poll: gap = 3000, sleep
           continue;
         }
         if (!execute) continue;
+        if (task.kind === "app" && !includeApp) { appSkipped++; continue; }
         if (!["chat", "expert", "skill", "desktop", "app"].includes(task.kind)) { manual++; continue; }
         if (row.needView) {
           try { await viewed(client, spec, task.code); }
@@ -272,12 +273,12 @@ export async function campaign(client, { execute = true, poll: gap = 3000, sleep
       errors.push(`${spec.label}：${e.message}`);
     }
   }
-  return { tasks, ready, claimed, earned, manual, skipped, pending, errors };
+  return { tasks, ready, claimed, earned, manual, skipped, pending, errors, ...(appSkipped ? { appSkipped } : {}) };
 }
 
 // Read-only campaign progress for the account board. The same portal contract
 // is used, but nothing is viewed, reported or claimed here.
-export async function campaignStatus(client) {
+export async function campaignStatus(client, { appEnabled = true } = {}) {
   const found = [];
   for (const spec of campaigns) {
     try {
@@ -292,7 +293,8 @@ export async function campaignStatus(client) {
           return {
             code: task.code, label: task.label, progress: row.progress || 0, target: row.target || task.times || 1,
             credit: row.credit || task.credit || 0, done: done(row), claimed: !!row.claimed_at,
-            manual: !["chat", "expert", "skill", "desktop", "app"].includes(task.kind)
+            manual: !["chat", "expert", "skill", "desktop", "app"].includes(task.kind),
+            ...(task.kind === "app" && !appEnabled && !done(row) ? { disabled: true } : {})
           };
         })
       });

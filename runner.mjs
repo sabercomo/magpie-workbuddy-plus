@@ -145,7 +145,7 @@ export class Runner {
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
-      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false },
+      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false, campaignApp: config.campaignApp === true },
       accounts: this.board.accounts.map(({ key, ...a }) => {
         const row = this.withLedger(a, key, found, day);
         const restricted = this.state.restricted?.[a.id], webPaused = this.state.webPaused?.[a.id];
@@ -357,10 +357,11 @@ export class Runner {
       else if (["pause", "resume"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), enabled: request.action === "resume" });
       else if (request.action === "config") {
         // Settings saved from Magpie's page: times, spread, time zone, proxy,
-        // the web conversation and model-limit switches. A
-        // proxy shown masked and sent back unchanged keeps the saved one.
+        // the web conversation, campaign App conversation and skill-share
+        // switches. A proxy shown masked and sent back unchanged keeps the
+        // saved one.
         const current = this.config(), given = request.config || {};
-        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(typeof given.intlWeb === "boolean" ? { intlWeb: given.intlWeb } : {}), ...(typeof given.skillShare === "boolean" ? { skillShare: given.skillShare } : {}), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
+        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(typeof given.intlWeb === "boolean" ? { intlWeb: given.intlWeb } : {}), ...(typeof given.campaignApp === "boolean" ? { campaignApp: given.campaignApp } : {}), ...(typeof given.skillShare === "boolean" ? { skillShare: given.skillShare } : {}), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
           ...(given.proxy !== undefined && given.proxy !== maskProxy(current.proxy) ? { proxy: given.proxy } : {}) };
         writeJSON(join(this.dir, "config.json"), validateConfig(next));
       }

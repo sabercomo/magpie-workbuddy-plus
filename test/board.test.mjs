@@ -219,7 +219,7 @@ test("page snapshot carries no credentials and each page request runs once", asy
 
   // Settings saved from Magpie's page, for installs whose local panel can't be reached.
   writeJSON(join(dir, "config.json"), { ...runner.config(), proxy: "http://user:secret@proxy.example:8080" });
-  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlWebModel: "auto", intlWeb: true });
+  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlWebModel: "auto", intlWeb: true, campaignApp: false });
   assert.ok(!JSON.stringify(runner.boardView()).includes("secret"));
   const schedules = { daily: ["08:30"], tasks: ["08:40", "20:40"], sweep: ["10:20", "22:20"], night: [], keepalive: ["22:00"] };
   assert.equal(runner.pageRequest({ id: "c1", action: "config", at: Date.now(), config: { schedules, spread: 5, timezone: "Asia/Shanghai", proxy: "http://***@proxy.example:8080" } }).ok, true);

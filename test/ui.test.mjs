@@ -20,10 +20,10 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   }
   const nodes = new Map(), buttonNames = [...readFileSync(new URL("../public/index.html", import.meta.url), "utf8").matchAll(/data-action="([^"]+)"/g)].map(m => m[1]);
   const buttons = buttonNames.map(action => { const b = new Element("button"); b.dataset.action = action; return b; });
-  for (const id of ["error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "intl-schedule-fields", "intl-fields", "cn-state", "intl-state", "saved", "board", "board-state", "board-refresh", "add-menu", "open-settings", "close-settings", "settings", "sched-pill", "run-scope-note"]) nodes.set(id, new Element("div"));
+  for (const id of ["error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "intl-schedule-fields", "intl-fields", "intl-conversation", "intl-model-pick", "cn-state", "intl-state", "saved", "board", "board-state", "board-refresh", "add-menu", "open-settings", "close-settings", "settings", "sched-pill", "run-scope-note"]) nodes.set(id, new Element("div"));
   nodes.get("add-menu").contains = () => false;
   const form = nodes.get("config-form"); form.elements = {};
-  for (const name of ["timezone", "proxy", "spread", "intlWeb", "skillShare"]) form.elements[name] = new Element("input");
+  for (const name of ["timezone", "proxy", "spread", "intlWeb", "campaignApp", "skillShare"]) form.elements[name] = new Element("input");
   for (const id of ["schedule-fields", "intl-schedule-fields"]) nodes.get(id).append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };
   const calls = [], status = { config: structuredClone(defaults), intlSchedules: structuredClone(defaults.intlSchedules), intlModels: ["hy3", "kimi-k3"], accounts: [
     { id: "cn:a", name: "国内测试", realm: "cn", source: "magpie", enabled: true },
@@ -215,15 +215,17 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   form.elements["intl-web"].value = "11:00，10:30";
   assert.equal(context.WBBoard.modelChoices([{ id: "hy3", name: "Hy3", rate: 0 }, { id: "gpt-6-luna", name: "GPT-6-Luna", rate: 0.07, tier: { exclusive: true } }, { id: "glm-5.3", name: "glm-5.3", rate: 0.69 }], "gone").map(r => [r.id, r.tag || "", r.note || ""].join("|")).join(" "),
     "auto||优先当前免费的模型 hy3|免费|hy3 gpt-6-luna|Pro|gpt-6-luna glm-5.3|×0.69| gone||");
-  const menu = all(nodes.get("intl-schedule-fields"), "wb-pick-menu")[0], option = menu?.children.find(b => text(b).includes("kimi-k3"));
+  form.elements["intl-model"] = nodes.get("intl-model-pick").children[0];
+  const menu = all(nodes.get("intl-model-pick"), "wb-pick-menu")[0], option = menu?.children.find(b => text(b).includes("kimi-k3"));
   option.onclick();
   assert.equal(form.elements["intl-model"].value, "kimi-k3", "picking from the menu sets the form's value");
   form.elements["intl-model"].value = "hy3";
   assert.equal(form.elements.intlWeb.checked, true, "the switch shows the saved setting");
   form.elements.intlWeb.checked = false;
+  form.elements.campaignApp.checked = true;
   await form.onsubmit({ preventDefault() {}, currentTarget: form });
   const saved = calls.filter(c => c.path === "/api/config").at(-1).body;
-  assert.deepEqual([saved.schedules.daily, saved.schedules.sweep, saved.intlSchedules.web, saved.intlSchedules.daily, saved.intlWebModel, saved.intlWeb], [["09:00", "21:00"], ["10:00", "22:10"], ["10:30", "11:00"], ["09:00", "21:00"], "hy3", false]);
+  assert.deepEqual([saved.schedules.daily, saved.schedules.sweep, saved.intlSchedules.web, saved.intlSchedules.daily, saved.intlWebModel, saved.intlWeb, saved.campaignApp], [["09:00", "21:00"], ["10:01", "22:11"], ["10:30", "11:00"], ["09:01", "21:01"], "hy3", false, true]);
 
   // Back to board list view: enterprise login hides check-in and locked unlockAt renders properly.
   findNode(nodes.get("board"), n => n.dataset?.tab === "board").onclick();
@@ -251,13 +253,14 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   const nodes = new Map(), requests = [];
   for (const id of ["state", "note", "board", "jobs", "panel", "cn-state", "intl-state", "sched-pill", "intl-model-pick", "settings", "settings-form", "open-settings", "close-settings"]) nodes.set(id, new Element("div"));
   const form = nodes.get("settings-form");
-  form.elements = Object.fromEntries(["daily", "tasks", "sweep", "night", "keepalive", "intl-daily", "intl-web", "intl-keepalive", "intl-model", "intl-web-on", "skill-share", "spread", "timezone", "proxy"].map(k => [k, new Element("input")]));
+  form.elements = Object.fromEntries(["daily", "tasks", "sweep", "night", "keepalive", "intl-daily", "intl-web", "intl-keepalive", "intl-model", "intl-web-on", "campaign-app", "skill-share", "spread", "timezone", "proxy"].map(k => [k, new Element("input")]));
+  form.querySelector = () => new Element("button");
   const bodyEl = new Element("body");
   const context = vm.createContext({
     WBPLUS: {
       build: "abc123", generated: new Date().toISOString(), at: Date.now(), enabled: true, intlEnabled: true,
       schedules: structuredClone(defaults.schedules), intlSchedules: structuredClone(defaults.intlSchedules),
-      settings: { timezone: "Asia/Shanghai", spread: 10, proxy: "", intlWebModel: "auto", intlWeb: true, skillShare: true },
+      settings: { timezone: "Asia/Shanghai", spread: 10, proxy: "", intlWebModel: "auto", intlWeb: true, campaignApp: false, skillShare: true },
       intl: { accounts: 0 }, today: { timezone: "Asia/Shanghai", next: { kind: "tasks", at: "21:10", status: "upcoming" }, slots: [{ kind: "tasks", at: "21:10", status: "upcoming" }] },
       accounts: [{ id: "cn:a", name: "主力号", expires: 0, errors: {}, balance: { balance: 100, size: 200, packages: [] }, tasks: { total: 2, claimed: 1, credit: 50, open: [{ code: "skill_1", title: "技能任务", state: "claimable", current: 1, target: 1, credit: 50 }] }, travel: { state: "arrived", location: "大理", reward: 30 } }],
       jobs: []
@@ -280,4 +283,11 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   await findNode(nodes.get("board"), n => n.textContent === "领奖并出发" && n.className?.includes("wb-task-run")).onclick();
   assert.equal(requests.at(-1).action, "travel");
   assert.equal(requests.at(-1).accounts.join(","), "cn:a");
+
+  // The App conversation setting is saved by Magpie's page too.
+  assert.equal(form.elements["campaign-app"].checked, false);
+  form.elements["campaign-app"].checked = true;
+  await form.onsubmit({ preventDefault() {}, target: form });
+  const savedPage = requests.filter(r => r.action === "config").at(-1);
+  assert.equal(savedPage.config.campaignApp, true);
 });
