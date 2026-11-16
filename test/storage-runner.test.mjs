@@ -55,6 +55,16 @@ test("China and WorkBuddy AI logins are read, each build's schedule on its own s
   if (process.platform !== "win32") assert.equal(statSync(authFile).mode & 0o777, 0o600);
 });
 
+test("personal logins come first and enterprise logins last, whatever the login file order", t => {
+  const p = fixture(t), file = join(p.magpieDir, "plugin-auth.json");
+  writeJSON(file, {
+    "workbuddy#ent": { ...p.auth, uid: "u3", enterpriseId: "ent-1" },
+    "workbuddy#u1": p.auth,
+    "workbuddy-ai": { ...p.auth, uid: "u2" }
+  });
+  assert.deepEqual(accounts(p.config()).map(a => [a.id, a.enterprise]), [["cn:u1", false], ["cn:u3", true], ["intl:u2", false]]);
+});
+
 test("concurrent refreshes spend one token and preserve unrelated Magpie logins", async t => {
   const p = fixture(t), file = join(p.magpieDir, "plugin-auth.json");
   writeJSON(file, { "workbuddy#u1": { ...p.auth, expires: Date.now() - 1000 }, other: { key: "unrelated-secret" } });

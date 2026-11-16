@@ -28,7 +28,9 @@
   const boardViews = [["list", "列表"], ["rings", "圆环"], ["widgets", "小组件"]];
   const abroad = a => a.realm === "intl";
   let order = orderSaved.get() === "intl" ? "intl" : "cn", both = false;
-  const ordered = list => [...list].sort((a, b) => (abroad(a) === (order === "intl") ? 0 : 1) - (abroad(b) === (order === "intl") ? 0 : 1));
+  // Personal logins first, enterprise last inside each realm; the chosen realm leads.
+  const rank = a => (abroad(a) === (order === "intl") ? 0 : 2) + (a.enterprise ? 1 : 0);
+  const ordered = list => [...list].sort((a, b) => rank(a) - rank(b));
 
   // Migrate legacy wb-view values ("tasks" / "models") cleanly into wb-tab.
   const initRawView = savedView.get(), initRawTab = savedTab.get();
@@ -138,7 +140,7 @@
     return [...groups.values()].map(g => ({ ...g, count: g.accounts.size })).sort((x, y) => x.expires - y.expires);
   }
 
-  function segs(options, current, pick, label, withIcon) {
+  function segs(options, current, pick, label, withIcon, dataAttr) {
     const box = el("div", "wb-segs");
     box.setAttribute("role", "group");
     box.setAttribute("aria-label", label);
@@ -146,6 +148,7 @@
       const b = el("button", key === current ? "wb-seg-btn on" : "wb-seg-btn");
       b.type = "button";
       b.setAttribute("aria-pressed", String(key === current));
+      if (dataAttr) b.dataset[dataAttr] = key;
       if (withIcon?.[key]) b.append(icon(withIcon[key], 13));
       b.append(text);
       b.onclick = () => { if (key !== current) pick(key); };
@@ -282,14 +285,9 @@
         }
       }
       for (const c of a.campaigns || []) {
+        // Campaign manual tasks stay in the Tasks tab; they are not things this
+        // plugin can do, so they do not raise reminders here.
         if (c.error) items.push({ tone: "soon", text: `${a.name}：${c.label}读取失败`, aside: c.error, order: 0.5 });
-        for (const t of c.tasks || []) {
-          if (!t.manual || t.claimed || t.done) continue;
-          const title = `${c.label}：${t.label}`;
-          const e = manual.get(title) || { title, count: 0, credit: t.credit || 0, ends: Infinity };
-          e.count++;
-          manual.set(title, e);
-        }
       }
       for (const [part, message] of Object.entries(a.errors || {})) items.push({ tone: "urgent", text: `${a.name}：${parts[part] || part}读取失败`, aside: message, order: 0 });
       if (a.expires && a.expires - now < DAY) items.push({ tone: "urgent", text: `${a.name} 的登录${a.expires <= now ? "已过期" : `${left(a.expires, now)}过期`}`, aside: "点「添加账号」用同一账号重新登录", order: 0 });
@@ -344,7 +342,7 @@
     strip.setAttribute("aria-label", "提醒摘要");
     const bar = el("div", "wb-alert-bar"), chips = el("div", "wb-alert-chips");
     const headline = urgent.length ? `需处理 ${urgent.length} 件` : limited.length ? `限额/排队 ${limited.length} 项` : `提醒 ${rest.length} 件`;
-    chips.append(el("span", "wb-alert-mark", headline), el("span", "wb-alert-preview", [...urgent, ...limited, ...rest].slice(0, 2).map(i => i.text).join(" · ")));
+    chips.append(el("span", "wb-alert-mark", headline), el("span", "wb-alert-preview", [...urgent, ...limited, ...rest].slice(0, 2).map(i => i.aside ? `${i.text} · ${i.aside}` : i.text).join(" · ")));
     const toggle = el("button", "wb-alert-toggle", alertsOpen ? "收起 ▴" : `展开全部 ${items.length} 条 ↓`);
     toggle.type = "button";
     toggle.setAttribute("aria-expanded", String(alertsOpen));
@@ -955,7 +953,7 @@
     const titleWrap = el("span", "wb-task-title");
     titleWrap.append(el("span", "wb-name", task.title));
     if (showAccount) titleWrap.append(el("span", "wb-pill outline", account.name));
-    const head = line(titleWrap, el("span", `wb-pill ${state[1]}`, task.state === "locked" && task.unlockAt > now ? `${when(task.unlockAt)} 解锁` : state[0]));
+    const pill = el("span", `wb-pill ${state[1]}`, task.state === "locked" && task.unlockAt > now ? `${when(task.unlockAt)} 解锁` : state[0]);
     const meta = el("div", "wb-task-meta");
     const facts = [
       task.target ? `${task.current}/${task.target}` : "",
@@ -972,8 +970,8 @@
       meta.append(track);
     }
     meta.append(el("span", "wb-sub", facts.join(" · ")));
-    main.append(head, meta);
-    row.append(main);
+    main.append(titleWrap, meta);
+    row.append(main, pill);
     if (task.code && hooks.onTask && (task.state === "auto" || task.state === "claimable")) {
       const run = el("button", `wb-task-run${task.state === "claimable" ? " claim" : ""}`, task.state === "claimable" ? "领奖" : "执行");
       run.type = "button";
@@ -1114,8 +1112,8 @@
             if (t.claimed) continue;
             const row = el("div", "wb-task"), main = el("div", "wb-task-main");
             const [lbl, cls] = t.done ? ["可领奖", "ok"] : t.manual ? ["需手动", "warn"] : ["定时会完成", "go"];
-            main.append(line(el("span", "wb-name", `${c.label} · ${t.label}`), el("span", `wb-pill ${cls}`, lbl)), el("div", "wb-sub", [`${a.name}`, `${t.progress}/${t.target}`, t.credit ? `+${num(t.credit)} 积分` : ""].filter(Boolean).join(" · ")));
-            row.append(main);
+            main.append(el("div", "wb-name", `${c.label} · ${t.label}`), el("div", "wb-sub", [`${a.name}`, `${t.progress}/${t.target}`, t.credit ? `+${num(t.credit)} 积分` : ""].filter(Boolean).join(" · ")));
+            row.append(main, el("span", `wb-pill ${cls}`, lbl));
             if (!t.manual && hooks.onRunAction) {
               const btn = el("button", `wb-task-run${t.done ? " claim" : ""}`, t.done ? "领奖" : "执行");
               btn.type = "button";
@@ -1135,20 +1133,20 @@
     return box;
   }
 
-  // Primary navigation bar with count badges.
+  // Primary navigation tabs; only 看板 carries an account count, and 任务 shows
+  // a badge only while something is unfinished.
   function navBar(rows, view, now) {
     const nav = el("nav", "wb-nav");
     nav.setAttribute("aria-label", "主导航");
     const openCount = taskBadgeCount(rows, now);
-    const slotCount = view?.today?.slots?.length || 0;
-    const modelRealms = realms.filter(([k]) => k !== "ent" || view?.models?.ent).length;
-    const badges = { board: `${rows.length} 账号`, tasks: `${openCount} 待办`, schedule: `${slotCount} 时段`, models: `${modelRealms} 版本` };
+    const badges = { board: `${rows.length} 账号`, tasks: openCount ? `${openCount} 待办` : "" };
     for (const [key, label] of tabs) {
       const b = el("button", `wb-nav-tab${key === tab ? " active" : ""}`);
       b.type = "button";
       b.dataset.tab = key;
       b.setAttribute("aria-current", key === tab ? "page" : "false");
-      b.append(icon(tabIcons[key], 14), el("span", undefined, label), el("span", `wb-nav-badge${key === "tasks" && openCount > 0 ? " hot" : ""}`, badges[key]));
+      b.append(icon(tabIcons[key], 14), el("span", undefined, label));
+      if (badges[key]) b.append(el("span", `wb-nav-badge${key === "tasks" ? " hot" : ""}`, badges[key]));
       b.onclick = () => { if (key !== tab) goTab(key); };
       nav.append(b);
     }

@@ -46,7 +46,7 @@ async function refresh() {
   $("cn-state").textContent = `· 定时${current.config.enabled ? "已开启" : "已暂停"}`;
   $("intl-state").textContent = `· 定时${current.config.intlEnabled ? "已开启" : "已暂停"}`;
   $("accounts").replaceChildren();
-  const accounts = [...current.accounts].sort((a, b) => Number(a.realm === "intl") - Number(b.realm === "intl"));
+  const rank = a => (a.realm === "intl" ? 2 : 0) + (a.enterprise ? 1 : 0), accounts = [...current.accounts].sort((a, b) => rank(a) - rank(b));
   for (const account of accounts) {
     const row = element("div", undefined, account.realm === "intl" ? "account intl" : "account"), checkbox = element("input");
     checkbox.type = "checkbox"; checkbox.checked = selected.has(account.id); checkbox.disabled = !account.enabled;

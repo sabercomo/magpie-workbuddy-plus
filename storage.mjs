@@ -101,7 +101,11 @@ export function accounts(config) {
     const id = `${realm}:${auth.uid}`;
     found.set(id, { id, realm, name: auth.accountId || auth.uid, auth, source: "magpie", file, key });
   }
-  return [...found.values()].map(a => ({ ...a, enabled: !config.disabledAccounts.includes(a.id), enterprise: !!a.auth.enterpriseId }));
+  // Personal accounts first, enterprise last; the board still groups by realm.
+  const rank = a => (a.realm === "intl" ? 2 : 0) + (a.enterprise ? 1 : 0);
+  return [...found.values()]
+    .map(a => ({ ...a, enabled: !config.disabledAccounts.includes(a.id), enterprise: !!a.auth.enterpriseId }))
+    .sort((a, b) => rank(a) - rank(b));
 }
 
 // The international login the models view reads its list and plan with.

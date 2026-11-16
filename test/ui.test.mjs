@@ -108,12 +108,13 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   assert.ok(text(nodes.get("board")).indexOf("国内测试 个人 · 连登 8 天") < text(nodes.get("board")).indexOf("模型额度用完 1 个"));
   alertToggle.onclick();
   const rendered = text(nodes.get("board")), alerts = rendered.slice(rendered.indexOf("模型额度用完 1 个"));
-  assert.match(alerts, /模型额度用完 1 个[\s\S]*需要你处理[\s\S]*网络\/代理连续失败，自动任务暂停至 \d\d\/\d\d \d\d:\d\d[\s\S]*120 积分（活动赠送）将作废[\s\S]*其他提醒 2 件[\s\S]*「关注公众号」需手动完成 \+100 积分[\s\S]*「星巴克协作：邀请好友」需手动完成/);
+  assert.match(alerts, /模型额度用完 1 个[\s\S]*需要你处理[\s\S]*网络\/代理连续失败，自动任务暂停至 \d\d\/\d\d \d\d:\d\d[\s\S]*120 积分（活动赠送）将作废[\s\S]*其他提醒 1 件[\s\S]*「关注公众号」需手动完成 \+100 积分/);
+  assert.doesNotMatch(alerts, /星巴克协作：邀请好友/);
 
   // Tasks center aggregates open tasks, cat travel, and campaign items, and supports single-task execution.
   findNode(nodes.get("board"), n => n.dataset?.tab === "tasks").onclick();
   assert.equal(bodyEl.dataset.wbTab, "tasks");
-  assert.match(text(nodes.get("board")), /1 项可以自动做[\s\S]*2 项待办 · 1 项需手动 · 合计 \+100 积分[\s\S]*聊天 5 次 定时会完成[\s\S]*0\/1 · \+100 积分[\s\S]*执行[\s\S]*关注公众号 需手动[\s\S]*0\/1 · \+100 积分 · \+5 能量 · 需要关注官方公众号 官方客户端[\s\S]*猫猫旅行快捷处理[\s\S]*运营活动任务/);
+  assert.match(text(nodes.get("board")), /1 项可以自动做[\s\S]*2 项待办 · 1 项需手动 · 合计 \+100 积分[\s\S]*聊天 5 次\s+0\/1 · \+100 积分 定时会完成 执行[\s\S]*关注公众号\s+0\/1 · \+100 积分 · \+5 能量 · 需要关注官方公众号 需手动 官方客户端[\s\S]*猫猫旅行快捷处理[\s\S]*运营活动任务/);
   await findNode(nodes.get("board"), n => n.textContent?.startsWith("执行全部待办") && n.className === "wb-task-run-all").onclick();
   assert.ok(calls.some(call => call.path === "/api/run" && JSON.stringify(call.body) === JSON.stringify({ actions: ["tasks"], accounts: ["cn:a"] })));
   calls.length = 0;
@@ -143,7 +144,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const notes = all(nodes.get("board"), "wb-alert-more");
   assert.equal(notes.length, 1);
   assert.ok(!notes[0].open);
-  assert.equal(all(notes[0], "wb-alert-row plain").length, 2);
+  assert.equal(all(notes[0], "wb-alert-row plain").length, 1);
   assert.ok(findNode(nodes.get("board"), n => n.className?.startsWith("wb-alert-footer")));
   assert.ok(all(nodes.get("board"), "wb-fold").length >= 2 && all(nodes.get("board"), "wb-fold").every(f => !f.open));
   const intlDetail = all(nodes.get("board"), "wb-detail-grid").find(g => /每日活跃奖励/.test(text(g)));
@@ -163,6 +164,11 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   button(nodes.get("board"), "移到上面").onclick();
   assert.deepEqual(listNames(), ["海外号", "国内测试", "企业号"]);
   button(nodes.get("board"), "移到上面").onclick();
+  assert.deepEqual(listNames(), ["国内测试", "企业号", "海外号"]);
+  // Personal logins lead and enterprise logins close the 国内版 group, whatever order the API sends.
+  board.accounts = [board.accounts[1], board.accounts[2], board.accounts[0]];
+  nodes.get("board-refresh").onclick();
+  await setImmediate();
   assert.deepEqual(listNames(), ["国内测试", "企业号", "海外号"]);
 
   // Board view switcher: Rings & Widgets live inside Board and keep the alert footer.
@@ -224,7 +230,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   button(nodes.get("board"), "列表").onclick();
   assert.doesNotMatch(text(nodes.get("board")), /企业号：|没签上/);
   const unlockAt = new Date(2026, 10, 13).getTime();
-  board.accounts[0].tasks.open.push({ title: "创建 1 个定时任务", state: "locked", unlockAt });
+  board.accounts.find(a => a.id === "cn:a").tasks.open.push({ title: "创建 1 个定时任务", state: "locked", unlockAt });
   context.WBBoard.render(nodes.get("board"), board, unlockAt - 1000);
   assert.match(text(nodes.get("board")), /创建 1 个定时任务 11\/13 00:00 解锁/);
   context.WBBoard.render(nodes.get("board"), board, unlockAt);
