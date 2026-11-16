@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { defaults, accounts, calendar, initialize, intlSchedules, plan, readJSON, settle, validateConfig, writeJSON } from "../storage.mjs";
-import { WorkBuddyClient } from "../client.mjs";
+import { WorkBuddyClient, isRestricted } from "../client.mjs";
+import { dropped } from "../network.mjs";
 import { EventEmitter } from "node:events";
 import { Runner, jobOutcome, magpieBin, shifted } from "../runner.mjs";
 import { createService, answering } from "../server.mjs";
@@ -46,7 +47,7 @@ test("China and WorkBuddy AI logins are read, each build's schedule on its own s
   assert.deepEqual(accounts({ ...p.config(), intl: false }).map(a => [a.id, a.enabled]), [["cn:u1", true], ["intl:u2", true]]);
   const { intlEnabled: _, ...before } = { ...p.config(), enabled: true };
   assert.deepEqual([settle(before).intlEnabled, settle({ ...before, intl: false }).intlEnabled, settle({ ...before, enabled: false }).intlEnabled, "intl" in settle({ ...before, intl: false })], [true, false, false, false]);
-  assert.deepEqual(plan({ ...before, intlEnabled: false }).map(s => s.on), [true, true, true, true, false, false, false]);
+  assert.deepEqual(plan({ ...before, intlEnabled: false }).map(s => s.on), [true, true, true, true, true, false, false, false]);
   const runner = new Runner(p.dir);
   const status = JSON.stringify(runner.status());
   assert.ok(!/private-access|private-refresh|unrelated-secret|private-international/.test(status));
@@ -89,6 +90,22 @@ test("timer slots survive restart and do not run twice at the same minute", asyn
   assert.equal(readJSON(join(p.dir, "state.json")).jobs.length, 1);
 });
 
+test("the sweep slot runs its claim-only action without reporting events", async t => {
+  const p = fixture(t), config = p.config(), paths = [];
+  config.enabled = true; config.schedules.sweep = ["09:30"];
+  writeJSON(join(p.dir, "config.json"), config);
+  const runner = new Runner(p.dir, { gap: 0, fetcher: async url => {
+    const path = new URL(url).pathname;
+    paths.push(path);
+    if (path === "/v2/activity/growth/tasks") return Response.json({ code: 0, data: { tasks: [] } });
+    if (path === "/portal/activity/config") return Response.json({ code: 0, data: { config: { in_period: false } } });
+    throw new Error("unexpected endpoint " + path);
+  } });
+  runner.tick(new Date("2026-10-29T01:30:00Z")); await settled(runner);
+  assert.deepEqual(runner.state.jobs.map(j => [j.trigger, j.actions, j.status]), [["schedule:sweep:09:30", ["sweep"], "succeeded"]]);
+  assert.ok(!paths.includes("/v2/report"));
+});
+
 test("each build runs its own slots; settings from before the split carry on from China's", async t => {
   const p = fixture(t), authFile = join(p.magpieDir, "plugin-auth.json"), auths = readJSON(authFile);
   auths["workbuddy-ai"] = { type: "oauth", uid: "u9", accountId: "abroad", access: "intl-access", expires: Date.now() + 86400_000 };
@@ -100,7 +117,7 @@ test("each build runs its own slots; settings from before the split carry on fro
   // Saved by 0.5.7 or 0.5.8: WorkBuddy AI's growth-task slot is dropped, the rest kept.
   assert.deepEqual(intlSchedules({ intlSchedules: { daily: ["08:00"], tasks: ["09:10"], web: [], keepalive: ["22:00"] } }), { daily: ["08:00"], web: [], keepalive: ["22:00"] });
   assert.ok(!plan({ ...old, intlSchedules: { daily: [], tasks: ["09:10"], web: [], keepalive: [] } }).some(s => s.kind === "intl-tasks"));
-  assert.deepEqual(plan(old).map(s => `${s.kind}:${s.actions.join("+")}`), ["daily:activity+travel+bonus", "tasks:tasks", "night:night", "keepalive:keepalive", "intl-daily:activity+bonus", "intl-web:web", "intl-keepalive:keepalive"]);
+  assert.deepEqual(plan(settle(old)).map(s => `${s.kind}:${s.actions.join("+")}`), ["daily:activity+travel+bonus", "tasks:tasks", "sweep:sweep", "night:night", "keepalive:keepalive", "intl-daily:activity+bonus", "intl-web:web", "intl-keepalive:keepalive"]);
   assert.equal(intlSchedules({ schedules: { ...old.schedules, daily: [] } }).web.length, 0, "activity off before, no web conversation now");
   assert.ok(!plan({ ...old, intlWeb: false }).some(s => s.kind === "intl-web"));
 
@@ -111,8 +128,8 @@ test("each build runs its own slots; settings from before the split carry on fro
   assert.deepEqual(jobs(), ["schedule:daily:09:00=cn:u1:activity+travel+bonus", "schedule:intl-daily:09:00=intl:u9:activity+bonus"]);
   runner.tick(new Date("2026-10-29T02:30:00Z")); await settled(runner);
   assert.ok(jobs().includes("schedule:intl-web:10:30=intl:u9:web"));
-  assert.equal(runner.state.jobs.length, 3);
-  assert.deepEqual(runner.today(runner.config(), new Date("2026-10-29T03:00:00Z")).slots.map(s => s.kind), ["daily", "intl-daily", "intl-web", "intl-keepalive", "keepalive"]);
+  assert.equal(runner.state.jobs.length, 4);
+  assert.deepEqual(runner.today(runner.config(), new Date("2026-10-29T03:00:00Z")).slots.map(s => s.kind), ["daily", "intl-daily", "sweep", "intl-web", "intl-keepalive", "keepalive", "sweep"]);
 
   // WorkBuddy AI paused from the page: its slots wait as paused, China's run on.
   runner.pageRequest({ id: "p1", action: "intl-off", at: Date.now() });
@@ -225,6 +242,94 @@ test("a rate limit is retried, then defers the slot instead of failing it", asyn
   runner.tick(new Date("2026-10-29T01:26:00Z")); await settled(runner);
   assert.equal(runner.state.jobs.length, 2);
   assert.ok(runner.state.jobs.some(j => j.status === "succeeded"));
+});
+
+test("an upstream restriction pauses that account's automatic runs for the day", async t => {
+  assert.ok(isRestricted(403, { code: 11140, msg: "request illegal" }));
+  assert.ok(isRestricted(400, { msg: "11-128 Illegal API invocation from an unapproved channel" }));
+  assert.ok(!isRestricted(403, { msg: "permission denied" }));
+
+  const p = fixture(t), config = p.config();
+  config.enabled = true; config.schedules.tasks = ["09:10", "21:10"];
+  writeJSON(join(p.dir, "config.json"), config);
+  const runner = new Runner(p.dir, { gap: 0, fetcher: async () => Response.json({ code: 11140, msg: "request illegal" }, { status: 403 }) });
+  runner.tick(new Date("2026-10-29T01:10:00Z")); await settled(runner);
+  assert.equal(runner.state.jobs.length, 1);
+  assert.equal(runner.state.jobs[0].status, "failed", JSON.stringify(runner.state.jobs[0].logs));
+  assert.equal(runner.state.restricted["cn:u1"].day, "2026-10-29");
+  assert.match(runner.state.jobs[0].logs.at(-1).message, /今天暂停这个账号的自动任务/);
+
+  runner.tick(new Date("2026-10-29T13:10:00Z")); await settled(runner);
+  assert.equal(runner.state.jobs.length, 1, "the later slot does not retry a restricted account");
+
+  runner.clientOptions = { gap: 0, fetcher: async () => Response.json({ code: 0, data: { tasks: [] } }) };
+  runner.submit(["tasks"], ["cn:u1"], "manual"); await settled(runner);
+  assert.equal(runner.state.restricted["cn:u1"], undefined);
+});
+
+test("a one-task job carries its code to the engine and rejects a missing task", async t => {
+  const p = fixture(t);
+  let reported = false;
+  const fetcher = async url => {
+    const path = new URL(url).pathname;
+    if (path === "/v2/activity/growth/tasks") return Response.json({ code: 0, data: { tasks: [
+      { task_code: "chat_5", title: "聊天 5 次", accept_status: reported ? "completed" : "accepted", progress: { current: reported ? 1 : 0, target: 1 }, reward_credit: 100 }
+    ] } });
+    if (path === "/v2/report") { reported = true; return Response.json({ code: 0, data: {} }); }
+    if (path === "/activity/growth/tasks/chat_5/claim") return Response.json({ code: 0, data: { credit: 100 } });
+    throw new Error("unexpected endpoint " + path);
+  };
+  const runner = new Runner(p.dir, { gap: 0, fetcher });
+  assert.throws(() => runner.submit(["task"], ["cn:u1"], "manual", {}), /无效的任务/);
+  const job = runner.submit(["task"], ["cn:u1"], "manual", { task: "chat_5" });
+  assert.equal(job.task, "chat_5");
+  await settled(runner);
+  assert.equal(job.status, "succeeded", JSON.stringify(job.logs));
+  assert.deepEqual(job.results.map(r => [r.action, r.data]), [["task", { task: "chat_5", outcome: "claimed" }]]);
+
+  // Magpie's sandboxed page hands the account and task code back through its
+  // saved request.
+  runner.clientOptions = { gap: 0, fetcher: async url => {
+    if (new URL(url).pathname === "/v2/activity/growth/tasks") return Response.json({ code: 0, data: { tasks: [
+      { task_code: "first_buddy", title: "领取一只 Buddy", accept_status: "claimed", progress: { current: 1, target: 1 } }
+    ] } });
+    throw new Error("unexpected endpoint " + new URL(url).pathname);
+  } };
+  const note = runner.pageRequest({ id: "page-task", action: "task", at: Date.now(), accounts: ["cn:u1"], task: "first_buddy" });
+  assert.equal(note.ok, true, note.error);
+  const pageJob = runner.state.jobs.find(j => j.id === note.job);
+  assert.deepEqual([pageJob.actions, pageJob.task, pageJob.accounts], [["task"], "first_buddy", ["cn:u1"]]);
+  await settled(runner);
+  assert.equal(pageJob.status, "succeeded", JSON.stringify(pageJob.logs));
+});
+
+test("consecutive network failures pause scheduled runs; a manual success clears the pause", async t => {
+  const reset = () => Object.assign(new Error("ECONNRESET: The socket connection was closed unexpectedly."), { code: "ECONNRESET" });
+  assert.ok(dropped(reset()));
+  assert.ok(dropped(new Error("The operation timed out.")));
+  assert.ok(!dropped(Object.assign(new Error("HTTP 403，denied"), { status: 403 })));
+
+  const p = fixture(t), config = p.config();
+  config.enabled = true; config.schedules.tasks = ["09:10", "21:10"];
+  writeJSON(join(p.dir, "config.json"), config);
+  let calls = 0;
+  const runner = new Runner(p.dir, { gap: 0, fetcher: async () => { calls++; throw reset(); } });
+  for (let i = 0; i < 3; i++) { runner.submit(["tasks"], ["cn:u1"], `schedule:test:${i}`); await settled(runner); }
+  assert.equal(calls, 3, "each failed job stops at its first network request");
+  assert.equal(runner.state.jobs.length, 3);
+  assert.ok(runner.state.network.pausedUntil > Date.now());
+  assert.match(runner.state.jobs[0].logs.at(-1).message, /网络\/代理连续失败 3 次/);
+  assert.ok(runner.boardView().networkPaused?.until > Date.now());
+
+  // Scheduled runs wait out the pause; a manual run can still test recovery.
+  const before = runner.state.jobs.length;
+  runner.tick(new Date("2026-10-29T01:10:00Z")); await settled(runner);
+  assert.equal(runner.state.jobs.length, before);
+  runner.clientOptions = { gap: 0, fetcher: async () => Response.json({ code: 0, data: { tasks: [] } }) };
+  runner.submit(["tasks"], ["cn:u1"], "manual"); await settled(runner);
+  assert.equal(runner.state.network.pausedUntil, undefined);
+  assert.equal(runner.state.network.failures, 0);
+  assert.match(runner.state.jobs[0].logs.map(l => l.message).join("\n"), /网络\/代理已恢复/);
 });
 
 test("the board lists today's slots with how each went and which is next", async t => {
@@ -479,8 +584,10 @@ test("the page saves the web conversation switch; anything but a boolean is refu
     initialize(dir);
     const runner = new Runner(dir);
     assert.equal(runner.pageRequest({ id: "s1", action: "config", at: Date.now(), config: { intlWeb: false } }).ok, true);
+    assert.equal(runner.pageRequest({ id: "s2", action: "config", at: Date.now(), config: { skillShare: false } }).ok, true);
     const saved = readJSON(join(dir, "config.json"));
-    assert.equal(saved.intlWeb, false);
+    assert.deepEqual([saved.intlWeb, saved.skillShare], [false, false]);
     assert.throws(() => validateConfig({ ...defaults, intlWeb: "no" }), /国际版网页会话开关无效/);
+    assert.throws(() => validateConfig({ ...defaults, skillShare: "no" }), /自动分享技能开关无效/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

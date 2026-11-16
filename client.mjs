@@ -15,7 +15,17 @@ export class UpstreamError extends Error {
     super(`${path}: HTTP ${status}，${payload.msg || payload.message || `code=${payload.code}`}`);
     this.code = payload.code;
     this.status = status;
+    this.restricted = isRestricted(status, payload);
   }
+}
+
+// Upstream tells an account it has been blocked or its channel is no longer
+// accepted with these codes/messages. Retrying the same account only makes it
+// worse, so the scheduler stops automatic runs for the rest of the day.
+export function isRestricted(status, payload = {}) {
+  const code = Number(payload?.code);
+  const message = String(payload?.msg || payload?.message || "");
+  return code === 11140 || /(?:11-128|unapproved channel|request illegal|account (?:is )?restricted|风控|封禁|账号受限)/i.test(message);
 }
 
 // Too many requests: the upstream turned the call away without acting on it,
@@ -70,12 +80,12 @@ export class WorkBuddyClient {
   recordLimit(model, payload) { noteLimit(this.limits, model, payload); }
   clearLimit(model) { forgetLimit(this.limits, model); }
 
-  async fetch(url, init = {}) {
+  async fetch(url, init = {}, timeout = 30_000) {
     if (this.config.proxy && !globalThis.Bun && this.fetcher === globalThis.fetch) throw new Error("HTTP 代理需要使用 Bun 启动 WorkBuddy Plus");
     const wait = this.gap - (Date.now() - this.lastRequest);
     if (wait > 0) await delay(wait, undefined, { signal: this.signal });
     this.lastRequest = Date.now();
-    const signal = this.signal ? AbortSignal.any([this.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000);
+    const signal = this.signal ? AbortSignal.any([this.signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
     return this.fetcher(url, { ...init, signal, ...(this.config.proxy ? { proxy: this.config.proxy } : {}) });
   }
 

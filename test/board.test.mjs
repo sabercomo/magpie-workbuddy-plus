@@ -221,7 +221,7 @@ test("page snapshot carries no credentials and each page request runs once", asy
   writeJSON(join(dir, "config.json"), { ...runner.config(), proxy: "http://user:secret@proxy.example:8080" });
   assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlWebModel: "auto", intlWeb: true });
   assert.ok(!JSON.stringify(runner.boardView()).includes("secret"));
-  const schedules = { daily: ["08:30"], tasks: ["08:40", "20:40"], night: [], keepalive: ["22:00"] };
+  const schedules = { daily: ["08:30"], tasks: ["08:40", "20:40"], sweep: ["10:20", "22:20"], night: [], keepalive: ["22:00"] };
   assert.equal(runner.pageRequest({ id: "c1", action: "config", at: Date.now(), config: { schedules, spread: 5, timezone: "Asia/Shanghai", proxy: "http://***@proxy.example:8080" } }).ok, true);
   const saved = readJSON(join(dir, "config.json"));
   assert.deepEqual(saved.schedules, schedules);
@@ -301,6 +301,17 @@ test("task board puts claimable first, then what the scheduler does; what nothin
   assert.deepEqual(got.open.map(t => [t.title, t.state]), [["尝鲜技能", "claimable"], ["别人帮忙完成的", "claimable"], ["聊天 5 次", "auto"], ["桌面端对话", "auto"], ["今天新出的任务", "manual"], ["创建 1 个定时任务", "locked"]]);
   assert.match(got.open.find(t => t.state === "manual").note, /尚未适配/);
   assert.deepEqual([got.open.at(-1).unlockAt, got.open.at(-1).note], [Date.parse("2026-10-30T00:00:00+08:00"), "在小程序内创建一个定时任务"]);
+});
+
+test("skill sharing is shown as an automatic task with its deadline", () => {
+  const now = Date.parse("2026-11-16T12:00:00+08:00");
+  const got = taskBoard([{ task_code: "skill_share", title: "分享一个技能给好友", accept_status: "not_accepted", progress: null, reward_credit: 50, valid_end: "2026-11-18T23:59:00+08:00" }], now);
+  assert.deepEqual([got.total, got.open.length, got.open[0].state, got.open[0].ends], [1, 1, "auto", Date.parse("2026-11-18T23:59:00+08:00")]);
+});
+
+test("the task board keeps a task's code and mini-program channel for one-task runs", () => {
+  const got = taskBoard([{ task_code: "Sequential_Tasks_1", mp: true, title: "小程序首对话", accept_status: "accepted", progress: { current: 0, target: 1 }, reward_credit: 100 }]);
+  assert.deepEqual([got.open[0].code, got.open[0].mp, got.open[0].state], ["Sequential_Tasks_1", true, "auto"]);
 });
 
 test("an enterprise allowance is what's left of the month, and none when it grants nothing", () => {

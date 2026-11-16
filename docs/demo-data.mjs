@@ -19,7 +19,7 @@ const usage = credit => {
     models: [["kimi-k3.1-pro", .55], ["deepseek-v4.1-flash", .25], ["glm-5.3", .12], ["hy3", .08]].map(([model, k]) => ({ model, credit: Math.round(total * k * 100) / 100, count: Math.round(total * k / 3) })),
     charges: 48, free: 6, recent: [[18, 2.41, "kimi-k3.1-pro"], [41, 0.37, "deepseek-v4.1-flash"], [66, 1.92, "kimi-k3.1-pro"], [130, 0.08, "glm-5.3-flash"], [190, 0.52, "glm-5.3"]].map(([m, credit, model]) => ({ at: now - m * 60_000, credit, model, client: "WorkBuddy" })) };
 };
-const task = (title, state, current, target, credit, energy = 0, note = "") => ({ title, state, note, current, target, credit, energy, ends: at(12, 23, 59) });
+const task = (code, title, state, current, target, credit, energy = 0, note = "") => ({ code, title, state, note, current, target, credit, energy, ends: at(12, 23, 59) });
 
 const accounts = [
   {
@@ -33,10 +33,10 @@ const accounts = [
     travel: { state: "traveling", name: "团子", location: "敦煌", departAt: now - 2 * H, arriveAt: now + 1.5 * H, limitReached: false, reward: 30 },
     streak: { days: 12, makeupCards: 1, active: true, nextTier: { days: 14, remaining: 2, credit: 200, energy: 50 } },
     tasks: { total: 9, claimed: 5, credit: 260, open: [
-      task("体验专家团队协作", "claimable", 1, 1, 80, 20),
-      task("连续 3 天使用 Skill", "auto", 2, 3, 100, 30),
-      task("关注官方公众号", "manual", 0, 1, 50, 0, "需要关注官方公众号满 24 小时"),
-      task("邀请好友体验", "locked", 0, 1, 30)
+      task("Expert_team_use_3", "体验专家团队协作", "claimable", 1, 1, 80, 20),
+      task("skill_1", "连续 3 天使用 Skill", "auto", 2, 3, 100, 30),
+      task("wb_wechat_oa_subscribe_task", "关注官方公众号", "manual", 0, 1, 50, 0, "需要关注官方公众号满 24 小时"),
+      task("Sequential_Tasks_4", "邀请好友体验", "locked", 0, 1, 30)
     ] },
     growth: { energy: 340, earned: 1280, spent: 940, draws: 2, buddies: 7, rarity: { R: 4, SR: 2, UR: 1 }, current: ["团子"] },
     checkin: { outcome: "claimed", credit: 100, streak: 12, at: at(0, 0, 0) },
@@ -58,8 +58,8 @@ const accounts = [
     travel: { state: "arrived", name: "芝麻", location: "大理", departAt: now - 5 * H, arriveAt: now - H, limitReached: false, reward: 30 },
     streak: { days: 5, makeupCards: 0, active: true, nextTier: { days: 7, remaining: 2, credit: 100, energy: 20 } },
     tasks: { total: 9, claimed: 7, credit: 80, open: [
-      task("连续 3 天使用 Skill", "auto", 1, 3, 50, 10),
-      task("在桌面端发起对话", "manual", 0, 1, 30, 0, "需要在桌面端发起对话")
+      task("skill_1", "连续 3 天使用 Skill", "auto", 1, 3, 50, 10),
+      task("RichMeow_Chat", "在桌面端发起对话", "manual", 0, 1, 30, 0, "需要在桌面端发起对话")
     ] },
     growth: { energy: 85, earned: 420, spent: 335, draws: 0, buddies: 3, rarity: { R: 2, SR: 1 }, current: ["芝麻"] },
     checkin: { outcome: "claimed", credit: 100, streak: 5, at: at(0, 0, 0) }

@@ -22,12 +22,12 @@ export function createService({ dir = dataDir, runner = new Runner(dir), stop = 
       const url = new URL(request.url, `http://${host}`);
       if (request.method === "GET" && url.pathname === "/api/status") return send(200, runner.status());
       if (request.method === "GET" && url.pathname === "/api/board") return send(200, runner.boardView());
-      if (request.method === "GET" && ["/", "/app.js", "/style.css", "/board.js", "/board.css"].includes(url.pathname)) {
+      if (request.method === "GET" && ["/", "/app.js", "/style.css", "/board.js", "/board.css", "/icon.svg"].includes(url.pathname)) {
         const file = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
-        const type = { html: "text/html", js: "text/javascript", css: "text/css" }[file.split(".").pop()];
+        const type = { html: "text/html", js: "text/javascript", css: "text/css", svg: "image/svg+xml" }[file.split(".").pop()];
         response.writeHead(200, { "Content-Type": `${type}; charset=utf-8`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'" });
         // The board renderer is shared with Magpie's page, which may only load files from page/.
-        return response.end(readFileSync(new URL(file, file.startsWith("board.") ? shared : root)));
+        return response.end(readFileSync(new URL(file, file.startsWith("board.") || file === "icon.svg" ? shared : root)));
       }
       if (request.method !== "POST") return send(404, { error: "未知地址" });
       if (request.headers["x-workbuddy-plus"] !== "1" || !request.headers["content-type"]?.startsWith("application/json")) return send(403, { error: "缺少操作请求头" });
@@ -39,7 +39,7 @@ export function createService({ dir = dataDir, runner = new Runner(dir), stop = 
       const value = JSON.parse(body);
       if (url.pathname === "/api/run") {
         if (value.accounts !== undefined && (!Array.isArray(value.accounts) || value.accounts.some(a => typeof a !== "string"))) throw new Error("账号列表无效");
-        return send(202, runner.submit(value.actions || [value.action], value.accounts));
+        return send(202, runner.submit(value.actions || [value.action], value.accounts, "manual", { task: value.task }));
       }
       if (url.pathname === "/api/config") {
         const config = validateConfig(value);

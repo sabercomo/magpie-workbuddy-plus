@@ -11,10 +11,16 @@
   const base = document.createElement("style");
   base.textContent = ':where(html){background:var(--magpie-bg);color:var(--magpie-fg);font:13px/1.45 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",system-ui,sans-serif;-webkit-font-smoothing:antialiased}:where(small,.muted){color:var(--magpie-muted)}:where(button){background:var(--magpie-card);border:1px solid var(--magpie-line);border-radius:6px;padding:3px 10px;color:inherit;font:inherit}:where(input,textarea,select){background:var(--magpie-card);border:1px solid var(--magpie-line);border-radius:6px;padding:4px 8px;color:inherit}';
   document.head.append(base);
-  try { localStorage.setItem("wb-view", q.get("view") || "list"); if (q.get("realm")) localStorage.setItem("wb-realm", q.get("realm")); } catch {}
+  try {
+    if (q.get("tab")) localStorage.setItem("wb-tab", q.get("tab"));
+    else localStorage.removeItem("wb-tab");
+    localStorage.setItem("wb-view", q.get("view") || "list");
+    if (q.get("realm")) localStorage.setItem("wb-realm", q.get("realm"));
+  } catch {}
   globalThis.magpie = { options: { get: async () => ({}), set: async () => {} } };
   addEventListener("load", () => setTimeout(() => {
     for (const sel of (q.get("open") || "").split(",").filter(Boolean)) { const d = document.querySelector(sel); if (d) d.open = true; }
+    for (const sel of (q.get("click") || "").split(",").filter(Boolean)) { const b = document.querySelector(sel); if (b) b.click(); }
     const to = q.get("to"), el = to && document.querySelector(to);
     if (el) { const y = el.getBoundingClientRect().top - 24; document.body.style.transform = `translateY(${-y}px)`; }
   }, 300));

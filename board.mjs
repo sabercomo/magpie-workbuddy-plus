@@ -1,9 +1,11 @@
 import { limits } from "./limits.mjs";
+import { dropped } from "./network.mjs";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { calendar } from "./storage.mjs";
 import { specs, growthTasks, miniProgram, unreachable } from "./events.mjs";
+import { campaignStatus } from "./campaign.mjs";
 
 // Read-only account board: credit packages, official request usage, the
 // Buddy's trip, growth tasks, energy and the login streak. Package merging and usage paging are
@@ -186,8 +188,8 @@ async function streak(client) {
 
 // Growth tasks as the board shows them: what waits for a claim and what the
 // scheduler will finish, then any task nothing here does yet (to do by hand).
-// What only a person can do (following an account, a donation, sharing a
-// skill) and WorkBuddy AI's client-only tasks are neither listed nor counted.
+// What only a person can do (following an account, a donation) and WorkBuddy
+// AI's client-only tasks are neither listed nor counted.
 export function taskBoard(list, now = Date.now()) {
   const done = t => t.accept_status === "completed" || (t.progress?.target > 0 && t.progress.current >= t.progress.target);
   const live = list.filter(t => (!t.valid_end || Date.parse(t.valid_end) > now) && (t.accept_status === "claimed" || done(t) || (!t.intl && !unreachable.has(t.task_code))));
@@ -195,7 +197,7 @@ export function taskBoard(list, now = Date.now()) {
   const open = live.filter(t => t.accept_status !== "claimed").map(t => {
     const state = done(t) ? "claimable" : t.locked === true ? "locked" : specs[t.task_code] ? "auto" : "manual";
     return {
-      title: t.title || t.task_code, ...(t.intl ? { intl: true } : {}), state,
+      code: t.task_code, title: t.title || t.task_code, ...(t.intl ? { intl: true } : {}), ...(t.mp ? { mp: true } : {}), state,
       ...(state === "locked" && t.unlock_at ? { unlockAt: Date.parse(t.unlock_at) } : {}),
       note: t.note || t.task_desc?.trim() || (state === "manual" ? "尚未适配此任务，欢迎到 GitHub 提 issue" : ""),
       current: t.progress?.current ?? 0, target: t.progress?.target ?? 0,
@@ -210,7 +212,7 @@ async function tasks(client, account) {
   if (!Array.isArray(list)) throw new Error("成长任务接口缺少 tasks 列表");
   // The mini program's own tasks are listed only to a mini-program client.
   if (account?.realm !== "intl") {
-    try { for (const t of (await client.request("/v2/activity/growth/tasks", { extra: miniProgram }))?.tasks || []) if (!list.some(x => x.task_code === t.task_code)) list.push(t); }
+    try { for (const t of (await client.request("/v2/activity/growth/tasks", { extra: miniProgram }))?.tasks || []) if (!list.some(x => x.task_code === t.task_code)) list.push({ ...t, mp: true }); }
     catch (e) { if (e.limited) throw e; }
   }
   return taskBoard(growthTasks(list));
@@ -245,16 +247,14 @@ async function intlCheckin(client) {
   return s.today_checked_in ? { outcome: "done", credit: Number(s.today_credit) || 0, streak: Number(s.streak_days) || 0 } : { outcome: "waiting" };
 }
 
-// A connection dropped or timed out on the way (a proxy resetting it, a
-// network blip), as opposed to an answer WorkBuddy gave.
-export const dropped = e => !e?.status && !e?.limited && /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|socket|fetch failed|network|timed out/i.test(`${e?.code || ""} ${e?.message || ""}`);
+export { dropped };
 
 // Each part fails alone: a refused usage query still shows the balance. These
 // are all reads, so a dropped connection is tried once more before it shows.
 export async function collect(account, client, config, memory, pause = ms => new Promise(r => setTimeout(r, ms))) {
   const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {} };
   const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone, 7, new Date(), 50, account.enterprise) };
-  if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client) }), streak: () => streak(client), tasks: () => tasks(client, account), growth: () => growth(client) });
+  if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client), campaigns: () => campaignStatus(client) }), streak: () => streak(client), tasks: () => tasks(client, account), growth: () => growth(client) });
   if (!account.enterprise && account.realm === "intl") parts.checkin = () => intlCheckin(client);
   for (const [name, run] of Object.entries(parts)) {
     try { row[name] = await run(); }

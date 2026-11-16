@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { defaults, initialize, readJSON, writeJSON, calendar } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
 import { perform } from "../engine.mjs";
+import { buildEvents, specs } from "../events.mjs";
 
 const ok = data => Response.json({ code: 0, data });
 function fixture(t, serve, realm = "cn") {
@@ -65,6 +66,25 @@ test("a growth-task round with completed and failed tasks carries partial counts
     assert.deepEqual(error.counts, { succeeded: 1, failed: 1, limited: 0, total: 2 });
     return true;
   });
+});
+
+test("a one-task run reports and claims only the task picked from the board", async t => {
+  let reported = false;
+  const p = fixture(t, path => {
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: [
+      { task_code: "chat_5", title: "聊天 5 次", accept_status: reported ? "completed" : "accepted", progress: { current: reported ? 1 : 0, target: 1 }, reward_credit: 100 },
+      { task_code: "create_canvas", title: "创建画布", accept_status: "accepted", progress: { current: 0, target: 1 }, reward_credit: 100 }
+    ] });
+    if (path === "/v2/report") { reported = true; return ok({}); }
+    if (path === "/activity/growth/tasks/chat_5/claim") return ok({ credit: 100 });
+    throw new Error("unexpected endpoint " + path);
+  });
+  p.context.task = "chat_5";
+  const got = await p.run("task");
+  assert.deepEqual(got, { task: "chat_5", outcome: "claimed" });
+  assert.equal(p.seen.filter(r => r.path === "/v2/report").length, 1);
+  assert.deepEqual(p.seen.filter(r => r.path.includes("/claim")).map(r => r.path), ["/activity/growth/tasks/chat_5/claim"]);
+  assert.ok(!p.seen.some(r => r.path.includes("create_canvas")));
 });
 
 test("an all round with completed and failed actions carries partial counts", async t => {
@@ -150,6 +170,20 @@ test("a partially failed report resumes remaining events without repeating accep
   assert.equal(attempts, 4);
 });
 
+test("a network failure stops a task round at the first task", async t => {
+  let reports = 0;
+  const p = fixture(t, path => {
+    if (path.endsWith("/tasks")) return ok({ tasks: [
+      { task_code: "RichMeow_Chat", accept_status: "accepted", progress: { current: 0, target: 1 } },
+      { task_code: "Buddy_App", accept_status: "accepted", progress: { current: 0, target: 1 } }
+    ] });
+    if (path === "/v2/report") { reports++; throw Object.assign(new Error("ECONNRESET: The socket connection was closed unexpectedly."), { code: "ECONNRESET" }); }
+    throw new Error("unexpected " + path);
+  });
+  await assert.rejects(p.run("tasks"), /ECONNRESET/);
+  assert.equal(reports, 1);
+});
+
 test("desktop and web tasks are reported as those clients; what nothing here can do is left alone and not listed", async t => {
   const done = new Set();
   const p = fixture(t, (path, request) => {
@@ -187,7 +221,7 @@ test("the mini program's tasks are listed, accepted, reported and claimed as a m
       { task_code: "chat_5", accept_status: "claimed", progress: { current: 5, target: 5 } },
       { task_code: "Sequential_Tasks_3", title: "完成 5 次对话", accept_status: state.Sequential_Tasks_3, progress: state.Sequential_Tasks_3 === "not_accepted" ? null : { current: sent.Sequential_Tasks_3, target: 5 } },
       { task_code: "Sequential_Tasks_2", title: "完成 1 次专家对话", accept_status: state.Sequential_Tasks_2, progress: state.Sequential_Tasks_2 === "not_accepted" ? null : { current: sent.Sequential_Tasks_2, target: 1 } },
-      { task_code: "Sequential_Tasks_4", title: "还没适配的", accept_status: "not_accepted", progress: null }
+      { task_code: "Future_Unsupported_Task", title: "还没适配的", accept_status: "not_accepted", progress: null }
     ] });
     if (path.endsWith("/accept")) {
       assert.equal(mp, true, "accepted as the mini program");
@@ -441,6 +475,86 @@ test("a 10034 web refusal explains that OAuth is not an API key", async t => {
   }, "intl");
   await assert.rejects(p.run("web"), /网页会话：需要可用的 CODEBUDDY_API_KEY。当前 OAuth 登录没有提供该 Key，免费账号也无法创建个人 API Key；请使用已有 Key 的付费账号/);
   assert.deepEqual(p.seen.map(request => request.path), ["/console/as/conversations/"]);
+  assert.equal(p.state.webPaused["intl:u1"].day, calendar(new Date(), p.context.config.timezone).day);
+  p.seen.length = 0;
+  assert.deepEqual(await p.run("web"), { skipped: true, reason: "paused" });
+  assert.equal(p.seen.length, 0, "a paused web turn does not retry the same day");
+});
+
+test("a 10034 from the fallback model also pauses the web turn for the day", async t => {
+  const p = fixture(t, (path, request) => {
+    if (path === "/console/as/conversations/" && request.body) {
+      return request.body.model === "deepseek-v4.1-flash"
+        ? Response.json({ code: 10034, msg: "CODEBUDDY_API_KEY required" })
+        : Response.json({ code: 6004, msg: "额度已用完" });
+    }
+    throw new Error("unexpected endpoint " + path);
+  }, "intl");
+  p.context.models = { plan: { paid: false }, models: [{ id: "hy3", rate: 0 }] };
+  await assert.rejects(p.run("web"), /网页会话：需要可用的 CODEBUDDY_API_KEY/);
+  assert.deepEqual(p.seen.filter(r => r.path === "/console/as/conversations/" && r.body).map(r => r.body.model), ["hy3", "deepseek-v4.1-flash"]);
+  assert.equal(p.state.webPaused["intl:u1"].day, calendar(new Date(), p.context.config.timezone).day);
+  p.seen.length = 0;
+  assert.deepEqual(await p.run("web"), { skipped: true, reason: "paused" });
+  assert.equal(p.seen.length, 0);
+});
+
+// Sharing a skill is a real share channel plus two channel actions; the task
+// has no progress until the channel exists. The channel is reused on a retry.
+test("skill_share creates one real share channel, reports its actions and claims", async t => {
+  let accepted = false, reported = false, claimed = false, channels = 0;
+  const p = fixture(t, (path, request) => {
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: [{
+      task_code: "skill_share", title: "分享一个技能给好友", task_type: "single",
+      accept_status: claimed ? "claimed" : reported ? "completed" : accepted ? "accepted" : "not_accepted",
+      progress: reported ? { current: 1, target: 1 } : null, reward_credit: 50
+    }] });
+    if (path === "/v2/activity/growth/tasks/accept") { accepted = true; return ok({ results: [{ task_code: "skill_share", status: "accepted" }] }); }
+    if (path === "/v2/operation-platform/market/skill/list") return ok({ skills: [{ skill_id: "skill_2097350077599879168", name: "pptx" }] });
+    if (path === "/api/v2/open-platform/asset-shares/c2c/channels") { channels++; return ok({ share_code: "share-1" }); }
+    if (path === "/v2/report") { reported = true; return ok({}); }
+    if (path === "/activity/growth/tasks/skill_share/claim") { claimed = true; return ok({ credit: 50 }); }
+    if (path === "/portal/activity/config") return ok({ config: { in_period: false } });
+    throw new Error("unexpected " + path);
+  });
+  p.state.shares = { "cn:u1:skill_share": { shareCode: "stale", skillId: "stale", skillName: "stale" } };
+  await p.run("tasks");
+  const market = p.seen.find(r => r.path === "/v2/operation-platform/market/skill/list");
+  const channel = p.seen.find(r => r.path === "/api/v2/open-platform/asset-shares/c2c/channels");
+  const report = p.seen.find(r => r.path === "/v2/report");
+  assert.deepEqual([market.host, channel.host, report.host], ["www.codebuddy.cn", "open.workbuddy.cn", "copilot.tencent.com"]);
+  assert.equal(report.body.length, 2);
+  assert.deepEqual(report.body.map(e => [e.eventCode, e.id, e.skillId]), [["skill_share_channel_action", "share-1", "skill_2097350077599879168"], ["skill_share_channel_action", "share-1", "skill_2097350077599879168"]]);
+  assert.ok(p.seen.some(r => r.path === "/activity/growth/tasks/skill_share/claim"));
+  assert.equal(channels, 1);
+
+  await p.run("tasks");
+  assert.equal(channels, 1, "a claimed task does not create another channel");
+
+  // Off for bulk runs, but the task center's one-task button is an explicit
+  // request: it still creates the channel.
+  accepted = reported = claimed = false;
+  channels = 0;
+  p.state.shares = {};
+  p.context.config.skillShare = false;
+  p.context.task = "skill_share";
+  assert.deepEqual(await p.run("task"), { task: "skill_share", outcome: "claimed" });
+  assert.equal(channels, 1);
+});
+
+test("turning automatic skill sharing off leaves the task untouched in a task round", async t => {
+  const p = fixture(t, path => {
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: [{
+      task_code: "skill_share", title: "分享一个技能给好友", task_type: "single",
+      accept_status: "not_accepted", progress: null, reward_credit: 50
+    }] });
+    if (path === "/portal/activity/config") return ok({ config: { in_period: false } });
+    throw new Error("unexpected " + path);
+  });
+  p.context.config.skillShare = false;
+  await p.run("tasks");
+  assert.ok(!p.seen.some(r => /skill|report|claim|asset-shares/.test(r.path)), JSON.stringify(p.seen.map(r => r.path)));
+  assert.match(p.logs.join("\n"), /自动分享技能已关闭/);
 });
 
 // The server drops a buddyapp_enter_click whose isFirstPage is the string "1"
@@ -479,4 +593,96 @@ test("a task whose report keeps failing for its format pauses after three days, 
   await p.run("tasks");
   assert.equal(p.state.taskStops["cn:u1:Buddy_App"], undefined, "a manual run clears the pause");
   assert.ok(p.seen.some(r => r.path.endsWith("/claim")));
+});
+
+test("sweep accepts pending tasks and claims reached rewards without reporting any events", async t => {
+  const accepted = [], claimed = [];
+  const p = fixture(t, (path, request) => {
+    const mp = request.headers["X-Client-Platform"] === "miniprogram";
+    if (path === "/v2/activity/growth/tasks") {
+      if (mp) return ok({ tasks: [
+        { task_code: "Sequential_Tasks_2", title: "完成 1 次专家对话", task_type: "single", accept_status: "not_accepted", progress: null }
+      ] });
+      return ok({ tasks: [
+        { task_code: "done", title: "已完成", task_type: "single", accept_status: "completed", progress: { current: 1, target: 1 } },
+        { task_code: "pending", title: "待接取", task_type: "single", accept_status: "not_accepted", progress: { current: 0, target: 3 } },
+        { task_code: "locked", title: "未解锁", task_type: "single", accept_status: "completed", locked: true, progress: { current: 1, target: 1 } },
+        { task_code: "claimed", title: "已领取", task_type: "single", accept_status: "claimed", progress: { current: 1, target: 1 } }
+      ] });
+    }
+    if (path === "/v2/activity/growth/tasks/accept") {
+      accepted.push({ code: request.body.task_codes[0], mp });
+      return ok({ results: [{ task_code: request.body.task_codes[0], status: "accepted" }] });
+    }
+    if (path.endsWith("/claim")) {
+      claimed.push(path.split("/").at(-2));
+      return ok({ credit: 100, energy: 5 });
+    }
+    if (path === "/portal/activity/config") return ok({ config: { in_period: false } });
+    throw new Error("unexpected endpoint " + path);
+  });
+  const result = await p.run("sweep");
+  assert.deepEqual(result, { accepted: 2, claimed: 1, credit: 100, energy: 5 });
+  assert.deepEqual(accepted, [{ code: "pending", mp: false }, { code: "Sequential_Tasks_2", mp: true }]);
+  assert.deepEqual(claimed, ["done"]);
+  assert.ok(!p.seen.some(request => request.path === "/v2/report"));
+  assert.equal(p.logs.at(-1), "补领：接取 2 项；领取 1 项 +100 积分 / 5 能量");
+});
+
+test("sequential tasks 4-7 build the mini and desktop event shapes upstream counts", () => {
+  const account = { auth: { uid: "u1" } };
+  const four = buildEvents(account, specs.Sequential_Tasks_4);
+  assert.deepEqual(four.map(event => [event.eventCode, event.mode, event.scheduleType]), [["automated_task_create_suc", "CLOUD", "daily"]]);
+  const five = buildEvents(account, specs.Sequential_Tasks_5);
+  assert.deepEqual(five.map(event => [event.eventCode, event.requestModelId, event.requestModelName]), [["chat_request_send", "glm-5.2", "GLM-5.2"]]);
+  assert.deepEqual([specs.Sequential_Tasks_6.target, specs.Sequential_Tasks_6.pace], [10, 45_000]);
+  const seven = buildEvents(account, specs.Sequential_Tasks_7);
+  assert.deepEqual(seven.map(event => event.eventCode), [
+    "agent_task_created", "chat_message_send", "chat_request_send", "chat_message_response", "chat_message_status", "chat_request_response", "playbook_cta_click", "playbook_prompt_send"
+  ]);
+  assert.equal(seven[7].id, "01-ProductDesign");
+  assert.equal(seven[7].conversationId, seven[0].conversationId);
+});
+
+test("mini automation and the PC playbook task are accepted, reported and claimed", async t => {
+  const state = { Sequential_Tasks_4: "not_accepted", Sequential_Tasks_7: "not_accepted" }, reported = {};
+  const p = fixture(t, (path, request) => {
+    const mini = request.headers["X-Client-Platform"] === "miniprogram";
+    if (path === "/v2/activity/growth/tasks") {
+      if (mini) return ok({ tasks: [{
+        task_code: "Sequential_Tasks_4", title: "创建 1 个定时任务", task_type: "single",
+        accept_status: state.Sequential_Tasks_4, progress: reported.Sequential_Tasks_4 ? { current: 1, target: 1 } : null
+      }] });
+      return ok({ tasks: [{
+        task_code: "Sequential_Tasks_7", title: "体验灵感功能", task_type: "single",
+        accept_status: state.Sequential_Tasks_7, progress: reported.Sequential_Tasks_7 ? { current: 1, target: 1 } : { current: 0, target: 1 }
+      }] });
+    }
+    if (path === "/v2/activity/growth/tasks/accept") {
+      const code = request.body.task_codes[0];
+      state[code] = "accepted";
+      return ok({ results: [{ task_code: code, status: "accepted" }] });
+    }
+    if (path === "/v2/report") {
+      if (request.host === "copilot.tencent.com") {
+        assert.deepEqual(request.body.slice(-2).map(event => event.eventCode), ["playbook_cta_click", "playbook_prompt_send"]);
+        reported.Sequential_Tasks_7 = true;
+      } else {
+        assert.deepEqual(request.body.map(event => event.eventCode), ["automated_task_create_suc"]);
+        reported.Sequential_Tasks_4 = true;
+      }
+      return ok({});
+    }
+    if (path.endsWith("/claim")) {
+      const code = path.split("/").at(-2);
+      state[code] = "claimed";
+      return ok({ credit: 100, energy: 5 });
+    }
+    if (path === "/portal/activity/config") return ok({ config: { in_period: false } });
+    throw new Error("unexpected endpoint " + path);
+  });
+  p.context.pace = 0;
+  assert.deepEqual(await p.run("tasks"), { checked: 2 });
+  assert.deepEqual(state, { Sequential_Tasks_4: "claimed", Sequential_Tasks_7: "claimed" });
+  assert.equal(p.logs.at(-1), "本次领奖 2 项");
 });

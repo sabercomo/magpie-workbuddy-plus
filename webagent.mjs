@@ -56,7 +56,10 @@ export async function webActivity(client, { model = fallback, prompt = "只回�
       if (body?.model) client.recordLimit(body.model, payload);
       const full = payload.code === 10105;
       const needsKey = payload.code === 10034;
-      throw new Error(needsKey ? "网页会话：需要可用的 CODEBUDDY_API_KEY。当前 OAuth 登录没有提供该 Key，免费账号也无法创建个人 API Key；请使用已有 Key 的付费账号" : full ? "网页会话：活跃会话已满 10 条，请到 workbuddy.ai 网页端结束几条旧对话" : `网页会话：HTTP ${response.status}，${payload.msg || `code=${payload.code}`}`);
+      const error = new Error(needsKey ? "网页会话：需要可用的 CODEBUDDY_API_KEY。当前 OAuth 登录没有提供该 Key，免费账号也无法创建个人 API Key；请使用已有 Key 的付费账号" : full ? "网页会话：活跃会话已满 10 条，请到 workbuddy.ai 网页端结束几条旧对话" : `网页会话：HTTP ${response.status}，${payload.msg || `code=${payload.code}`}`);
+      error.code = payload.code;
+      error.status = response.status;
+      throw error;
     }
     if (body?.model) client.clearLimit(body.model);
     return payload.data;

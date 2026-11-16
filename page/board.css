@@ -1,23 +1,75 @@
-/* Magpie's page supplies its theme as --magpie-*; the local panel uses the fallbacks. */
-.wb-board{--wb-card:var(--magpie-card,#fff);--wb-line:var(--magpie-line,#dce1d8);--wb-muted:var(--magpie-muted,#69746c);--wb-accent:var(--magpie-accent,#25583e);--wb-soft:var(--magpie-accent-soft,#eaf0e7);--wb-warn:#b4691b;--wb-urgent:#c0392b;--wb-go:#2d61a0;--wb-hover:color-mix(in srgb,var(--wb-muted) 9%,transparent)}
+/* Magpie's page supplies its theme as --magpie-*; the local panel sets matching tokens. */
+.wb-board{--wb-card:var(--magpie-card,#fff);--wb-line:var(--magpie-line,#dce1d8);--wb-muted:var(--magpie-muted,#69746c);--wb-accent:var(--magpie-accent,#25583e);--wb-soft:var(--magpie-accent-soft,#eaf0e7);--wb-warn:#b4691b;--wb-urgent:#c0392b;--wb-go:#2d61a0;--wb-ok:var(--wb-accent);--wb-hover:color-mix(in srgb,var(--wb-muted) 9%,transparent)}
 .wb-sub{font-size:12px;color:var(--wb-muted)}
 .wb-label{font-size:12.5px;font-weight:600}
 .wb-line{display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0}
 
-.wb-calm{font-size:12px;color:var(--wb-muted);margin:10px 2px 0}
-.wb-alerts{--tone:var(--wb-warn);border:1px solid color-mix(in srgb,var(--tone) 35%,transparent);background:color-mix(in srgb,var(--tone) 9%,var(--wb-card));border-radius:12px;padding:10px 14px;margin-top:12px;display:flex;flex-direction:column;gap:4px}
-.wb-alerts.urgent{--tone:var(--wb-urgent)}
-.wb-alerts-head{font-weight:600;color:var(--tone)}
-.wb-alert{font-size:12.5px;color:var(--wb-warn)}.wb-alert.urgent{color:var(--wb-urgent)}.wb-alert.plain{color:inherit}.wb-alert.plain .wb-alert-aside{color:var(--wb-muted);opacity:1}
-.wb-notes{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:10px 14px;margin-top:12px}
-.wb-alert-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wb-alert-aside{flex:none;font-variant-numeric:tabular-nums;opacity:.9}
+/* Primary module navigation bar (separate from Board's 3 display modes). */
+.wb-nav{display:flex;align-items:center;gap:2px;border-bottom:1px solid var(--wb-line);margin-bottom:14px;overflow-x:auto;scrollbar-width:none}
+.wb-nav-tab{all:unset;box-sizing:border-box;position:relative;display:inline-flex;align-items:center;gap:6px;padding:8px 13px 9px;font-size:13px;font-weight:500;color:var(--wb-muted);white-space:nowrap;cursor:pointer;transition:color 120ms ease-out}
+.wb-nav-tab:hover{color:var(--magpie-fg,inherit)}
+.wb-nav-tab:focus-visible{outline:2px solid var(--wb-accent);outline-offset:-2px;border-radius:6px}
+.wb-nav-tab.active{color:var(--magpie-fg,inherit);font-weight:600}
+.wb-nav-tab.active::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;border-radius:2px 2px 0 0;background:var(--wb-accent)}
+.wb-nav-badge{font-size:11.5px;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--wb-muted) 12%,transparent);color:var(--wb-muted);font-variant-numeric:tabular-nums}
+.wb-nav-tab.active .wb-nav-badge{background:var(--wb-soft);color:var(--wb-accent)}
+.wb-nav-badge.hot{background:var(--wb-soft);color:var(--wb-accent);font-weight:600}
+
+/* Hallmark · component: alert footer · genre: modern-minimal · theme: Magpie tokens
+ * states: calm · collapsed · hover · focus · expanded
+ * contrast: inherited from Magpie tokens
+ */
+.wb-alert-footer{margin:18px 0;padding-top:14px;border-top:1px solid var(--wb-line);--tone:var(--wb-muted)}
+.wb-alert-footer.has-warn{--tone:var(--wb-warn)}
+.wb-alert-footer.has-urgent{--tone:var(--wb-urgent)}
+.wb-alert-empty{margin:18px 0 0;padding-top:14px;border-top:1px solid var(--wb-line);font-size:12px;color:var(--wb-muted)}
+.wb-alert-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.wb-alert-chips{display:flex;align-items:baseline;gap:9px;min-width:0;flex:1;flex-wrap:wrap}
+.wb-alert-mark{display:inline-flex;align-items:center;gap:7px;flex:none;font-size:12px;font-weight:600;color:var(--tone)}
+.wb-alert-mark::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.wb-alert-preview{font-size:12px;line-height:1.45;color:var(--wb-muted);min-width:0;overflow-wrap:anywhere}
+.wb-alert-toggle{all:unset;box-sizing:border-box;flex:none;font-size:12px;color:var(--wb-accent);cursor:pointer;padding:1px 0;white-space:nowrap}
+.wb-alert-toggle:hover{text-decoration:underline;text-underline-offset:3px}
+.wb-alert-toggle:focus-visible{outline:2px solid var(--wb-accent);outline-offset:3px;border-radius:3px}
+.wb-alert-drawer{padding-top:8px}
+.wb-alert-group{display:flex;flex-direction:column}
+.wb-alert-section{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--wb-line);--tone:var(--wb-warn)}
+.wb-alert-section:first-child{border-top:0;padding-top:8px}
+.wb-alert-section.urgent{--tone:var(--wb-urgent)}
+.wb-alert-section-head{font-size:11.5px;font-weight:600;color:var(--tone)}
+.wb-alert-row{display:grid;grid-template-columns:5px auto minmax(0,1fr);align-items:start;gap:9px;font-size:12.5px;line-height:1.45;--tone:var(--wb-warn)}
+.wb-alert-row.urgent{--tone:var(--wb-urgent)}
+.wb-alert-row.plain{--tone:var(--wb-muted)}
+.wb-alert-row::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--tone);margin-top:.58em}
+.wb-alert-text{min-width:0;overflow-wrap:anywhere}
+.wb-alert-aside{min-width:0;font-size:11.5px;color:var(--wb-muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.wb-alert-more{border-top:1px solid var(--wb-line);padding:9px 0 0}
+.wb-alert-more-head{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;padding:2px 0 6px;font-size:12px;color:var(--wb-muted);cursor:pointer;list-style:none}
+.wb-alert-more-head::-webkit-details-marker{display:none}
+.wb-alert-more-head::after{content:"⌄";margin-left:auto;font-size:13px;line-height:1;transition:transform 150ms ease}
+.wb-alert-more-head:hover{color:inherit}
+.wb-alert-more-head:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px;border-radius:3px}
+.wb-alert-more-count{font-variant-numeric:tabular-nums}
+.wb-alert-more[open] .wb-alert-more-head::after{transform:rotate(180deg)}
+.wb-alert-more-body{display:flex;flex-direction:column;gap:6px;padding-top:2px}
+.wb-calm{font-size:12px;color:var(--wb-muted);margin:10px 2px 0}.wb-pad{padding:0 14px 12px}
+
+/* Board toolbar: realm filter + view mode switcher */
+.wb-board-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.wb-board-filters,.wb-view-switch{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wb-swap-btn,.wb-filter-btn{all:unset;box-sizing:border-box;font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--wb-line);background:var(--wb-card);color:var(--wb-muted);cursor:pointer;white-space:nowrap;transition:background-color 120ms ease-out,color 120ms ease-out}
+.wb-swap-btn:hover,.wb-filter-btn:hover{background:var(--wb-hover);color:inherit}
+.wb-filter-btn.on{background:var(--wb-soft);border-color:color-mix(in srgb,var(--wb-accent) 45%,var(--wb-line));color:var(--wb-accent);font-weight:600}
+.wb-swap-btn:focus-visible,.wb-filter-btn:focus-visible,.wb-link-btn:focus-visible,.wb-mini-tab:focus-visible{outline:2px solid var(--wb-accent);outline-offset:1px}
+.wb-link-btn{all:unset;box-sizing:border-box;font-size:12px;font-weight:500;color:var(--wb-accent);cursor:pointer;padding:2px 6px;border-radius:6px;white-space:nowrap}
+.wb-link-btn:hover{background:var(--wb-soft)}
 
 .wb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--wb-line);border:1px solid var(--wb-line);border-radius:12px;overflow:hidden;margin-bottom:12px}
 .wb-kpi{background:var(--wb-card);padding:11px 14px 10px;display:flex;flex-direction:column;gap:1px;min-width:0}
 .wb-kpi strong{font-size:21px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wb-kpi .wb-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+/* List view */
 .wb-list{border:1px solid var(--wb-line);border-radius:12px;overflow:hidden;background:var(--wb-card)}
 .wb-row{all:unset;box-sizing:border-box;width:100%;display:grid;grid-template-columns:30px minmax(0,1.1fr) minmax(0,1.3fr) 104px 14px;gap:12px;align-items:center;padding:10px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color 120ms ease-out}
 .wb-row:hover{background:var(--wb-hover)}
@@ -40,7 +92,7 @@
 .wb-chevron{color:var(--wb-muted);font-size:17px;line-height:1;transition:transform 260ms cubic-bezier(.2,.8,.2,1)}
 .wb-row[aria-expanded="true"] .wb-chevron{transform:rotate(90deg)}
 
-/* Critically damped feel: quick start, no overshoot. */
+/* Account detail panel (unchanged layout) */
 .wb-detail{display:grid;grid-template-rows:0fr;transition:grid-template-rows 280ms cubic-bezier(.2,.8,.2,1)}
 .wb-detail.open{grid-template-rows:1fr}
 .wb-detail-in{overflow:hidden;min-height:0}
@@ -51,7 +103,8 @@
 .wb-when{font-size:12px;color:var(--wb-muted);white-space:nowrap;font-variant-numeric:tabular-nums}.wb-when.soon{color:var(--wb-warn)}.wb-when.urgent{color:var(--wb-urgent);font-weight:600}
 .wb-stats{font-size:12.5px;font-variant-numeric:tabular-nums}
 .wb-pill{flex:none;font-size:11.5px;padding:1px 8px;border-radius:10px;background:var(--wb-soft);white-space:nowrap}
-.wb-pill.ok{color:var(--wb-accent)}.wb-pill.warn{color:var(--wb-warn)}.wb-pill.go{color:var(--wb-go)}
+.wb-pill.ok{color:var(--wb-accent)}.wb-pill.warn{color:var(--wb-warn)}.wb-pill.go{color:var(--wb-go)}.wb-pill.urgent{color:var(--wb-urgent);background:color-mix(in srgb,var(--wb-urgent) 12%,var(--wb-card))}
+.wb-inline-actions{display:inline-flex;align-items:center;gap:6px}
 .wb-bar{height:5px;border-radius:3px;background:var(--wb-soft);overflow:hidden}.wb-bar span{display:block;height:100%;background:var(--wb-go);border-radius:3px}
 .wb-chart{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;height:54px;align-items:end}
 .wb-col{display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;gap:2px}
@@ -59,20 +112,18 @@
 .wb-col small{font-size:10px;color:var(--wb-muted);line-height:1}
 .wb-legend{font-size:11.5px;color:var(--wb-muted);margin:8px 2px 0}
 
-
-/* View switcher, shaped like Magpie's own segmented controls. */
-.wb-viewbar{display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+/* Segmented controls */
 .wb-segs{display:inline-flex;gap:2px;padding:2px;border-radius:8px;background:var(--wb-soft);max-width:100%;overflow-x:auto;scrollbar-width:none}
-.wb-seg-btn{all:unset;box-sizing:border-box;padding:3px 12px;border-radius:6px;font-size:12.5px;color:var(--wb-muted);white-space:nowrap;cursor:pointer;transition:background-color 120ms ease-out,color 120ms ease-out}
+.wb-seg-btn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border-radius:6px;font-size:12px;color:var(--wb-muted);white-space:nowrap;cursor:pointer;transition:background-color 120ms ease-out,color 120ms ease-out}
 .wb-seg-btn:hover{color:inherit}.wb-seg-btn:focus-visible{outline:2px solid var(--wb-accent);outline-offset:-2px}
 .wb-seg-btn.on{background:var(--wb-card);color:inherit;font-weight:600;box-shadow:0 0 0 1px var(--wb-line)}
 .wb-enter{animation:wb-enter 220ms cubic-bezier(.2,.8,.2,1)}
 @keyframes wb-enter{from{opacity:0;transform:translateY(4px)}}
 
-/* Rings view */
+/* Rings view & unified spotlight */
 .wb-card{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .wb-view-rings>.wb-segs{margin-bottom:12px}
-.wb-ringcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.wb-ringcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(184px,1fr));gap:12px}
 .wb-ringcard{all:unset;box-sizing:border-box;background:var(--wb-card);border:1px solid var(--wb-line);border-radius:14px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;text-align:center;transition:border-color 120ms ease-out}
 .wb-ringcard:hover{border-color:var(--wb-muted)}.wb-ringcard:active{transform:scale(.98);transition:transform 100ms ease-out}.wb-ringcard:focus-visible{outline:2px solid var(--wb-accent)}
 .wb-ringcard .wb-rings-big{width:112px;height:112px;margin-bottom:8px}
@@ -80,31 +131,29 @@
 .wb-ring-none{width:112px;height:112px;margin-bottom:8px;border-radius:50%;border:12px solid var(--wb-soft);box-sizing:border-box;display:grid;place-items:center;font-size:11.5px;color:var(--wb-muted)}
 .wb-rings-big .wb-ring-track,.wb-rings-big .wb-ring{stroke-width:12}
 .wb-b-top{display:grid;grid-template-columns:240px minmax(0,1fr);gap:12px;align-items:stretch}.wb-b-top.solo{grid-template-columns:1fr}
-/* The column beside the rings sets the row's height; the rings only fill what's left,
-   so they can never push the card taller than its neighbour. */
 .wb-b-rings{align-items:stretch;padding:18px 16px 16px}
 .wb-ring-fit{flex:1 1 0;min-height:120px;position:relative}
 .wb-ring-fit .wb-rings-big{position:absolute;inset:0;width:100%;height:100%}
 .wb-keys{width:100%;display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.wb-b-side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.wb-hero{display:flex;align-items:baseline;gap:6px}.wb-hero strong{font-size:30px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.wb-b-foot{margin-top:12px;flex-direction:row;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px 16px}
+.wb-b-todo{display:flex;gap:10px;align-items:baseline;min-width:0;font-size:12.5px}
+.wb-warn-text{color:var(--wb-warn)}
 .wb-key{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap}
 .wb-dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
 .wb-dot-none{box-shadow:inset 0 0 0 1.5px var(--wb-muted)}
 .wb-dot-a{background:var(--wb-accent)}.wb-dot-b{background:color-mix(in srgb,var(--wb-accent) 68%,var(--wb-card))}.wb-dot-c{background:color-mix(in srgb,var(--wb-accent) 42%,var(--wb-card))}
-.wb-b-side{display:flex;flex-direction:column;gap:12px;min-width:0}
-.wb-hero{display:flex;align-items:baseline;gap:6px}.wb-hero strong{font-size:30px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
-.wb-timeline{display:flex;flex-direction:column;gap:4px}
-.wb-track{position:relative;height:58px;margin:0 9px}
+.wb-timeline{display:flex;flex-direction:column;gap:4px;margin:2px 0 4px}
+.wb-track{position:relative;height:54px;margin:0 9px}
 .wb-track::before{content:"";position:absolute;left:0;right:0;top:12px;height:1px;background:var(--wb-line)}
 .wb-pkg-dot{position:absolute;top:12px;transform:translate(-50%,-50%);border-radius:50%;background:var(--wb-accent);box-shadow:0 0 0 2px var(--wb-card)}
 .wb-pkg-dot.soon{background:var(--wb-warn)}.wb-pkg-dot.urgent{background:var(--wb-urgent)}
-.wb-tl-label{position:absolute;top:26px;transform:translateX(-50%);font-size:11.5px;color:var(--wb-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
-.wb-tl-label.low{top:42px}.wb-tl-label.start{transform:translateX(-9px)}.wb-tl-label.end{transform:translateX(calc(-100% + 9px))}
+.wb-tl-label{position:absolute;top:24px;transform:translateX(-50%);font-size:11px;color:var(--wb-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.wb-tl-label.low{top:39px}.wb-tl-label.start{transform:translateX(-9px)}.wb-tl-label.end{transform:translateX(calc(-100% + 9px))}
 .wb-tl-label.soon{color:var(--wb-warn)}.wb-tl-label.urgent{color:var(--wb-urgent);font-weight:600}
-.wb-b-foot{margin-top:12px;flex-direction:row;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px 16px}
-.wb-b-todo{display:flex;gap:10px;align-items:baseline;min-width:0;font-size:12.5px}
-.wb-warn-text{color:var(--wb-warn)}
 
-/* Widgets view: small is one cell, medium two, wide the whole row. */
+/* Widgets view */
 .wb-widgets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .wb-w{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:18px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0;position:relative}
 .wb-w-s{aspect-ratio:1;justify-content:space-between}.wb-w-m{grid-column:span 2}.wb-w-w{grid-column:1/-1}
@@ -116,6 +165,8 @@
 .wb-w-mid{font-size:17px;font-weight:650;letter-spacing:-.01em;line-height:1.25}
 .wb-w-foot{font-size:12px;color:var(--wb-muted);display:flex;flex-direction:column;gap:1px}
 .wb-w-corner{position:absolute;top:12px;right:16px;font-size:17px;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.wb-w-corner-btn{all:unset;position:absolute;top:12px;right:14px;font-size:12px;font-weight:500;color:var(--wb-accent);cursor:pointer;padding:1px 6px;border-radius:6px}
+.wb-w-corner-btn:hover{background:var(--wb-soft)}
 .wb-w-acct{display:flex;flex-direction:column;gap:4px}.wb-num{font-size:12.5px;font-variant-numeric:tabular-nums}
 .wb-w-rings{display:flex;gap:14px;flex-wrap:wrap}.wb-w-ring{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
 .wb-w-ring .wb-rings{width:40px;height:40px}.wb-w-ring .wb-sub{max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -124,19 +175,23 @@
 .wb-acc-0,.wb-stack .wb-col span.wb-acc-0{background:var(--wb-accent)}.wb-acc-1,.wb-stack .wb-col span.wb-acc-1{background:color-mix(in srgb,var(--wb-accent) 62%,var(--wb-card))}.wb-acc-2,.wb-stack .wb-col span.wb-acc-2{background:color-mix(in srgb,var(--wb-accent) 32%,var(--wb-card))}
 .wb-w-keys{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--wb-muted)}.wb-w-keys .wb-key{font-size:12px}
 
-/* The official sign-in the add-account button started. */
+/* Compact Schedule bridge strip under Board */
+.wb-bridge{margin-top:14px;background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.wb-bridge-info{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+
+/* Sign-in status banner */
 .wb-signin{border:1px solid var(--wb-line);background:var(--wb-card);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;display:flex;flex-direction:column;gap:4px}
 .wb-signin.waiting{border-color:color-mix(in srgb,var(--wb-go) 40%,transparent);color:var(--wb-go)}
 .wb-signin.done{color:var(--wb-accent)}.wb-signin.failed{border-color:color-mix(in srgb,var(--wb-urgent) 40%,transparent);color:var(--wb-urgent)}
 .wb-url{user-select:all;overflow-wrap:anywhere}
 
-/* Today's schedule, under every view. */
-.wb-sched{margin-top:12px;background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+/* Schedule tab */
+.wb-sched{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.wb-sched-head-r{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}
 .wb-sched-realm{font-size:12.5px;font-weight:600}
 .wb-sched>.wb-line:not(:first-child){margin-top:4px;padding-top:8px;border-top:1px solid var(--wb-line)}
 .wb-sched>.wb-line:nth-child(2){border-top:0;padding-top:0}
 .wb-paused{opacity:.55}
-/* A schedule switch: its state in words, then the knob, in the board's own green. */
 .wb-switch{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:8px;padding:3px 2px 3px 8px;border-radius:999px;cursor:pointer;font-size:12px;color:var(--wb-muted)}
 .wb-switch:hover{background:var(--wb-hover)}
 .wb-switch:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
@@ -149,25 +204,17 @@
 .wb-slot{border:1px solid var(--wb-line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}
 .wb-slot strong{font-size:15px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .wb-slot.next{border-color:var(--wb-accent);box-shadow:inset 0 0 0 1px var(--wb-accent)}.wb-slot.next .wb-pill{color:var(--wb-accent);font-weight:600}
-.wb-pill.urgent{color:var(--wb-urgent)}
-.wb-widgets>.wb-sched{grid-column:1/-1;margin-top:0}
 
-/* 积分流水: when, how much, what gave it, what's left of it. */
+/* Ledger & Deductions */
 .wb-ledger{display:flex;flex-direction:column;gap:2px;margin-top:4px}
-.wb-ledger-row{display:grid;grid-template-columns:auto minmax(52px,max-content) minmax(0,1fr) auto;gap:10px;align-items:baseline;font-variant-numeric:tabular-nums}
+.wb-ledger-row{position:relative;display:grid;grid-template-columns:auto minmax(52px,max-content) minmax(0,1fr) auto;gap:10px;align-items:baseline;font-variant-numeric:tabular-nums}
 .wb-ledger-row strong{font-weight:600;text-align:right;white-space:nowrap}.wb-gain{color:var(--wb-accent)}
 .wb-ledger-why{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* The deduction's time: a clock, kept tabular so the column doesn't wobble. */
 .wb-clock{white-space:nowrap;font-variant-numeric:tabular-nums}
-/* A charge that arrived since the last redraw slides in and marks itself with
-   a thin top rule that fades. Rows redraw on every poll, so only a genuinely
-   new row carries .wb-charge-new; an old one is redrawn unmarked. */
-.wb-ledger-row{position:relative}
 .wb-ledger-row.wb-charge-new{animation:wb-charge-in 240ms cubic-bezier(.2,.8,.2,1)}
 @keyframes wb-charge-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .wb-ledger-row.wb-charge-new::before{content:"";position:absolute;inset:0 0 auto;height:1.5px;background:var(--wb-accent);opacity:.9;animation:wb-charge-line 1.2s ease-out forwards;pointer-events:none}
 @keyframes wb-charge-line{to{opacity:0}}
-/* 扣分明细: same rows, a charge in place of a grant; the rest behind a fold. */
 .wb-spend{color:inherit}
 .wb-more>summary{cursor:pointer;margin-top:4px;list-style:none}
 .wb-more>summary::-webkit-details-marker{display:none}
@@ -181,8 +228,11 @@
 .wb-fold-body{display:flex;flex-direction:column;gap:5px;margin-top:5px}
 .wb-col-r>.wb-fold:not(:first-child){margin-top:8px}
 
-/* Models: one row per model, its id copied by a click; a plan's locked models dimmed below. */
-.wb-realms{margin-left:auto}
+/* Models tab */
+.wb-models-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.wb-models-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wb-search{font:inherit;font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--wb-line);background:var(--wb-card);color:inherit;width:168px}
+.wb-search:focus-visible{outline:2px solid var(--wb-accent);outline-offset:1px}
 .wb-kpis.wb-kpis-3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .wb-models-hint{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 2px 10px}
 .wb-mtable{border:1px solid var(--wb-line);border-radius:12px;overflow:hidden;background:var(--wb-card);margin-bottom:12px}
@@ -207,23 +257,55 @@
 .wb-copy-note{font:11px system-ui,sans-serif;color:var(--wb-accent);white-space:nowrap}
 .wb-locked .wb-mrow{color:var(--wb-muted)}
 .wb-disclosure{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;padding:11px 14px;cursor:pointer;color:var(--wb-muted)}
-.wb-disclosure strong{color:var(--magpie-text,inherit);font-weight:600;white-space:nowrap}.wb-grow{flex:1;min-width:0}
+.wb-disclosure strong{color:var(--magpie-fg,inherit);font-weight:600;white-space:nowrap}.wb-grow{flex:1;min-width:0}
 .wb-disclosure:focus-visible{outline:2px solid var(--wb-accent);outline-offset:-2px}
 .wb-disclosure[aria-expanded="true"] .wb-chevron{transform:rotate(90deg)}
 
-@media (max-width:640px){
-  .wb-b-top{grid-template-columns:1fr}
-  .wb-widgets{grid-template-columns:repeat(2,minmax(0,1fr))}.wb-w-m{grid-column:1/-1}
-  .wb-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .wb-row{grid-template-columns:30px minmax(0,1fr) 94px 14px}.wb-row .wb-money{grid-column:2/4;grid-row:2}
-  .wb-list-head{display:none}
-  .wb-detail-grid{grid-template-columns:1fr;padding-left:14px}
-  .wb-kpis.wb-kpis-3{grid-template-columns:1fr}
-  .wb-mrow{grid-template-columns:minmax(0,1fr) 92px}.wb-mrow .wb-mctx{display:none}.wb-mrow>.wb-copy{grid-column:1/-1;grid-row:2}.wb-mrow>.wb-mreason{grid-column:1/-1;grid-row:3;flex-direction:row;gap:8px}.wb-mhead>:nth-child(2),.wb-mhead>.wb-mreason{display:none}
-}
-@media (prefers-reduced-motion:reduce){.wb-detail,.wb-chevron,.wb-row,.wb-seg-btn,.wb-ringcard,.wb-copy{transition:none}.wb-enter{animation:none}.wb-ringcard:active{transform:none}.wb-ledger-row.wb-charge-new{animation:none}.wb-ledger-row.wb-charge-new::before{animation:none;opacity:.35}}
+/* Tasks center */
+.wb-task-summary{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.wb-task-summary-l{display:flex;flex-direction:column;gap:2px;min-width:0}
+.wb-task-summary-l strong{font-size:15px;font-weight:650}
+.wb-task-summary-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wb-task-run-all{font:inherit;font-size:12px;font-weight:600;padding:5px 12px;border-radius:8px;border:1px solid var(--wb-accent);background:var(--wb-accent);color:#fff;cursor:pointer}
+.wb-task-run-all:hover{filter:brightness(1.06)}
+.wb-task-sweep{font:inherit;font-size:12px;padding:5px 11px;border-radius:8px;border:1px solid var(--wb-line);background:var(--wb-card);color:inherit;cursor:pointer}
+.wb-task-sweep:hover{background:var(--wb-hover)}
+.wb-task-run-all:disabled,.wb-task-sweep:disabled{opacity:.55;cursor:default}
+.wb-task-run-all:focus-visible,.wb-task-sweep:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+.wb-task-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.wb-task-cards-single{grid-template-columns:1fr}
+.wb-task-card{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.wb-task-card>strong{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-task{border-top:1px solid var(--wb-line);padding:8px 0 6px;display:flex;align-items:center;gap:10px;min-width:0}
+.wb-task-card>.wb-line+.wb-task,.wb-task-card>.wb-sub+.wb-task{border-top:none}
+.wb-task-main{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.wb-task-title{display:inline-flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+.wb-task-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wb-mini-bar{width:54px;height:5px;border-radius:999px;background:var(--wb-soft);overflow:hidden;flex:none}
+.wb-mini-bar span{display:block;height:100%;border-radius:999px;background:var(--wb-go)}
+.wb-mini-bar span.ok{background:var(--wb-accent)}
+.wb-task-run{flex:none;font:inherit;font-size:12px;padding:4px 11px;border-radius:7px;border:1px solid var(--wb-accent);background:transparent;color:var(--wb-accent);cursor:pointer}
+.wb-task-run:hover{background:var(--wb-soft)}
+.wb-task-run.claim{background:var(--wb-accent);color:#fff;font-weight:600}
+.wb-task-run.claim:hover{filter:brightness(1.06);background:var(--wb-accent)}
+.wb-task-run:disabled{opacity:.55;cursor:default}
+.wb-task-run:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+.wb-task-why{flex:none;white-space:nowrap}
+.wb-task-done{font-size:12px;color:var(--wb-muted);padding:4px 0}
+.wb-companions{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
 
-/* A menu in place of a native select: the field looks like the inputs beside it, the list like the page's menus. */
+.wb-group+.wb-group{margin-top:18px}
+.wb-group-head{padding:0 4px 8px;display:flex;flex-direction:column;gap:2px}
+.wb-group-top{align-items:baseline;flex-wrap:wrap}
+.wb-group-name{font-size:13.5px;font-weight:600;display:inline-flex;align-items:baseline;gap:10px}
+.wb-group-total{white-space:nowrap}
+.wb-group-total strong{font-size:17px;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums;margin-right:2px}
+.wb-group-move{all:unset;cursor:pointer;font-size:12px;font-weight:400;color:var(--wb-accent);padding:1px 5px;border-radius:5px}
+.wb-group-move:hover{background:var(--wb-soft)}.wb-group-move:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+.wb-group-move:active{transform:scale(.97)}
+.wb-w-realm{margin-top:6px}.wb-w-realm .wb-num{font-size:15px}
+
+/* Custom model picker */
 .wb-pick{position:relative;display:block}
 .wb-pick summary{list-style:none;font-weight:400;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--wb-line);cursor:pointer;user-select:none}.wb-pick summary::-webkit-details-marker{display:none}
 .wb-pick summary:hover{border-color:color-mix(in srgb,var(--wb-muted) 55%,var(--wb-line))}.wb-pick summary:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
@@ -240,17 +322,19 @@
 .wb-pick-tag{flex:none;font-size:11px;color:var(--wb-muted);font-variant-numeric:tabular-nums}
 .wb-pick-free{color:var(--wb-accent);background:var(--wb-soft);padding:1px 7px;border-radius:999px}
 .wb-pick-menu hr{border:0;border-top:1px solid var(--wb-line);margin:4px 6px}
-@media (prefers-reduced-motion:reduce){.wb-pick-chev{transition:none}.wb-pick-menu{animation:none}}
 
-/* Each build as a grouped list: a header with its name, credits and accounts, its rows in one card below. */
-.wb-group+.wb-group{margin-top:20px}
-.wb-group-head{padding:0 4px 8px;display:flex;flex-direction:column;gap:2px}
-.wb-group-top{align-items:baseline;flex-wrap:wrap}
-.wb-group-name{font-size:13.5px;font-weight:600;display:inline-flex;align-items:baseline;gap:10px}
-.wb-group-total{white-space:nowrap}
-.wb-group-total strong{font-size:17px;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums;margin-right:2px}
-.wb-group-move{all:unset;cursor:pointer;font-size:12px;font-weight:400;color:var(--wb-accent);padding:1px 5px;border-radius:5px}
-.wb-group-move:hover{background:var(--wb-soft)}.wb-group-move:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
-.wb-group-move:active{transform:scale(.97)}
-.wb-view-rings .wb-group-head{padding-top:2px}
-.wb-w-realm{margin-top:6px}.wb-w-realm .wb-num{font-size:15px}
+@media (max-width:640px){
+  .wb-b-top{grid-template-columns:1fr}
+  .wb-alert-bar{flex-direction:column;gap:5px}.wb-alert-toggle{align-self:flex-end}
+  .wb-alert-row{grid-template-columns:5px minmax(0,1fr)}.wb-alert-aside{grid-column:2;max-width:none;text-align:left;white-space:normal}
+  .wb-widgets{grid-template-columns:repeat(2,minmax(0,1fr))}.wb-w-m{grid-column:1/-1}
+  .wb-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .wb-row{grid-template-columns:30px minmax(0,1fr) 94px 14px}.wb-row .wb-money{grid-column:2/4;grid-row:2}
+  .wb-list-head{display:none}
+  .wb-detail-grid{grid-template-columns:1fr;padding-left:14px}
+  .wb-kpis.wb-kpis-3{grid-template-columns:1fr}
+  .wb-mrow{grid-template-columns:minmax(0,1fr) 92px}.wb-mrow .wb-mctx{display:none}.wb-mrow>.wb-copy{grid-column:1/-1;grid-row:2}.wb-mrow>.wb-mreason{grid-column:1/-1;grid-row:3;flex-direction:row;gap:8px}.wb-mhead>:nth-child(2),.wb-mhead>.wb-mreason{display:none}
+  .wb-view-label{display:none}
+  .wb-search{width:100%}
+}
+@media (prefers-reduced-motion:reduce){.wb-detail,.wb-chevron,.wb-row,.wb-seg-btn,.wb-ringcard,.wb-copy,.wb-pick-chev,.wb-alert-more-head::after{transition:none}.wb-enter,.wb-pick-menu{animation:none}.wb-ringcard:active{transform:none}.wb-ledger-row.wb-charge-new{animation:none}.wb-ledger-row.wb-charge-new::before{animation:none;opacity:.35}}

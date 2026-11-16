@@ -12,6 +12,9 @@ import { checkin, collect, usageSince, writePage } from "./board.mjs";
 import { ledger } from "./history.mjs";
 import { routingRefusals } from "./limits.mjs";
 import { chinaModels, enterpriseModels, intlModels } from "./models.mjs";
+import { dropped } from "./network.mjs";
+
+const NETWORK_FAILURES = 3, NETWORK_PAUSE_MS = 10 * 60_000;
 
 // A LaunchAgent's PATH is only the system's, so the usual install places
 // (Magpie's own ~/.local/bin link, Homebrew, the app) are looked in too. On
@@ -132,18 +135,28 @@ export class Runner {
   boardView() {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
     const onDay = value => value && calendar(new Date(value), config.timezone).day === day;
+    const network = this.state.network;
     const jobs = this.state.jobs
       .filter(job => onDay(job.created) || onDay(job.started) || onDay(job.finished))
       .map(job => {
         const outcome = job.results?.length ? jobOutcome(job.results, job.status === "cancelled") : { status: job.status, counts: job.counts };
-        return { id: job.id, actions: job.actions, status: outcome.status, counts: outcome.counts, trigger: job.trigger, created: job.created, started: job.started, finished: job.finished, logs: job.logs };
+        return { id: job.id, actions: job.actions, ...(job.task ? { task: job.task } : {}), status: outcome.status, counts: outcome.counts, trigger: job.trigger, created: job.created, started: job.started, finished: job.finished, logs: job.logs };
       });
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
       settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false },
-      accounts: this.board.accounts.map(({ key, ...a }) => this.withLedger(a, key, found, day)), models: this.board.models || null,
+      accounts: this.board.accounts.map(({ key, ...a }) => {
+        const row = this.withLedger(a, key, found, day);
+        const restricted = this.state.restricted?.[a.id], webPaused = this.state.webPaused?.[a.id];
+        return {
+          ...row,
+          ...(restricted?.day === day ? { restricted: { at: restricted.at, message: restricted.message } } : {}),
+          ...(webPaused?.day === day ? { webPaused: { at: webPaused.at, message: webPaused.message } } : {})
+        };
+      }), models: this.board.models || null,
       intl: { enabled: config.intlEnabled, web: config.intlWeb !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
+      networkPaused: network?.pausedUntil > Date.now() ? { until: network.pausedUntil, at: network.last?.at, message: network.last?.message } : null,
       jobs
     };
   }
@@ -347,12 +360,12 @@ export class Runner {
         // the web conversation and model-limit switches. A
         // proxy shown masked and sent back unchanged keeps the saved one.
         const current = this.config(), given = request.config || {};
-        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(typeof given.intlWeb === "boolean" ? { intlWeb: given.intlWeb } : {}), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
+        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(typeof given.intlWeb === "boolean" ? { intlWeb: given.intlWeb } : {}), ...(typeof given.skillShare === "boolean" ? { skillShare: given.skillShare } : {}), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
           ...(given.proxy !== undefined && given.proxy !== maskProxy(current.proxy) ? { proxy: given.proxy } : {}) };
         writeJSON(join(this.dir, "config.json"), validateConfig(next));
       }
       else if (["intl-on", "intl-off"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), intlEnabled: request.action === "intl-on" });
-      else note.job = this.submit([request.action], undefined, "page").id;
+      else note.job = this.submit([request.action], request.accounts, "page", { task: request.task }).id;
       note.ok = true;
     } catch (e) { note.error = e.message; }
     this.state.pageRequest = note;
@@ -363,13 +376,15 @@ export class Runner {
   busy(ids) {
     return this.state.jobs.some(job => ["queued", "running"].includes(job.status) && job.accounts.some(a => ids.includes(a)));
   }
-  submit(requestedActions, ids, trigger = "manual") {
+  submit(requestedActions, ids, trigger = "manual", { task } = {}) {
     if (!Array.isArray(requestedActions) || !requestedActions.length || requestedActions.some(a => !actions.includes(a))) throw new Error("无效的操作");
+    if (requestedActions.includes("task") && (typeof task !== "string" || !/^[A-Za-z0-9_.-]{1,80}$/.test(task))) throw new Error("无效的任务");
+    const single = requestedActions.includes("task") ? task : undefined;
     const list = this.list().filter(a => a.enabled);
     const selected = ids?.length ? list.filter(a => ids.includes(a.id)) : list;
     if (!selected.length || (ids?.length && selected.length !== new Set(ids).size)) throw new Error("所选账号不存在或已停用");
     if (this.busy(selected.map(a => a.id))) throw new Error("所选账号已有任务正在执行或排队");
-    const job = { id: randomUUID(), actions: requestedActions, accounts: selected.map(a => a.id), trigger, status: "queued", created: new Date().toISOString(), logs: [], results: [] };
+    const job = { id: randomUUID(), actions: requestedActions, ...(single ? { task: single } : {}), accounts: selected.map(a => a.id), trigger, status: "queued", created: new Date().toISOString(), logs: [], results: [] };
     this.state.jobs.unshift(job);
     this.state.jobs = this.state.jobs.slice(0, 100);
     this.save();
@@ -388,6 +403,7 @@ export class Runner {
     job.started = new Date().toISOString();
     this.save();
     this.publish();
+    let stopAll = false;
     for (const [index, snapshot] of list.entries()) {
       // A scheduled run doesn't reach WorkBuddy for every account in the same second.
       if (index && job.trigger.startsWith("schedule:") && this.spread() > 0) {
@@ -404,23 +420,60 @@ export class Runner {
         this.save();
       };
       // WorkBuddy AI's model list picks the web conversation's model.
-      const context = { account, config, state: this.state, trigger: job.trigger, log, checkpoint: () => this.save(), signal: controller.signal, ...(account.realm === "intl" ? { models: this.board.models?.intl } : {}) };
+      const context = { account, config, state: this.state, trigger: job.trigger, task: job.task, log, checkpoint: () => this.save(), signal: controller.signal, ...(account.realm === "intl" ? { models: this.board.models?.intl } : {}) };
       for (const action of job.actions) {
         if (controller.signal.aborted) break;
         const result = { account: account.id, action, ok: false };
+        let stop = false;
         try {
           result.data = await perform(action, client, context);
           result.ok = true;
+          if (job.trigger === "manual" && this.state.restricted?.[account.id]) {
+            delete this.state.restricted[account.id];
+            this.save();
+            log("账号限制标记已清除");
+          }
+          if (this.state.network) {
+            this.state.network.failures = 0;
+            if (this.state.network.pausedUntil) {
+              delete this.state.network.pausedUntil;
+              delete this.state.network.last;
+              log("网络/代理已恢复，自动任务暂停已解除");
+            }
+          }
         } catch (e) {
           result.error = e.message;
           result.limited = !!e.limited;
           if (e.partial) { result.partial = true; result.counts = e.counts; }
-          log(`${action} ${e.partial ? "部分失败" : e.limited ? "被限流" : "失败"}：${e.message}`);
+          if (dropped(e)) {
+            result.network = true;
+            const network = this.state.network ||= { failures: 0 };
+            network.failures = (network.failures || 0) + 1;
+            network.last = { at: new Date().toISOString(), message: e.message.slice(0, 240) };
+            if (network.failures >= NETWORK_FAILURES) {
+              network.pausedUntil = Date.now() + NETWORK_PAUSE_MS;
+              network.failures = 0;
+              log(`网络/代理连续失败 ${NETWORK_FAILURES} 次，自动任务暂停到 ${calendar(new Date(network.pausedUntil), config.timezone).time}；手动执行仍可`);
+            } else {
+              log(`${action} 网络/代理失败（${network.failures}/${NETWORK_FAILURES}）：${e.message}`);
+            }
+            this.save();
+            stop = true;
+            stopAll = true;
+          } else if (e.restricted) {
+            result.restricted = true;
+            this.state.restricted ||= {};
+            this.state.restricted[account.id] = { day: job.day || calendar(new Date(job.started), config.timezone).day, at: new Date().toISOString(), message: e.message.slice(0, 240) };
+            this.save();
+            log(`${action} 被上游限制：${e.message}；今天暂停这个账号的自动任务`);
+            stop = true;
+          } else log(`${action} ${e.partial ? "部分失败" : e.limited ? "被限流" : "失败"}：${e.message}`);
         }
         job.results.push(result);
         this.save();
+        if (stop) break;
       }
-      if (controller.signal.aborted) break;
+      if (stopAll || controller.signal.aborted) break;
     }
     const outcome = jobOutcome(job.results, controller.signal.aborted);
     job.status = outcome.status;
@@ -439,10 +492,15 @@ export class Runner {
   tick(now = new Date()) {
     const config = this.config();
     const { day, time } = calendar(now, config.timezone);
+    if (this.state.network?.pausedUntil > now.getTime()) return;
+    if (this.state.network?.pausedUntil) {
+      delete this.state.network.pausedUntil;
+      this.save();
+    }
     // Each build keeps its own slots; enterprise logins only renew theirs.
     for (const { kind, times, realm, actions: group, on } of plan(config)) {
       if (!on) continue;
-      const ids = this.list().filter(a => a.enabled && a.realm === realm && (group.includes("keepalive") || !a.enterprise)).map(a => a.id);
+      const ids = this.list().filter(a => a.enabled && a.realm === realm && (group.includes("keepalive") || !a.enterprise) && this.state.restricted?.[a.id]?.day !== day).map(a => a.id);
       if (!ids.length || this.busy(ids)) continue;
       for (const slot of times) {
         if (shifted(day, kind, slot, this.spread(config), this.salt()) > time) continue;
@@ -456,6 +514,7 @@ export class Runner {
           if (previous.attempts >= 3 || (old && now - new Date(old.finished) < 15 * 60_000)) continue;
         }
         const job = this.submit(group, ids, `schedule:${kind}:${slot}`);
+        job.day = day;
         this.state.slots[key] = { job: job.id, attempts: (previous?.attempts || 0) + 1 };
         // Retain a week of slot/event deduplication, rather than an unbounded ledger.
         const cutoff = calendar(new Date(now - 7 * 86400_000), config.timezone).day;

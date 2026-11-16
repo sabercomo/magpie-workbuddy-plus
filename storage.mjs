@@ -15,6 +15,9 @@ export const defaults = {
   // on a model free right now ("auto") or the one named.
   intlWeb: true,
   intlWebModel: "auto",
+  // Sharing a skill creates a real link on WorkBuddy's side; off, only the
+  // task center's one-task button runs it.
+  skillShare: true,
   // Scheduled slots run within ±spread minutes of their set time.
   spread: 10,
   timezone: "Asia/Shanghai",
@@ -24,6 +27,7 @@ export const defaults = {
   schedules: {
     daily: ["09:00", "21:00"],
     tasks: ["09:10", "21:10"],
+    sweep: ["10:00", "22:10"],
     night: ["01:00"],
     keepalive: ["22:00"]
   },
@@ -147,7 +151,8 @@ export function intlSchedules(config) {
 // switch takes over both, and its slots carry on from China's times.
 export function settle(config) {
   const { intl: _, ...rest } = config;
-  return { ...rest, intlEnabled: intlOn(config), intlSchedules: intlSchedules(config) };
+  const schedules = { ...defaults.schedules, ...(rest.schedules || {}) };
+  return { ...rest, skillShare: rest.skillShare !== false, schedules, intlEnabled: intlOn(config), intlSchedules: intlSchedules({ ...rest, schedules }) };
 }
 
 // Every kind of slot, the build it serves and what it runs. WorkBuddy AI's
@@ -155,6 +160,7 @@ export function settle(config) {
 export const slotKinds = {
   daily: { realm: "cn", actions: ["activity", "travel", "bonus"] },
   tasks: { realm: "cn", actions: ["tasks"] },
+  sweep: { realm: "cn", actions: ["sweep"] },
   night: { realm: "cn", actions: ["night"] },
   keepalive: { realm: "cn", actions: ["keepalive"] },
   "intl-daily": { realm: "intl", actions: ["activity", "bonus"] },
@@ -184,12 +190,14 @@ export function validateConfig(value) {
   new Intl.DateTimeFormat("en", { timeZone: value.timezone });
   if (value.intlEnabled !== undefined && typeof value.intlEnabled !== "boolean") throw new Error("国际版定时开关无效");
   if (value.intlWeb !== undefined && typeof value.intlWeb !== "boolean") throw new Error("国际版网页会话开关无效");
+  if (value.skillShare !== undefined && typeof value.skillShare !== "boolean") throw new Error("自动分享技能开关无效");
   if (value.spread !== undefined && !(Number.isInteger(value.spread) && value.spread >= 0 && value.spread <= 60)) throw new Error("随机错开应为 0–60 分钟");
   if (!Array.isArray(value.disabledAccounts) || value.disabledAccounts.some(a => typeof a !== "string")) throw new Error("账号停用列表无效");
   if (value.intlWebModel !== undefined && !(typeof value.intlWebModel === "string" && /^[\w.:-]{1,80}$/.test(value.intlWebModel))) throw new Error("国际版网页会话模型无效");
-  times(value.schedules, "schedules");
-  if (value.intlSchedules !== undefined) times(intlSchedules(value), "intlSchedules");
-  return value;
+  const schedules = { ...defaults.schedules, ...(value.schedules || {}) };
+  times(schedules, "schedules");
+  if (value.intlSchedules !== undefined) times(intlSchedules({ ...value, schedules }), "intlSchedules");
+  return { ...value, schedules };
 }
 
 // A proxy's credentials never reach the page: it sees user:pass as ***.

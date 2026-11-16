@@ -23,17 +23,24 @@ export const specs = {
   Buddy_App: { kind: "buddyapp", via: "desktop" }, Buddy_App_QQ: { kind: "buddyapp", via: "desktop" },
   // A click on the library's introduction, as the web app reports it.
   Library_read: { kind: "library", via: "web", target: 1 },
+  // Sharing a skill creates a real share channel before its two events are
+  // reported; the task has no progress until that channel exists.
+  skill_share: { kind: "skillshare" },
   // The mini program's own tasks, listed only to a mini-program client. Its
   // chats must come at a person's pace: a burst is counted, then rolled back.
   Sequential_Tasks_1: { kind: "minichat", via: "mp", target: 1, pace: 45_000 },
   Sequential_Tasks_2: { kind: "miniexpert", via: "mp", target: 1 },
-  Sequential_Tasks_3: { kind: "minichat", via: "mp", target: 5, pace: 45_000 }
+  Sequential_Tasks_3: { kind: "minichat", via: "mp", target: 5, pace: 45_000 },
+  Sequential_Tasks_4: { kind: "miniautomation", via: "mp", target: 1 },
+  Sequential_Tasks_5: { kind: "minimodel", via: "mp", target: 1, pace: 45_000 },
+  Sequential_Tasks_6: { kind: "minichat", via: "mp", target: 10, pace: 45_000 },
+  Sequential_Tasks_7: { kind: "deskplaybook", via: "desktop" }
 };
 
 // Tasks that need a person and are neither listed nor counted. Any other task
 // nothing here does yet still shows, as one to do by hand, so a new one
 // is seen the day it appears.
-export const unreachable = new Set(["wb_wechat_oa_subscribe_task", "Expert_Philanthropy", "skill_share"]);
+export const unreachable = new Set(["wb_wechat_oa_subscribe_task", "Expert_Philanthropy"]);
 
 // What a mini-program client sends to see, accept and claim its own tasks.
 export const miniProgram = { "X-Client-Platform": "miniprogram" };
@@ -89,6 +96,7 @@ export function channel(via, account) {
       headers: { ...auth, "Content-Type": "application/json", Accept: "application/json", "X-Client-Product": "workbuddy-mp", "X-Client-Version": "2.4.0", "X-Client-Platform": "mp-weixin", "X-Platform": "wechatmp" },
       stamp: {
         timestamp: now, ideType: "WorkBuddy_MP", ideVersion: "2.4.0", extName: "workbuddy-mp", extVersion: "2.4.0", product: "SaaS", ideName: "wx_app_cloud", platform: "mini_program",
+        source: "mini_program",
         os: "windows", osVersion: "11", arch: "x64", machineId: `${m.slice(0, 8)}-${m.slice(8, 12)}-4${m.slice(13, 16)}-a${m.slice(17, 20)}-${m.slice(20, 32)}`,
         timezone: "Asia/Shanghai", userId: a.uid, userNickname: name
       }
@@ -105,17 +113,26 @@ export function buildEvents(account, spec, index = 0) {
   const session = { "codebuddy.session_id": conversationId, "codebuddy.conversation_request_id": requestId };
   const tokens = { inputToken: 120, outputToken: 80, totalToken: 200, cachedTokens: 0, cachedWriteTokens: 0, cachedMissTokens: 0, isSuccessful: true, messageErrorCode: "", finishReason: "stop" };
   const send = { inputLength: 24, isPlan: false, isAutoExecuteTerminal: false, isAutoModify: false, codebaseEnable: false, maxToken: 0, maxSteps: 500, temperature: 0, maxRetries: 0, mentionContexts: [], knowledgeId: [], knowledgeName: [], codebaseId: "", mentionContextCount: 0, command: "", recommendId: "", skillId: "", skillCount: 0, totalCount: 0 };
+  const desktopChat = () => [
+    { eventCode: "agent_task_created", source: "LOCAL", name: "working", task_target: "local", mode: "craft", requestModelId: "fast-model", requestModelName: "fast-model",
+      has_repo: false, repo_type: "none", workspace_type: "empty", has_connector: false, connector_types: [], has_mention: false, mention_types: [], has_template: false, action: "", template_name: "",
+      has_expert: false, expert_id: "", expert_name: "", expert_industry_id: "", has_skill: false, skill_names: [], conversationId, messageId, buddyId: "", buddyName: "" },
+    { eventCode: "chat_message_send", messageId: `${messageId}-assistant`, historyCount: 0, isContextTruncated: false, currentStepCount: 1, ...agent },
+    { eventCode: "chat_request_send", ...send, ...agent, ...session },
+    { eventCode: "chat_message_response", messageId: `${messageId}-assistant`, responseModelId: "fast-model", ...tokens, firstTokenAt: Date.now(), conversationId, ...agent, ...session },
+    { eventCode: "chat_message_status", messageId: `${messageId}-assistant`, messageErrorCode: "0", ...agent },
+    { eventCode: "chat_request_response", mode: "craft", toolCallCount: 0, ...tokens, rootRequestId: requestId, parentConversationId: conversationId }
+  ];
   switch (spec.kind) {
-    case "deskchat": return [
-      { eventCode: "agent_task_created", source: "LOCAL", name: "working", task_target: "local", mode: "craft", requestModelId: "fast-model", requestModelName: "fast-model",
-        has_repo: false, repo_type: "none", workspace_type: "empty", has_connector: false, connector_types: [], has_mention: false, mention_types: [], has_template: false, action: "", template_name: "",
-        has_expert: false, expert_id: "", expert_name: "", expert_industry_id: "", has_skill: false, skill_names: [], conversationId, messageId, buddyId: "", buddyName: "" },
-      { eventCode: "chat_message_send", messageId: `${messageId}-assistant`, historyCount: 0, isContextTruncated: false, currentStepCount: 1, ...agent },
-      { eventCode: "chat_request_send", ...send, ...agent, ...session },
-      { eventCode: "chat_message_response", messageId: `${messageId}-assistant`, responseModelId: "fast-model", ...tokens, firstTokenAt: Date.now(), conversationId, ...agent, ...session },
-      { eventCode: "chat_message_status", messageId: `${messageId}-assistant`, messageErrorCode: "0", ...agent },
-      { eventCode: "chat_request_response", mode: "craft", toolCallCount: 0, ...tokens, rootRequestId: requestId, parentConversationId: conversationId }
-    ];
+    case "deskchat": return desktopChat();
+    case "deskplaybook": {
+      const base = { id: "01-ProductDesign", name: "产品设计", type: "document", categoryId: "", categoryName: "" };
+      return [
+        ...desktopChat(),
+        { ...base, eventCode: "playbook_cta_click", source: "discover", position: 0, conversationId, requestId, messageId },
+        { ...base, eventCode: "playbook_prompt_send", source: "discover", promptLength: 30, isOfficial: 1, conversationId, requestId, messageId, skills: "", skillNames: "" }
+      ];
+    }
     case "buddyapp": {
       const app = { mode: "LOCAL", buddyId: "cb_y5Dy46tPQGGWtueMxXbe", buddyName: "企鹅教师助手" }, element = { elementId: app.buddyId, elementName: app.buddyName };
       return [
@@ -126,6 +143,8 @@ export function buildEvents(account, spec, index = 0) {
     }
     case "library": return [{ eventCode: "web_element_click", pageURL: "https://www.workbuddy.cn/space/d/o0KWYeynteVv06UnAZqIFm", elementId: "library_doc_intro_click", elementName: "WorkBuddy资料库介绍" }];
     case "minichat": return [{ eventCode: "chat_request_send", ...send, inputLength: 14, traceId: requestId, rootRequestId: requestId, parentConversationId: conversationId, conversationId, messageId: `msg-${requestId.slice(-8)}`, agentName: "mp", agentType: "main", ...session }];
+    case "miniautomation": return [{ eventCode: "automated_task_create_suc", mode: "CLOUD", name: "每日读书提醒", source: "manually", skills: "", skillCount: 0, scheduleType: "daily" }];
+    case "minimodel": return buildEvents(account, { ...spec, kind: "minichat" }, index).map(event => ({ ...event, requestModelId: "glm-5.2", requestModelName: "GLM-5.2" }));
     // The mini program names the expert by id in both fields; the id must be a real one.
     case "miniexpert": { const [id, name] = experts[index % experts.length]; return [{ eventCode: "expert_actual_use", reportDelay: 0, extVersion: "2.2.8", source: "mini_program", id, name: id, expertTitle: name, type: "send_message", characterCount: 12, expertType: "agent" }]; }
     default: return [buildEvent(account.auth.uid, spec, index)];
