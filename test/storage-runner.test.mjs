@@ -445,17 +445,16 @@ test("the magpie command is found outside a LaunchAgent's bare PATH", t => {
   writeJSON(join(dir, name), {});
   assert.equal(magpieBin({ PATH: ["/usr/bin", dir].join(delimiter) }), join(dir, name));
   assert.equal(magpieBin({ WORKBUDDY_PLUS_MAGPIE_BIN: join(dir, name), PATH: "" }), join(dir, name));
-  // Magpie's Windows installer leaves its folder off the PATH.
-  const programs = join(dir, "local", "Programs", "Magpie");
-  mkdirSync(programs, { recursive: true });
-  writeJSON(join(programs, name), {});
-  // A machine with Magpie in one of the usual places (~/.local/bin) finds it there first.
-  assert.equal(magpieBin({ PATH: "", LOCALAPPDATA: join(dir, "local") }), magpieBin({ PATH: "" }) || join(programs, name));
 });
 
-test("Windows finds a portable or custom Magpie install without PATH", t => {
+test("Windows finds default, portable and custom Magpie installs without PATH", t => {
   const dir = mkdtempSync(join(tmpdir(), "wb-plus-win-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const programs = join(dir, "local", "Programs", "Magpie");
+  mkdirSync(programs, { recursive: true });
+  writeFileSync(join(programs, "magpie.com"), "");
+  assert.equal(magpieBin({ LOCALAPPDATA: join(dir, "local") }, "win32", () => assert.fail("default install already found")), join(programs, "magpie.com"));
+
   const data = join(dir, "data"), portable = join(dir, "magpie-windows-amd64.exe");
   writeFileSync(portable, "");
   assert.equal(magpieBin({ WORKBUDDY_PLUS_HOST_CONFIG: data }, "win32", () => assert.fail("portable copy already found")), portable);
