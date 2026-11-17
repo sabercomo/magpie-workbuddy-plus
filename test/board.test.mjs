@@ -172,6 +172,28 @@ test("one failing part leaves the rest of an account's board readable", async ()
   assert.equal(row.balance.balance, 3, "a personal account never reads the enterprise meter");
 });
 
+test("the WorkBuddy AI board only reads the supported parts and explains a rejected proxy tunnel", async () => {
+  const account = { id: "intl:u1", name: "AI", realm: "intl", auth: { uid: "u1", expires: Date.now() + 86400_000 } };
+  const config = { ...defaults, proxy: "http://fixture:1080" }, paths = [];
+  const client = new WorkBuddyClient(account, config, { gap: 0, fetcher: async (url, { proxy }) => {
+    assert.equal(proxy, config.proxy);
+    const { pathname } = new URL(url);
+    paths.push(pathname);
+    if (pathname.endsWith("/get-user-resource")) throw new Error("Proxy refused to open a tunnel: 503 Service Unavailable");
+    if (pathname.endsWith("/get-user-request-usage")) return ok({ total: 0, data: [] });
+    if (pathname.endsWith("/streak")) return ok({ streak: { days: 6 } });
+    if (pathname.endsWith("/heatmap")) return ok({});
+    if (pathname.endsWith("/checkin-activity-status")) return ok({ active: true });
+    throw new Error(`unexpected endpoint ${pathname}`);
+  } });
+  const row = await collect(account, client, config);
+  assert.deepEqual(Object.keys(row.errors), ["balance"]);
+  assert.match(row.errors.balance, /^HTTP 代理无法连接 .*503 Service Unavailable.*清空 HTTP 代理/);
+  assert.equal(row.streak.days, 6);
+  assert.equal(row.checkin.outcome, "waiting");
+  assert.equal(paths.length, 5);
+});
+
 test("page snapshot carries no credentials and each page request runs once", async t => {
   const dir = mkdtempSync(join(tmpdir(), "wb-plus-board-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -219,7 +241,7 @@ test("page snapshot carries no credentials and each page request runs once", asy
 
   // Settings saved from Magpie's page, for installs whose local panel can't be reached.
   writeJSON(join(dir, "config.json"), { ...runner.config(), proxy: "http://user:secret@proxy.example:8080" });
-  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlWebModel: "auto", intlWeb: true, campaignApp: false });
+  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlWebModel: "auto", intlWeb: true, campaignApp: false, skillShare: true });
   assert.ok(!JSON.stringify(runner.boardView()).includes("secret"));
   const schedules = { daily: ["08:30"], tasks: ["08:40", "20:40"], sweep: ["10:20", "22:20"], night: [], keepalive: ["22:00"] };
   assert.equal(runner.pageRequest({ id: "c1", action: "config", at: Date.now(), config: { schedules, spread: 5, timezone: "Asia/Shanghai", proxy: "http://***@proxy.example:8080" } }).ok, true);

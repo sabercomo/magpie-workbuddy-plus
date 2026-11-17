@@ -242,7 +242,7 @@ Magpie runs plugin pages in a sandbox with no network, so the page reads `page/d
 | `page/data.js` in the plugin folder | The board snapshot for Magpie's page, rewritten by the service |
 | `~/Library/LaunchAgents/io.github.sabercomo.magpie-workbuddy-plus.plist` | macOS background start (optional install) |
 
-China logins are read from `~/.config/magpie/plugin-auth.json`. When Magpie uses a custom config folder, `XDG_CONFIG_HOME` is followed, or point `WORKBUDDY_PLUS_MAGPIE_DIR` at it; `WORKBUDDY_PLUS_DIR` sets this plugin's data folder.
+When started by Magpie, the plugin reads `plugin-auth.json` from Magpie's active data directory, including portable and relocated installations. Standalone mode defaults to `~/.config/magpie`, honors `XDG_CONFIG_HOME`, and supports `WORKBUDDY_PLUS_MAGPIE_DIR` as an override; `WORKBUDDY_PLUS_DIR` sets this plugin's data folder. If Add account still cannot find Magpie on Windows, sign in from Magpie's Providers page or add the Magpie install folder to PATH and restart Magpie.
 
 **Port**: the service listens on `127.0.0.1:3439`. When it runs from Magpie, change it with the plugin option:
 
@@ -261,7 +261,7 @@ The Models view reads both builds' `/v3/config` (the WorkBuddy client's own mode
 
 The plugin works with Magpie through its local account file, renewing logins under the same file and account locks Magpie uses. A change in Magpie's storage format may need an update here. Released source contains no personal account files, settings or run history.
 
-The service listens on `127.0.0.1` only. An HTTP proxy can be set in the panel; proxied requests need Bun. Node.js 22+ can run the tests, or the service without a proxy.
+The service listens on `127.0.0.1` only. An HTTP proxy can be set in the panel; proxied requests need Bun. Node.js 22+ can run the tests, or the service without a proxy. If the proxy reports `503 Service Unavailable`, check whether it can reach the WorkBuddy hostname in the error. If a direct connection works, clear the proxy setting, save and refresh. In Docker or on a NAS, the proxy must be reachable from the environment running Magpie.
 
 </details>
 

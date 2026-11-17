@@ -128,9 +128,10 @@ async function ask(action, extra = {}) {
   setTimeout(reload, 2000);
 }
 
-$("settings-form").onsubmit = async event => {
-  event.preventDefault();
-  const form = event.target, button = event.submitter || form.querySelector('button[type="submit"]');
+// Magpie's iframe allows scripts but blocks native form submission.
+$("save-settings").onclick = async event => {
+  const form = $("settings-form"), button = event.currentTarget;
+  if (!form.reportValidity()) return;
   const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
   const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), intlSchedules: Object.fromEntries(intlKinds.map(k => [k, times(form.elements[`intl-${k}`].value)])), intlWebModel: form.elements["intl-model"].value || "auto", intlWeb: form.elements["intl-web-on"].checked, campaignApp: form.elements["campaign-app"].checked, skillShare: form.elements["skill-share"].checked, spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
   const bad = [...Object.values(config.schedules), ...Object.values(config.intlSchedules)].flat().find(t => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t));

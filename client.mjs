@@ -86,7 +86,13 @@ export class WorkBuddyClient {
     if (wait > 0) await delay(wait, undefined, { signal: this.signal });
     this.lastRequest = Date.now();
     const signal = this.signal ? AbortSignal.any([this.signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
-    return this.fetcher(url, { ...init, signal, ...(this.config.proxy ? { proxy: this.config.proxy } : {}) });
+    try {
+      return await this.fetcher(url, { ...init, signal, ...(this.config.proxy ? { proxy: this.config.proxy } : {}) });
+    } catch (error) {
+      const refused = /^Proxy refused to open a tunnel: (\d{3}\b.*)/i.exec(error.message);
+      if (!refused) throw error;
+      throw new Error(`HTTP 代理无法连接 ${new URL(url).hostname}（${refused[1]}）。请检查代理节点和分流；可直连时，到设置清空 HTTP 代理再刷新。`, { cause: error });
+    }
   }
 
   // `extra` adds headers to this client's own; `headers` replaces them (a

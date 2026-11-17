@@ -256,10 +256,10 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
     get lastChild() { return this.children.at(-1); }
   }
   const nodes = new Map(), requests = [];
-  for (const id of ["state", "note", "board", "jobs", "panel", "cn-state", "intl-state", "sched-pill", "intl-model-pick", "settings", "settings-form", "open-settings", "close-settings", "save-status"]) nodes.set(id, new Element("div"));
+  for (const id of ["state", "note", "board", "jobs", "panel", "cn-state", "intl-state", "sched-pill", "intl-model-pick", "settings", "settings-form", "open-settings", "close-settings", "save-settings", "save-status"]) nodes.set(id, new Element("div"));
   const form = nodes.get("settings-form");
   form.elements = Object.fromEntries(["daily", "tasks", "sweep", "night", "keepalive", "intl-daily", "intl-web", "intl-keepalive", "intl-model", "intl-web-on", "campaign-app", "skill-share", "spread", "timezone", "proxy"].map(k => [k, new Element("input")]));
-  form.querySelector = () => new Element("button");
+  form.reportValidity = () => true;
   const bodyEl = new Element("body");
   const context = vm.createContext({
     WBPLUS: {
@@ -292,18 +292,19 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   // The App conversation setting is saved by Magpie's page too.
   assert.equal(form.elements["campaign-app"].checked, false);
   form.elements["campaign-app"].checked = true;
-  const submitter = new Element("button");
-  await form.onsubmit({ preventDefault() {}, target: form, submitter });
+  const button = nodes.get("save-settings");
+  assert.match(readFileSync(new URL("../page/index.html", import.meta.url), "utf8"), /<button type="button" id="save-settings">/);
+  await button.onclick({ currentTarget: button });
   const savedPage = requests.filter(r => r.action === "config").at(-1);
   assert.equal(savedPage.config.campaignApp, true);
-  assert.equal(submitter.disabled, true, "the submit button, not the model menu's first button, shows the save");
+  assert.equal(button.disabled, true, "the save button is disabled while saving");
 
   // A malformed time keeps the settings open and says so beside the button.
   form.elements.daily.value = "9:00";
-  const badSubmitter = new Element("button");
-  await form.onsubmit({ preventDefault() {}, target: form, submitter: badSubmitter });
+  button.disabled = false;
+  await button.onclick({ currentTarget: button });
   assert.equal(nodes.get("save-status").textContent, "时间「9:00」不对，应为 HH:MM，例如 09:00");
   assert.equal(nodes.get("save-status").classList._on, true);
-  assert.equal(badSubmitter.disabled, undefined, "a rejected save does not disable the button");
+  assert.equal(button.disabled, false, "a rejected save does not disable the button");
   assert.equal(requests.filter(r => r.action === "config").length, 1, "nothing is sent for an invalid time");
 });

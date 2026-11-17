@@ -453,6 +453,31 @@ test("the magpie command is found outside a LaunchAgent's bare PATH", t => {
   assert.equal(magpieBin({ PATH: "", LOCALAPPDATA: join(dir, "local") }), magpieBin({ PATH: "" }) || join(programs, name));
 });
 
+test("Windows finds a portable or custom Magpie install without PATH", t => {
+  const dir = mkdtempSync(join(tmpdir(), "wb-plus-win-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const data = join(dir, "data"), portable = join(dir, "magpie-windows-amd64.exe");
+  writeFileSync(portable, "");
+  assert.equal(magpieBin({ WORKBUDDY_PLUS_HOST_CONFIG: data }, "win32", () => assert.fail("portable copy already found")), portable);
+
+  const custom = join(dir, "custom install"), cli = join(custom, "magpie.com");
+  mkdirSync(custom);
+  writeFileSync(cli, "");
+  assert.equal(magpieBin({}, "win32", (command, args) => {
+    assert.deepEqual([command, ...args], ["reg.exe", "query", "HKCU\\Software\\magpie", "/v", "InstallLocation"]);
+    return { stdout: `\r\n    InstallLocation    REG_SZ    ${custom}\r\n` };
+  }), cli);
+});
+
+test("Magpie's active data folder supplies accounts when the Plus config still uses the default", t => {
+  const p = fixture(t), custom = join(p.dir, "manual");
+  writeJSON(join(p.dir, "config.json"), defaults);
+  const runner = new Runner(p.dir, {}, { hostConfig: p.magpieDir });
+  assert.deepEqual(runner.list().map(a => a.id), ["cn:u1"]);
+  writeJSON(join(p.dir, "config.json"), { ...defaults, magpieDir: custom });
+  assert.equal(runner.config().magpieDir, custom);
+});
+
 test("the board carries today's check-in from Magpie's own record, never the login key", t => {
   const p = fixture(t), runner = new Runner(p.dir), day = calendar(new Date(), "Asia/Shanghai").day;
   runner.board = { at: Date.now(), accounts: [{ id: "cn:u1", name: "a", key: "workbuddy#u1", errors: {} }, { id: "cn:u2", name: "b", key: "workbuddy#u2", errors: {} }] };
@@ -612,6 +637,7 @@ test("the page saves the web conversation switch; anything but a boolean is refu
     assert.equal(runner.pageRequest({ id: "s2", action: "config", at: Date.now(), config: { campaignApp: true, skillShare: false } }).ok, true);
     const saved = readJSON(join(dir, "config.json"));
     assert.deepEqual([saved.intlWeb, saved.campaignApp, saved.skillShare], [false, true, false]);
+    assert.equal(runner.boardView().settings.skillShare, false);
     assert.throws(() => validateConfig({ ...defaults, intlWeb: "no" }), /国际版网页会话开关无效/);
     assert.throws(() => validateConfig({ ...defaults, skillShare: "no" }), /自动分享技能开关无效/);
   } finally { rmSync(dir, { recursive: true, force: true }); }

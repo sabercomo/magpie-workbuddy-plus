@@ -207,14 +207,12 @@ export function taskBoard(list, now = Date.now()) {
   return { total: live.length, claimed: live.length - open.length, credit: open.reduce((s, t) => s + t.credit, 0), open };
 }
 
-async function tasks(client, account) {
+async function tasks(client) {
   const list = (await client.request("/v2/activity/growth/tasks"))?.tasks;
   if (!Array.isArray(list)) throw new Error("成长任务接口缺少 tasks 列表");
   // The mini program's own tasks are listed only to a mini-program client.
-  if (account?.realm !== "intl") {
-    try { for (const t of (await client.request("/v2/activity/growth/tasks", { extra: miniProgram }))?.tasks || []) if (!list.some(x => x.task_code === t.task_code)) list.push({ ...t, mp: true }); }
-    catch (e) { if (e.limited) throw e; }
-  }
+  try { for (const t of (await client.request("/v2/activity/growth/tasks", { extra: miniProgram }))?.tasks || []) if (!list.some(x => x.task_code === t.task_code)) list.push({ ...t, mp: true }); }
+  catch (e) { if (e.limited) throw e; }
   return taskBoard(growthTasks(list));
 }
 
@@ -254,8 +252,8 @@ export { dropped };
 export async function collect(account, client, config, memory, pause = ms => new Promise(r => setTimeout(r, ms))) {
   const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {} };
   const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone, 7, new Date(), 50, account.enterprise) };
-  if (!account.enterprise) Object.assign(parts, { ...(account.realm === "intl" ? {} : { travel: () => travel(client), campaigns: () => campaignStatus(client, { appEnabled: config.campaignApp === true }) }), streak: () => streak(client), tasks: () => tasks(client, account), growth: () => growth(client) });
-  if (!account.enterprise && account.realm === "intl") parts.checkin = () => intlCheckin(client);
+  if (!account.enterprise && account.realm === "intl") Object.assign(parts, { streak: () => streak(client), checkin: () => intlCheckin(client) });
+  else if (!account.enterprise) Object.assign(parts, { travel: () => travel(client), campaigns: () => campaignStatus(client, { appEnabled: config.campaignApp === true }), streak: () => streak(client), tasks: () => tasks(client), growth: () => growth(client) });
   for (const [name, run] of Object.entries(parts)) {
     try { row[name] = await run(); }
     catch (e) {

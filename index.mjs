@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendFileSync, closeSync, openSync, mkdirSync, readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
@@ -17,6 +17,7 @@ export function portOf(options, env = process.env) {
   return 3439;
 }
 let port = portOf();
+let hostConfig;
 const base = () => `http://127.0.0.1:${port}`;
 const refused = e => ["ECONNREFUSED", "ConnectionRefused"].includes(e.cause?.code || e.code);
 const lastLine = file => { try { return readFileSync(file, "utf8").trim().split("\n").at(-1) || ""; } catch { return ""; } };
@@ -33,7 +34,7 @@ async function rpc(path, body) {
     if (!refused(e)) throw e;
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
     const file = join(dataDir, "service.log"), log = openSync(file, "a", 0o600);
-    const child = spawn(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "server.mjs")], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: { ...process.env, WORKBUDDY_PLUS_PORT: String(port) } });
+    const child = spawn(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "server.mjs")], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: { ...process.env, WORKBUDDY_PLUS_PORT: String(port), ...(hostConfig ? { WORKBUDDY_PLUS_HOST_CONFIG: hostConfig } : {}) } });
     closeSync(log);
     child.unref();
     // A service that can't have the port says why in its log and exits.
@@ -93,6 +94,8 @@ export async function handoff({ fetcher = fetch, wait = delay, mine = version, r
 // buttons save a request into them; the service runs each request id once.
 export const WorkBuddyPlusPlugin = async (input, options) => {
   port = portOf(options);
+  // Magpie passes its active settings directory, including for portable installs.
+  hostConfig = input?.magpie && isAbsolute(input.directory || "") ? input.directory : undefined;
   const ready = handoff().then(() => rpc("/api/page-target", { file: pageFile })).catch(e => console.error("[workbuddy-plus]", e.message));
   if (options?.request) ready.then(() => rpc("/api/page", options.request)).catch(e => console.error("[workbuddy-plus]", e.message));
   return { tool: {

@@ -1,11 +1,11 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { accounts, calendar, checkins, initialize, intlAccount, intlSchedules, maskProxy, plan, publicAccount, readJSON, settle, validateConfig, version, writeJSON } from "./storage.mjs";
+import { accounts, calendar, checkins, initialize, intlAccount, intlSchedules, magpieDir, maskProxy, plan, publicAccount, readJSON, settle, validateConfig, version, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
 import { checkin, collect, usageSince, writePage } from "./board.mjs";
@@ -19,13 +19,26 @@ const NETWORK_FAILURES = 3, NETWORK_PAUSE_MS = 10 * 60_000;
 // A LaunchAgent's PATH is only the system's, so the usual install places
 // (Magpie's own ~/.local/bin link, Homebrew, the app) are looked in too. On
 // Windows the command is magpie.com (the console build beside magpie.exe),
-// which Magpie's installer puts in %LOCALAPPDATA%\Programs\Magpie, off the PATH.
-export function magpieBin(env = process.env) {
-  const names = process.platform === "win32" ? ["magpie.com", "magpie.exe"] : ["magpie"];
-  const dirs = [...(env.PATH || "").split(delimiter).filter(Boolean), join(homedir(), ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/Applications/magpie.app/Contents/MacOS",
-    ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, "Programs", "Magpie")] : [])];
+// which the installer puts in %LOCALAPPDATA%\Programs\Magpie or its registered InstallLocation.
+export function magpieBin(env = process.env, platform = process.platform, query = spawnSync) {
+  const win = platform === "win32";
+  const names = win ? ["magpie.com", "magpie.exe"] : ["magpie"];
+  const dirs = (env.PATH || "").split(win ? ";" : delimiter).filter(Boolean);
+  if (win) {
+    const data = env.WORKBUDDY_PLUS_HOST_CONFIG;
+    if (data && basename(data).toLowerCase() === "data") {
+      // A portable copy keeps its data beside the downloaded executable.
+      dirs.unshift(dirname(data));
+      names.push("magpie-windows-amd64.exe", "magpie-windows-arm64.exe", "magpie-cli-windows-amd64.exe", "magpie-cli-windows-arm64.exe");
+    }
+    if (env.LOCALAPPDATA) dirs.push(join(env.LOCALAPPDATA, "Programs", "Magpie"));
+  } else dirs.push(join(homedir(), ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/Applications/magpie.app/Contents/MacOS");
   const places = [env.WORKBUDDY_PLUS_MAGPIE_BIN, ...dirs.flatMap(d => names.map(name => join(d, name)))];
-  return places.find(f => f && existsSync(f)) || "";
+  const found = places.find(f => f && existsSync(f));
+  if (found || !win) return found || "";
+  const { stdout } = query("reg.exe", ["query", "HKCU\\Software\\magpie", "/v", "InstallLocation"], { encoding: "utf8", windowsHide: true });
+  const installed = /^\s*InstallLocation[ \t]+REG_SZ[ \t]+([^\r\n]+)/im.exec(stdout || "")?.[1].trim();
+  return installed && names.map(name => join(installed, name)).find(f => existsSync(f)) || "";
 }
 
 // Magpie's routing trace records the official plugin's quota refusals. Read
@@ -96,7 +109,7 @@ export function jobOutcome(results, aborted = false) {
 
 export class Runner {
   // pace: the wait between accounts in a scheduled run, 5–45 s.
-  constructor(dir, clientOptions = {}, { pageFile, panel = "", spawner = spawn, magpie = magpieBin, pace = () => 5000 + Math.random() * 40_000 } = {}) {
+  constructor(dir, clientOptions = {}, { pageFile, panel = "", hostConfig = process.env.WORKBUDDY_PLUS_HOST_CONFIG, spawner = spawn, magpie = magpieBin, pace = () => 5000 + Math.random() * 40_000 } = {}) {
     this.pace = pace;
     this.panel = panel;
     initialize(dir);
@@ -105,6 +118,7 @@ export class Runner {
     this.signin = null;
     this.dir = dir;
     this.clientOptions = clientOptions;
+    this.hostConfig = hostConfig;
     this.pageFile = pageFile;
     this.board = { at: 0, accounts: [] };
     this.boardStale = true;
@@ -117,7 +131,11 @@ export class Runner {
     }
     this.save();
   }
-  config() { return settle(readJSON(join(this.dir, "config.json"))); }
+  config() {
+    const config = readJSON(join(this.dir, "config.json"));
+    if (this.hostConfig && !process.env.WORKBUDDY_PLUS_MAGPIE_DIR && config.magpieDir === magpieDir) config.magpieDir = this.hostConfig;
+    return settle(config);
+  }
   // Minutes a slot may move either way; settings from before it have 10.
   spread(config = this.config()) { return Number.isInteger(config.spread) ? config.spread : 10; }
   // The install's own seed for its slot moments, kept with its state.
@@ -145,7 +163,7 @@ export class Runner {
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
-      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false, campaignApp: config.campaignApp === true },
+      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false, campaignApp: config.campaignApp === true, skillShare: config.skillShare },
       accounts: this.board.accounts.map(({ key, ...a }) => {
         const row = this.withLedger(a, key, found, day);
         const restricted = this.state.restricted?.[a.id], webPaused = this.state.webPaused?.[a.id];
