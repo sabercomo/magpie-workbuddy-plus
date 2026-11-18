@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WorkBuddy Plus · A2 应用壳</title>
+  <link rel="stylesheet" href="a2-shell.css">
+</head>
+<body data-view="today" data-detail="closed">
+  <a class="sr" href="#main">跳到主要内容</a>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand">
+        <img src="../../page/icon.svg" alt="">
+        <div class="brand-copy">
+          <strong>WorkBuddy Plus</strong>
+          <small>个人工作台</small>
+        </div>
+      </div>
+
+      <div class="nav-block">
+        <p class="nav-label">工作区</p>
+        <nav class="nav">
+          <button class="nav-item" type="button" data-view-link="today" aria-current="page">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><path d="M8 1.4v1.5M8 13.1v1.5M1.4 8h1.5M13.1 8h1.5"/></svg>
+            今天
+          </button>
+          <button class="nav-item" type="button" data-view-link="accounts">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="3" width="11.6" height="10" rx="2.2"/><path d="M5 6.4h6M5 9.2h4"/></svg>
+            账号
+            <span class="nav-count">4</span>
+          </button>
+          <button class="nav-item" type="button" data-view-link="tasks">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="3"/><path d="m5.1 8 1.9 1.9 3.9-4"/></svg>
+            任务
+            <span class="nav-count">6</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="nav-block">
+        <p class="nav-label">工具</p>
+        <nav class="nav">
+          <button class="nav-item" type="button">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.8 5.5 3.2v6L8 14.2 2.5 11V5z"/><path d="M2.8 5.2 8 8.4l5.2-3.2M8 8.4v5.6"/></svg>
+            模型
+          </button>
+          <button class="nav-item" type="button">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.1"/><path d="M8 1.6v1.7M8 12.7v1.7M1.6 8h1.7M12.7 8h1.7M3.5 3.5l1.2 1.2M11.3 11.3l1.2 1.2M12.5 3.5l-1.2 1.2M4.7 11.3l-1.2 1.2"/></svg>
+            设置
+          </button>
+        </nav>
+      </div>
+
+      <div class="sidebar-foot">
+        <div class="service"><i class="dot"></i>服务运行中<span class="mono">3439</span></div>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb">
+          <span class="desktop-context">工作台 <span aria-hidden="true">/</span></span>
+          <strong id="crumb">今天</strong>
+        </div>
+        <div class="mobile-brand">
+          <img src="../../page/icon.svg" alt="">
+          <span>WorkBuddy Plus</span>
+        </div>
+        <div class="topbar-actions">
+          <span class="sync"><i class="dot"></i>更新于 14:40</span>
+          <button class="icon-btn mobile-only" type="button" aria-label="模型">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.8 5.5 3.2v6L8 14.2 2.5 11V5z"/><path d="M2.8 5.2 8 8.4l5.2-3.2M8 8.4v5.6"/></svg>
+          </button>
+          <button class="icon-btn" type="button" aria-label="刷新">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg>
+          </button>
+          <button class="icon-btn mobile-only" type="button" aria-label="更多">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="13" cy="8" r=".9" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <div class="run-split">
+            <button class="run-main" type="button">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.4v9.2l7-4.6z"/></svg>
+              执行所有任务
+            </button>
+            <button class="run-more" type="button" aria-label="选择执行范围">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main id="main">
+        <section class="view" id="view-today" aria-labelledby="today-title">
+          <div class="page-head">
+            <div>
+              <div class="eyebrow">11月16日 · 周一</div>
+              <h1 id="today-title">今天</h1>
+              <p class="page-sub">4 个账号 · 6 项待办 · 3 项需要留意</p>
+            </div>
+            <button class="btn primary mobile-run" type="button">执行所有任务</button>
+          </div>
+
+          <div class="metrics" aria-label="今日概览">
+            <div class="metric">
+              <span class="metric-label">账号</span>
+              <strong>4</strong>
+              <small>3 个国内版 · 1 个国际版</small>
+            </div>
+            <div class="metric">
+              <span class="metric-label">可用积分</span>
+              <strong>3,402.7</strong>
+              <small class="warn">120 明天作废</small>
+            </div>
+            <div class="metric">
+              <span class="metric-label">待办任务</span>
+              <strong>6</strong>
+              <small>3 项可以自动完成</small>
+            </div>
+            <div class="metric">
+              <span class="metric-label">下一次执行</span>
+              <strong>21:00</strong>
+              <small>活跃 · 旅行 · 福利</small>
+            </div>
+          </div>
+
+          <div class="section-head">
+            <h2>需要处理</h2>
+            <span class="meta"><strong>3</strong> 项</span>
+          </div>
+          <section class="surface" aria-label="需要处理">
+            <div class="attention-row">
+              <i class="dot warn"></i>
+              <div class="attention-copy"><strong>主力号</strong><span class="warn">120 积分明天作废</span></div>
+              <button class="text-btn" type="button">查看积分</button>
+            </div>
+            <div class="attention-row">
+              <i class="dot"></i>
+              <div class="attention-copy"><strong>备用号</strong>猫猫已从大理归来，<span>+30 积分</span> 待领取</div>
+              <button class="btn primary" type="button">领取</button>
+            </div>
+            <div class="attention-row">
+              <i class="dot info"></i>
+              <div class="attention-copy"><strong>公司账号</strong>Kimi-K3.1-Pro 排队中，当前第 257 位</div>
+              <button class="text-btn" type="button">查看模型</button>
+            </div>
+          </section>
+
+          <div class="today-grid">
+            <section aria-labelledby="account-status-title">
+              <div class="section-head">
+                <h2 id="account-status-title">账号状态</h2>
+                <button class="text-btn" type="button" data-view-link="accounts">查看全部</button>
+              </div>
+              <div class="surface">
+                <div class="account-table-head" aria-hidden="true">
+                  <span>账号</span>
+                  <span>今日</span>
+                  <span>积分</span>
+                  <span class="task-col">任务</span>
+                  <span class="next-col">下一次</span>
+                  <span></span>
+                </div>
+
+                <button class="account-row" type="button" data-view-link="accounts" data-account-open>
+                  <span class="account-cell">
+                    <span class="avatar">主</span>
+                    <span class="account-who"><strong>主力号</strong><small>国内版 · 个人 · 连登 12 天</small></span>
+                  </span>
+                  <span class="today-cell">
+                    <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                      <circle class="track" cx="20" cy="20" r="15.5"/>
+                      <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                      <circle class="track" cx="20" cy="20" r="10.9"/>
+                      <circle class="b" cx="20" cy="20" r="10.9" pathLength="100" stroke-dasharray="64 100" transform="rotate(-90 20 20)"/>
+                      <circle class="track" cx="20" cy="20" r="6.4"/>
+                      <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                    </svg>
+                    <span class="state-copy">
+                      <span class="state-dotline"><i class="dot"></i><strong>已完成</strong></span>
+                      <small>4 / 4 今日目标</small>
+                    </span>
+                  </span>
+                  <span class="credit-cell">
+                    <span class="credit-line"><strong>1,863.5</strong><small>/ 3,300</small></span>
+                    <span class="meter" aria-hidden="true"><span class="urgent" style="width:6%"></span><span class="soon" style="width:20%"></span><span class="soft" style="width:30%"></span></span>
+                  </span>
+                  <span class="task-cell"><span class="cell-main">5 / 9</span><span class="cell-sub">4 项待办</span></span>
+                  <span class="next-cell"><span class="cell-main">21:00</span><span class="cell-sub">活跃 · 旅行</span></span>
+                  <span class="chevron" aria-hidden="true">›</span>
+                </button>
+
+                <button class="account-row" type="button" data-view-link="accounts" data-account-open>
+                  <span class="account-cell">
+                    <span class="avatar">备</span>
+                    <span class="account-who"><strong>备用号</strong><small>国内版 · 个人 · 连登 5 天</small></span>
+                  </span>
+                  <span class="today-cell">
+                    <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                      <circle class="track" cx="20" cy="20" r="15.5"/>
+                      <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                      <circle class="track" cx="20" cy="20" r="10.9"/>
+                      <circle class="b" cx="20" cy="20" r="10.9" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                      <circle class="track" cx="20" cy="20" r="6.4"/>
+                      <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="72 100" transform="rotate(-90 20 20)"/>
+                    </svg>
+                    <span class="state-copy claim">
+                      <span class="state-dotline"><i class="dot"></i><strong>待领奖</strong></span>
+                      <small>旅行已归来</small>
+                    </span>
+                  </span>
+                  <span class="credit-cell">
+                    <span class="credit-line"><strong>412</strong><small>/ 1,300</small></span>
+                    <span class="meter" aria-hidden="true"><span style="width:16%"></span><span class="soft" style="width:16%"></span></span>
+                  </span>
+                  <span class="task-cell"><span class="cell-main">7 / 9</span><span class="cell-sub">2 项待办</span></span>
+                  <span class="next-cell"><span class="cell-main">+30</span><span class="cell-sub">领取奖励</span></span>
+                  <span class="chevron" aria-hidden="true">›</span>
+                </button>
+
+                <button class="account-row" type="button" data-view-link="accounts" data-account-open>
+                  <span class="account-cell">
+                    <span class="avatar firm">企</span>
+                    <span class="account-who"><strong>公司账号</strong><small>国内版 · 企业 · 月度额度</small></span>
+                  </span>
+                  <span class="today-cell">
+                    <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                      <circle class="track" cx="20" cy="20" r="15.5"/>
+                      <circle class="track" cx="20" cy="20" r="10.9"/>
+                      <circle class="track" cx="20" cy="20" r="6.4"/>
+                    </svg>
+                    <span class="state-copy queue">
+                      <span class="state-dotline"><i class="dot info"></i><strong>模型排队</strong></span>
+                      <small>Kimi 第 257 位</small>
+                    </span>
+                  </span>
+                  <span class="credit-cell">
+                    <span class="credit-line"><strong>597.21</strong><small>/ 2,000</small></span>
+                    <span class="meter" aria-hidden="true"><span style="width:30%"></span><span class="soft" style="width:40%"></span></span>
+                  </span>
+                  <span class="task-cell"><span class="cell-main">—</span><span class="cell-sub">企业账号</span></span>
+                  <span class="next-cell"><span class="cell-main">2 天后</span><span class="cell-sub">额度重置</span></span>
+                  <span class="chevron" aria-hidden="true">›</span>
+                </button>
+
+                <button class="account-row" type="button" data-view-link="accounts" data-account-open>
+                  <span class="account-cell">
+                    <span class="avatar intl">海</span>
+                    <span class="account-who"><strong>海外号</strong><small>国际版 · Free · 连登 9 天</small></span>
+                  </span>
+                  <span class="today-cell">
+                    <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                      <circle class="track" cx="20" cy="20" r="15.5"/>
+                      <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                      <circle class="track" cx="20" cy="20" r="10.9"/>
+                      <circle class="track" cx="20" cy="20" r="6.4"/>
+                      <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="20 100" transform="rotate(-90 20 20)"/>
+                    </svg>
+                    <span class="state-copy">
+                      <span class="state-dotline"><i class="dot"></i><strong>奖励到账</strong></span>
+                      <small>今日 +30</small>
+                    </span>
+                  </span>
+                  <span class="credit-cell">
+                    <span class="credit-line"><strong>530</strong><small>/ 800</small></span>
+                    <span class="meter" aria-hidden="true"><span style="width:4%"></span><span class="soft" style="width:62%"></span></span>
+                  </span>
+                  <span class="task-cell"><span class="cell-main">1 / 5</span><span class="cell-sub">已领取</span></span>
+                  <span class="next-cell"><span class="cell-main">10:30</span><span class="cell-sub">网页会话</span></span>
+                  <span class="chevron" aria-hidden="true">›</span>
+                </button>
+              </div>
+            </section>
+
+            <aside class="day-panel" aria-labelledby="today-plan-title">
+              <h2 id="today-plan-title">今日安排</h2>
+              <p class="panel-sub">下一次 <strong>21:00</strong> · 活跃、旅行、福利</p>
+              <ol class="timeline">
+                <li class="done"><time>09:00</time><i class="dot"></i><span class="tl-title">活跃 · 旅行</span></li>
+                <li class="done"><time>09:10</time><i class="dot"></i><span class="tl-title">成长任务</span></li>
+                <li class="done"><time>10:00</time><i class="dot"></i><span class="tl-title">补领奖励</span></li>
+                <li class="done"><time>10:30</time><i class="dot"></i><span class="tl-title">海外号网页会话</span></li>
+                <li class="next"><time>21:00</time><i class="dot"></i><span class="tl-title">活跃 · 旅行<small>3 个国内账号</small></span></li>
+                <li><time>21:10</time><i class="dot"></i><span class="tl-title">成长任务</span></li>
+              </ol>
+              <div class="recent">
+                <h2>最近完成</h2>
+                <div class="recent-row">
+                  <time>14:32</time>
+                  <div><strong>主力号</strong><small>领取「体验专家团队协作」</small></div>
+                  <span class="recent-gain">+80</span>
+                </div>
+                <div class="recent-row">
+                  <time>14:18</time>
+                  <div><strong>备用号</strong><small>猫猫旅行归来</small></div>
+                  <span class="recent-gain">+30</span>
+                </div>
+                <div class="recent-row">
+                  <time>13:50</time>
+                  <div><strong>海外号</strong><small>网页会话完成</small></div>
+                  <span class="recent-gain">待入账</span>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-accounts" aria-labelledby="accounts-title">
+          <div class="page-head accounts-head">
+            <div>
+              <div class="eyebrow">3 个国内版 · 1 个国际版</div>
+              <h1 id="accounts-title">账号</h1>
+              <p class="page-sub">所有账号和今日状态。点开账号查看详情，不离开当前页面。</p>
+              <div class="display-switch">
+                <span>显示方式</span>
+                <div class="segmented" role="group" aria-label="账号显示方式">
+                  <button class="seg" type="button" aria-pressed="true">列表</button>
+                  <button class="seg" type="button" aria-pressed="false">圆环</button>
+                  <button class="seg" type="button" aria-pressed="false">小组件</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="surface accounts-table">
+            <div class="account-table-head" aria-hidden="true">
+              <span>账号</span>
+              <span>今日</span>
+              <span>积分</span>
+              <span class="task-col">任务</span>
+              <span class="next-col">下一次</span>
+              <span></span>
+            </div>
+
+            <button class="account-row is-selected" type="button" data-account-open>
+              <span class="account-cell">
+                <span class="avatar">主</span>
+                <span class="account-who"><strong>主力号</strong><small>国内版 · 个人 · 连登 12 天</small></span>
+              </span>
+              <span class="today-cell">
+                <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                  <circle class="track" cx="20" cy="20" r="15.5"/>
+                  <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                  <circle class="track" cx="20" cy="20" r="10.9"/>
+                  <circle class="b" cx="20" cy="20" r="10.9" pathLength="100" stroke-dasharray="64 100" transform="rotate(-90 20 20)"/>
+                  <circle class="track" cx="20" cy="20" r="6.4"/>
+                  <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                </svg>
+                <span class="state-copy">
+                  <span class="state-dotline"><i class="dot"></i><strong>已完成</strong></span>
+                  <small>4 / 4 今日目标</small>
+                </span>
+              </span>
+              <span class="credit-cell">
+                <span class="credit-line"><strong>1,863.5</strong><small>/ 3,300</small></span>
+                <span class="meter" aria-hidden="true"><span class="urgent" style="width:6%"></span><span class="soon" style="width:20%"></span><span class="soft" style="width:30%"></span></span>
+              </span>
+              <span class="task-cell"><span class="cell-main">5 / 9</span><span class="cell-sub">4 项待办</span></span>
+              <span class="next-cell"><span class="cell-main">21:00</span><span class="cell-sub">活跃 · 旅行</span></span>
+              <span class="chevron" aria-hidden="true">›</span>
+            </button>
+
+            <button class="account-row" type="button" data-account-open>
+              <span class="account-cell">
+                <span class="avatar">备</span>
+                <span class="account-who"><strong>备用号</strong><small>国内版 · 个人 · 连登 5 天</small></span>
+              </span>
+              <span class="today-cell">
+                <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                  <circle class="track" cx="20" cy="20" r="15.5"/>
+                  <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                  <circle class="track" cx="20" cy="20" r="10.9"/>
+                  <circle class="b" cx="20" cy="20" r="10.9" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                  <circle class="track" cx="20" cy="20" r="6.4"/>
+                  <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="72 100" transform="rotate(-90 20 20)"/>
+                </svg>
+                <span class="state-copy claim">
+                  <span class="state-dotline"><i class="dot"></i><strong>待领奖</strong></span>
+                  <small>旅行已归来</small>
+                </span>
+              </span>
+              <span class="credit-cell">
+                <span class="credit-line"><strong>412</strong><small>/ 1,300</small></span>
+                <span class="meter" aria-hidden="true"><span style="width:16%"></span><span class="soft" style="width:16%"></span></span>
+              </span>
+              <span class="task-cell"><span class="cell-main">7 / 9</span><span class="cell-sub">2 项待办</span></span>
+              <span class="next-cell"><span class="cell-main">+30</span><span class="cell-sub">领取奖励</span></span>
+              <span class="chevron" aria-hidden="true">›</span>
+            </button>
+
+            <button class="account-row" type="button" data-account-open>
+              <span class="account-cell">
+                <span class="avatar firm">企</span>
+                <span class="account-who"><strong>公司账号</strong><small>国内版 · 企业 · 月度额度</small></span>
+              </span>
+              <span class="today-cell">
+                <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                  <circle class="track" cx="20" cy="20" r="15.5"/>
+                  <circle class="track" cx="20" cy="20" r="10.9"/>
+                  <circle class="track" cx="20" cy="20" r="6.4"/>
+                </svg>
+                <span class="state-copy queue">
+                  <span class="state-dotline"><i class="dot info"></i><strong>模型排队</strong></span>
+                  <small>Kimi 第 257 位</small>
+                </span>
+              </span>
+              <span class="credit-cell">
+                <span class="credit-line"><strong>597.21</strong><small>/ 2,000</small></span>
+                <span class="meter" aria-hidden="true"><span style="width:30%"></span><span class="soft" style="width:40%"></span></span>
+              </span>
+              <span class="task-cell"><span class="cell-main">—</span><span class="cell-sub">企业账号</span></span>
+              <span class="next-cell"><span class="cell-main">2 天后</span><span class="cell-sub">额度重置</span></span>
+              <span class="chevron" aria-hidden="true">›</span>
+            </button>
+
+            <button class="account-row" type="button" data-account-open>
+              <span class="account-cell">
+                <span class="avatar intl">海</span>
+                <span class="account-who"><strong>海外号</strong><small>国际版 · Free · 连登 9 天</small></span>
+              </span>
+              <span class="today-cell">
+                <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                  <circle class="track" cx="20" cy="20" r="15.5"/>
+                  <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                  <circle class="track" cx="20" cy="20" r="10.9"/>
+                  <circle class="track" cx="20" cy="20" r="6.4"/>
+                  <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="20 100" transform="rotate(-90 20 20)"/>
+                </svg>
+                <span class="state-copy">
+                  <span class="state-dotline"><i class="dot"></i><strong>奖励到账</strong></span>
+                  <small>今日 +30</small>
+                </span>
+              </span>
+              <span class="credit-cell">
+                <span class="credit-line"><strong>530</strong><small>/ 800</small></span>
+                <span class="meter" aria-hidden="true"><span style="width:4%"></span><span class="soft" style="width:62%"></span></span>
+              </span>
+              <span class="task-cell"><span class="cell-main">1 / 5</span><span class="cell-sub">已领取</span></span>
+              <span class="next-cell"><span class="cell-main">10:30</span><span class="cell-sub">网页会话</span></span>
+              <span class="chevron" aria-hidden="true">›</span>
+            </button>
+          </div>
+          <p class="accounts-note">列表、圆环和小组件展示同一批账号；切换只改变呈现方式。</p>
+        </section>
+
+        <section class="view" id="view-tasks" aria-labelledby="tasks-title">
+          <div class="page-head">
+            <div>
+              <div class="eyebrow">来自 2 个国内版账号</div>
+              <h1 id="tasks-title">任务</h1>
+              <p class="page-sub">6 项待办 · 3 项可自动 · 2 项需手动 · 1 项未解锁</p>
+            </div>
+            <button class="btn primary mobile-run" type="button">执行所有任务</button>
+          </div>
+
+          <div class="tasks-toolbar">
+            <div class="segmented" role="group" aria-label="筛选任务">
+              <button class="seg" type="button" aria-pressed="true">全部 <strong>6</strong></button>
+              <button class="seg" type="button" aria-pressed="false">待你处理 <strong>2</strong></button>
+              <button class="seg" type="button" aria-pressed="false">可自动 <strong>3</strong></button>
+              <button class="seg" type="button" aria-pressed="false">需手动 <strong>2</strong></button>
+            </div>
+            <button class="filter-select" type="button">
+              全部账号
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
+            </button>
+          </div>
+
+          <div class="tasks-layout">
+            <section aria-label="待办任务">
+              <div class="surface">
+                <div class="task-group">
+                  <div class="task-group-head">
+                    <span class="avatar">主</span>
+                    <strong>主力号</strong>
+                    <span>4 项待办</span>
+                    <span class="right">5 / 9 已领</span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status claim"><i class="dot"></i>可领奖</span>
+                    <div class="task-main"><strong>体验专家团队协作</strong><small>1 / 1 · 11月28日截止</small></div>
+                    <span class="task-reward">+80</span>
+                    <span class="task-actions"><button class="btn primary" type="button">领奖</button></span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status auto"><i class="dot info"></i>定时完成</span>
+                    <div class="task-main"><strong>连续 3 天使用 Skill</strong><small>2 / 3 · 11月28日截止</small></div>
+                    <span class="task-reward">+100</span>
+                    <span class="task-actions"><button class="btn quiet" type="button">执行</button></span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status manual"><i class="dot warn"></i>需手动</span>
+                    <div class="task-main"><strong>关注官方公众号</strong><small>需要关注满 24 小时</small></div>
+                    <span class="task-reward">+50</span>
+                    <span class="task-actions"><span class="task-why">官方客户端</span></span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status"><i class="dot idle"></i>未解锁</span>
+                    <div class="task-main"><strong>邀请好友体验</strong><small>明天 00:00 解锁</small></div>
+                    <span class="task-reward">+30</span>
+                    <span class="task-actions"><span class="task-why">等待解锁</span></span>
+                  </div>
+                </div>
+
+                <div class="task-group">
+                  <div class="task-group-head">
+                    <span class="avatar">备</span>
+                    <strong>备用号</strong>
+                    <span>2 项待办</span>
+                    <span class="right">7 / 9 已领</span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status auto"><i class="dot info"></i>定时完成</span>
+                    <div class="task-main"><strong>连续 3 天使用 Skill</strong><small>1 / 3 · 11月28日截止</small></div>
+                    <span class="task-reward">+50</span>
+                    <span class="task-actions"><button class="btn quiet" type="button">执行</button></span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status manual"><i class="dot warn"></i>需手动</span>
+                    <div class="task-main"><strong>在桌面端发起对话</strong><small>使用官方客户端完成</small></div>
+                    <span class="task-reward">+30</span>
+                    <span class="task-actions"><span class="task-why">官方客户端</span></span>
+                  </div>
+                </div>
+              </div>
+              <p class="tasks-note">「执行」只处理这一项任务，可用来补跑失败或到期的任务。手动项仍需在官方客户端完成；国际版任务按客户端实际使用计入，不在这里列出。</p>
+            </section>
+
+            <aside class="task-aside" aria-labelledby="queue-title">
+              <h2 id="queue-title">执行</h2>
+              <p class="panel-sub">按账号串行执行，完成后处理下一个。</p>
+              <div class="queue-surface">
+                <div class="queue-empty"><i class="dot"></i>队列空闲，没有执行中的任务</div>
+                <div class="queue-meta">
+                  <div><span>下一次自动执行</span><strong>21:10</strong></div>
+                  <div><span>上次执行</span><strong>14:40 · 成功</strong></div>
+                  <div><span>预计用时</span><strong>4–6 分钟</strong></div>
+                </div>
+                <p>执行过程中可以停止；已完成的账号不会回滚。</p>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <aside class="drawer" id="account-drawer" aria-labelledby="drawer-account-name" aria-hidden="true">
+    <div class="drawer-top">
+      <button class="drawer-back" type="button" data-drawer-close aria-label="返回账号列表">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>
+      </button>
+      <div class="drawer-title">账号 <span aria-hidden="true">/</span> <strong>主力号</strong></div>
+      <button class="drawer-close" type="button" data-drawer-close aria-label="关闭账号详情">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body">
+      <div class="drawer-account">
+        <span class="avatar">主</span>
+        <div class="drawer-account-main">
+          <h2 id="drawer-account-name">主力号</h2>
+          <p>国内版 · 个人 · 连登 12 天</p>
+        </div>
+        <span class="drawer-state"><i class="dot"></i>活跃</span>
+      </div>
+
+      <div class="drawer-credit">
+        <div class="drawer-credit-line"><strong>1,863.5</strong><span>/ 3,300 积分</span></div>
+        <div class="meter" aria-hidden="true"><span class="urgent" style="width:6%"></span><span class="soon" style="width:20%"></span><span class="soft" style="width:30%"></span></div>
+        <p class="drawer-credit-note">3 个积分包 · 最早 120 积分明天作废</p>
+      </div>
+
+      <div class="drawer-tabs" role="tablist" aria-label="账号详情">
+        <button class="drawer-tab" type="button" role="tab" aria-current="page">概览</button>
+        <button class="drawer-tab" type="button" role="tab">任务</button>
+        <button class="drawer-tab" type="button" role="tab">积分</button>
+        <button class="drawer-tab" type="button" role="tab">用量</button>
+      </div>
+
+      <section class="drawer-section" aria-labelledby="drawer-today-title">
+        <h3 id="drawer-today-title">今天</h3>
+        <div class="drawer-row"><span>活跃</span><div><strong>已亮灯</strong><small>09:00 完成</small></div></div>
+        <div class="drawer-row"><span>猫猫旅行</span><div><strong>团子 · 敦煌</strong><small>约 16:30 归来 · +30 积分</small></div></div>
+        <div class="drawer-row"><span>成长任务</span><div><strong>5 / 9 已领</strong><small>4 项待办 · 3 项可自动</small></div></div>
+        <div class="drawer-row"><span>每日签到</span><div><strong>+100 已签</strong><small>连续 12 天</small></div></div>
+      </section>
+
+      <section class="drawer-section" aria-labelledby="drawer-packages-title">
+        <h3 id="drawer-packages-title">积分包</h3>
+        <div class="package"><div><strong>新人体验积分</strong><small>11月17日作废</small></div><span class="warn">186.5</span></div>
+        <div class="package"><div><strong>成长任务奖励</strong><small>11月24日作废</small></div><span>677</span></div>
+        <div class="package"><div><strong>连登兑换积分</strong><small>长期有效</small></div><span>1,000</span></div>
+      </section>
+
+      <section class="drawer-section" aria-labelledby="drawer-next-title">
+        <h3 id="drawer-next-title">下一次</h3>
+        <div class="drawer-row"><span>21:00</span><div><strong>活跃 · 旅行 · 福利</strong><small>预计持续 40 秒</small></div></div>
+        <div class="drawer-row"><span>21:10</span><div><strong>成长任务</strong><small>自动上报并领取已完成奖励</small></div></div>
+      </section>
+
+      <p class="drawer-footnote">余额与旅行状态由后台服务约每 3 分钟刷新；手动执行不受定时开关影响。</p>
+    </div>
+  </aside>
+
+  <nav class="tabbar" aria-label="主导航">
+    <button class="tab" type="button" data-view-link="today" aria-current="page">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><path d="M8 1.4v1.5M8 13.1v1.5M1.4 8h1.5M13.1 8h1.5"/></svg>
+      今天
+    </button>
+    <button class="tab" type="button" data-view-link="accounts">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="3" width="11.6" height="10" rx="2.2"/><path d="M5 6.4h6M5 9.2h4"/></svg>
+      账号
+    </button>
+    <button class="tab" type="button" data-view-link="tasks">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="3"/><path d="m5.1 8 1.9 1.9 3.9-4"/></svg>
+      任务<span class="tab-badge">6</span>
+    </button>
+  </nav>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const labels = { today: "今天", accounts: "账号", tasks: "任务" };
+    const wantedView = labels[params.get("view")] ? params.get("view") : "today";
+    const drawer = document.getElementById("account-drawer");
+    drawer.inert = true;
+
+    function setView(view, updateUrl = false) {
+      document.body.dataset.view = view;
+      document.getElementById("crumb").textContent = labels[view];
+      for (const button of document.querySelectorAll(".nav-item[data-view-link], .tab[data-view-link]")) {
+        if (button.dataset.viewLink === view) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      }
+      if (view !== "accounts") closeDrawer();
+      if (updateUrl) {
+        const next = new URL(location.href);
+        next.searchParams.set("view", view);
+        next.searchParams.delete("account");
+        history.replaceState(null, "", next);
+      }
+    }
+
+    function openDrawer() {
+      document.body.dataset.detail = "open";
+      drawer.setAttribute("aria-hidden", "false");
+      drawer.inert = false;
+    }
+
+    function closeDrawer() {
+      document.body.dataset.detail = "closed";
+      drawer.setAttribute("aria-hidden", "true");
+      drawer.inert = true;
+    }
+
+    for (const button of document.querySelectorAll("[data-view-link]")) {
+      button.addEventListener("click", () => setView(button.dataset.viewLink, true));
+    }
+    for (const button of document.querySelectorAll("[data-account-open]")) {
+      button.addEventListener("click", openDrawer);
+    }
+    for (const button of document.querySelectorAll("[data-drawer-close]")) {
+      button.addEventListener("click", closeDrawer);
+    }
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && document.body.dataset.detail === "open") closeDrawer();
+    });
+
+    setView(wantedView);
+    if (wantedView === "accounts" && params.get("account") === "1") openDrawer();
+  </script>
+</body>
+</html>

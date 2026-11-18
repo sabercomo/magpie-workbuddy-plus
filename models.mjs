@@ -74,7 +74,7 @@ const planOf = sum => {
   return { name: s.SubscriptionPackageName || (s.IsPaidUser ? "Pro" : "Free"), paid: s.IsPaidUser === true };
 };
 
-// China: through a domestic account's client, which keeps its login renewed.
+// China: through a domestic account's client.
 export async function chinaModels(client, now = Date.now()) {
   const models = catalog(await client.request("/v3/config", { base: china }), now);
   const plan = planOf(await client.request("/billing/meter/get-user-resource-summary", { body: {}, base: china }));

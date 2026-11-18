@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { calendar } from "./storage.mjs";
-import { specs, unreachable, buildEvent, buildEvents, growthTasks, miniProgram } from "./events.mjs";
+import { specs, unreachable, buildEvent, buildEvents, growthTasks, miniProgram, dynamicExpert } from "./events.mjs";
 import { UpstreamError } from "./client.mjs";
 import { dropped } from "./network.mjs";
 import { fallback, pickModel, webActivity } from "./webagent.mjs";
 import { campaign } from "./campaign.mjs";
 import { createSkillShare, skillShareEvents } from "./skills.mjs";
 
-export const actions = ["all", "activity", "tasks", "sweep", "task", "travel", "bonus", "night", "keepalive", "web", "inspect"];
+export const actions = ["all", "activity", "tasks", "sweep", "task", "travel", "buddy", "bonus", "compensation", "night", "web", "inspect"];
 
 // A round whose every failure was a rate limit is deferred, not failed.
 function roundError(message, errors, counts) {
@@ -37,11 +37,6 @@ export async function perform(action, client, context) {
     return result;
   };
   const intl = account.realm === "intl", where = intl ? "国际版" : "国内";
-  if (action === "keepalive") {
-    const renewed = await client.refresh();
-    log(renewed ? `${intl ? "国际版" : ""}登录已续期` : "登录未临近到期，无需续期");
-    return { renewed, expires: account.auth.expires };
-  }
   if (account.enterprise) { log("企业账号没有个人成长奖励，跳过"); return { skipped: true, reason: "enterprise" }; }
   // The mini program's own tasks are listed, accepted and claimed only as
   // a mini-program client; `mp` asks that way.
@@ -106,7 +101,16 @@ export async function perform(action, client, context) {
       log("自动分享技能已关闭；可在「任务」里手动执行");
       return "skip";
     }
-    const spec = specs[code];
+    let spec = specs[code];
+    if (!spec) {
+      // A new expert task names its real id in jump_url; use it instead of
+      // waiting for this build's static table to catch up.
+      const expert = dynamicExpert(task);
+      if (expert) {
+        spec = { kind: "expert", expert };
+        log(`${task.title || code}：已识别为专家任务，按真实 expertId 自动完成`);
+      }
+    }
     if (!spec) { log(`${task.title || code}：尚未适配此任务${task.jump_url ? `（${task.jump_url}）` : ""}`); return "manual"; }
     if (spec.night) {
       const hour = calendar(new Date(), config.timezone).hour;
@@ -349,11 +353,27 @@ export async function perform(action, client, context) {
       return got;
     });
   };
+  // Growth energy opens Buddy blind boxes. It spends energy, so it only runs
+  // when the board asks for it or the travel auto setting is on.
+  const buddy = async () => {
+    if (intl) return { skipped: true, reason: "intl" };
+    const quota = await client.request("/v2/activity/growth/buddy/quota");
+    const affordable = Math.max(0, Number(quota?.affordable) || 0);
+    const maxOpen = Math.max(1, Number(quota?.max_open_count) || 1);
+    if (affordable <= 0) { log("成长能量不足以开启 Buddy 盲盒"); return { opened: 0 }; }
+    const count = Math.min(affordable, maxOpen);
+    const got = await client.request("/v2/activity/growth/buddy/open", { body: { count, client_token: randomUUID() } });
+    const raw = got?.buddy || got?.name || got?.buddies || "新 Buddy";
+    const name = (Array.isArray(raw) ? raw : [raw]).map(value => typeof value === "object" ? value.name || value.nickname || "新 Buddy" : String(value)).join("、");
+    log(`Buddy 盲盒：开启 ${count} 个（${name}）`);
+    return { opened: count, name };
+  };
   const travel = async () => {
     // WorkBuddy AI has no Buddy travel: nothing is asked and nothing logged.
     if (intl) return { skipped: true, reason: "intl" };
     const base = "/activity/growth/buddy/travel";
-    let status = await client.request(base + "/status");
+    let status = await client.request(base + "/status"), opened = false;
+    if (!status?.state && config.buddyAuto === true) { await buddy(); opened = true; status = await client.request(base + "/status"); }
     if (!status?.state) { log("还没有可旅行的猫猫，跳过"); return { skipped: true }; }
     if (status.state === "arrived") {
       const reward = await client.request(base + "/claim", { body: {} });
@@ -363,6 +383,11 @@ export async function perform(action, client, context) {
     if (status.state === "traveling") { log("猫猫正在旅行"); return status; }
     if (status.state !== "idle") throw new Error(`未知猫猫状态：${status.state}`);
     if (status.daily_limit_reached) { log("猫猫今日旅行已完成"); return status; }
+    if (config.buddyAuto === true && !opened) {
+      await buddy();
+      status = await client.request(base + "/status");
+      if (status.state !== "idle" || status.daily_limit_reached) return status;
+    }
     const configuration = await client.request(base + "/config");
     const location = configuration?.locations?.[0];
     if (location?.id === undefined) throw new Error("旅行配置没有可用目的地");
@@ -388,6 +413,21 @@ export async function perform(action, client, context) {
       log(said);
       return { outcome: e.code === 1001 ? "done" : "closed" };
     }
+  };
+  // Query the limited-time compensation before claiming it. active=false is
+  // "no campaign", claimed=true is "already took it"; a failed query stays an
+  // error and is not mistaken for either.
+  const compensation = async () => {
+    if (intl) return { skipped: true, reason: "intl" };
+    const status = await client.request("/billing/meter/compensation-status", { billing: true, body: {} });
+    const active = status?.active === true, claimed = status?.claimed === true;
+    const credit = Math.max(0, Number(status?.credit_num) || 0);
+    if (!active) { log("官方补偿：当前没有补偿活动"); return { active: false }; }
+    if (claimed) { log("官方补偿：已经领取"); return { active: true, claimed: true }; }
+    if (credit <= 0) { log("官方补偿：没有可领额度"); return { active: true, credit: 0 }; }
+    const got = await client.request("/billing/meter/claim-compensation", { billing: true, body: {} });
+    log(`官方补偿：已领取 ${got?.credit ?? credit} 积分`);
+    return { active: true, claimed: true, credit: got?.credit ?? credit };
   };
   const bonus = async () => {
     if (intl) await checkin();
@@ -423,7 +463,7 @@ export async function perform(action, client, context) {
       log(`成长抽奖 ${draws + 1}/${lottery.chances}：${JSON.stringify(result)}`);
     }
     // The starter gift and compensation are China's billing; WorkBuddy AI has neither.
-    for (const [path, title] of intl ? [] : [["claim-gift", "新手礼包"], ["claim-compensation", "活动补偿"]]) {
+    for (const [path, title] of intl ? [] : [["claim-gift", "新手礼包"]]) {
       const key = `${account.id}:${path}`;
       if (state.daily[key] === "settled") continue;
       try {
@@ -437,6 +477,7 @@ export async function perform(action, client, context) {
       }
       checkpoint();
     }
+    if (!intl) await compensation();
     log("连登兑换、补签与抽奖检查完毕");
     return { days: streak.streak?.days, draws };
   };
@@ -446,13 +487,14 @@ export async function perform(action, client, context) {
   };
   if (action === "task") return oneTask(context.task);
   if (action === "sweep") return sweep();
-  const handlers = { activity, tasks: () => runTasks(false), travel, bonus, night: () => runTasks(true), web };
+  const handlers = { activity, tasks: () => runTasks(false), travel, buddy, bonus, compensation, night: () => runTasks(true), web };
   if (action !== "all") return handlers[action]();
   if (intl) delete handlers.travel;
   else delete handlers.web;
   const results = {}, failures = [], errors = [], counts = { succeeded: 0, failed: 0, limited: 0, total: 0 };
   for (const [name, run] of Object.entries(handlers)) {
-    if (name === "night") continue;
+    // Compensation runs inside bonus; buddy is manual or travel-gated.
+    if (name === "night" || name === "buddy" || name === "compensation") continue;
     try {
       results[name] = await run();
       counts.succeeded++;

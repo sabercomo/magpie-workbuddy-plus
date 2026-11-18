@@ -16,6 +16,9 @@ export const specs = {
   expert_use_douyinyin: { kind: "expert", expert: ["ex_FbY5nlWTqDod", "抖音策略师"] },
   expert_use_shangjia_xuanchuan: { kind: "expert", expert: ["ex_Weo3x2EZuSDm", "商家宣传页与海报设计师"] },
   expert_use_bowangwang: { kind: "expert", expert: ["ex_WZY136wV5aMt", "直播电商教练"] },
+  // A web-side expert task already in the live list; its expert id is the
+  // builder's public account, not an `ex_…` id.
+  workstation_expert: { kind: "expert", expert: ["WorkspaceBuilder", "工作台搭建师"] },
   // Counted only from the desktop client's own reports: a whole chat as it
   // logs one, and the five steps of entering a Buddy app (企鹅教师助手, which
   // lights both tasks).
@@ -41,6 +44,34 @@ export const specs = {
 // nothing here does yet still shows, as one to do by hand, so a new one
 // is seen the day it appears.
 export const unreachable = new Set(["wb_wechat_oa_subscribe_task", "Expert_Philanthropy"]);
+
+// New expert tasks arrive with their real id in the task's own jump_url:
+// either an `expertId` query on the outer link, or inside the `deeplink`
+// query the web app uses. A task code `expert_use_<slug>` is the last
+// fallback. Anything else stays for a person to do.
+const expertId = /^ex_[A-Za-z0-9]{6,64}$/;
+export function dynamicExpert(task) {
+  const jump = String(task?.jump_url || "");
+  if (jump) {
+    try {
+      const url = new URL(jump);
+      const inner = url.searchParams.get("deeplink");
+      const id = inner ? new URL(inner).searchParams.get("expertId") : url.searchParams.get("expertId");
+      if (expertId.test(id || "")) return [id, String(task.title || task.name || "专家")];
+    } catch {}
+  }
+  const code = String(task?.task_code || "");
+  if (code.startsWith("expert_use_")) {
+    const slug = code.slice("expert_use_".length), id = `ex_${slug}`;
+    if (expertId.test(id)) return [id, String(task.title || task.name || slug)];
+  }
+  return null;
+}
+
+export function specFor(task) {
+  const expert = dynamicExpert(task);
+  return specs[task?.task_code] || (expert ? { kind: "expert", expert } : null);
+}
 
 // What a mini-program client sends to see, accept and claim its own tasks.
 export const miniProgram = { "X-Client-Platform": "miniprogram" };

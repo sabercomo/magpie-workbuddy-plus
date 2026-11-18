@@ -13,12 +13,13 @@ cp "$root/docs/screenshot-bridge.js" "$work/_magpie/bridge.js"
 ${BUN:-bun} "$root/docs/demo-data.mjs" "$work"
 chrome=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}
 shot() {
-  "$chrome" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=1100,760 \
+  "$chrome" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=1100,${3:-760} \
     --virtual-time-budget=4000 --user-data-dir="$work/profile" --screenshot="$root/docs/images/$1.png" "file://$work/index.html?$2" >/dev/null 2>&1
   echo "docs/images/$1.png"
 }
 shot list "view=list"
 shot tasks "tab=tasks"
+shot accounts "tab=accounts" 900
 shot rings "view=rings"
 shot widgets "view=widgets"
 shot alerts "view=list&to=.wb-alert-footer&click=.wb-alert-toggle"
@@ -26,3 +27,7 @@ shot models-cn "tab=models&realm=cn"
 shot models-intl "tab=models&realm=intl"
 shot models-ent "tab=models&realm=ent"
 shot dark "view=list&dark=1"
+
+shot queue "tab=schedule" 960
+shot runs "tab=schedule&click=[data-work-tab=runs],.wb-execution-record[data-job=demo-failed]>summary&to=.wb-workbench" 960
+shot logs "tab=schedule&click=[data-work-tab=logs]&to=.wb-workbench" 960

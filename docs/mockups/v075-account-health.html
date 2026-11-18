@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkBuddy Plus · v0.7.5 样稿：账号健康总览</title>
+<style>
+/* page/board.css inlined for standalone preview (same tokens as p0-four-features.html) */
+.wb-board{--wb-card:var(--magpie-card,#fff);--wb-line:var(--magpie-line,#dce1d8);--wb-muted:var(--magpie-muted,#69746c);--wb-accent:var(--magpie-accent,#25583e);--wb-soft:var(--magpie-accent-soft,#eaf0e7);--wb-warn:#b4691b;--wb-urgent:#c0392b;--wb-go:#2d61a0;--wb-ok:var(--wb-accent);--wb-hover:color-mix(in srgb,var(--wb-muted) 9%,transparent)}
+.wb-sub{font-size:12px;color:var(--wb-muted)}
+.wb-label{font-size:12.5px;font-weight:600}
+.wb-line{display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0}
+.wb-segs{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:var(--wb-soft);max-width:100%;overflow-x:auto;scrollbar-width:none}
+.wb-seg-btn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;font-size:12.5px;color:var(--wb-muted);white-space:nowrap;cursor:pointer;transition:background-color 120ms ease-out,color 120ms ease-out}
+.wb-seg-btn:hover{color:inherit}.wb-seg-btn:focus-visible{outline:2px solid var(--wb-accent);outline-offset:-2px}
+.wb-seg-btn.on{background:var(--wb-card);color:inherit;font-weight:600;box-shadow:0 1px 2px rgba(15,23,42,.08)}
+.wb-pill{flex:none;font-size:11.5px;padding:1px 8px;border-radius:10px;background:var(--wb-soft);white-space:nowrap}
+.wb-pill.ok{color:var(--wb-accent)}.wb-pill.warn{color:var(--wb-warn)}.wb-pill.go{color:var(--wb-go)}.wb-pill.urgent{color:var(--wb-urgent);background:color-mix(in srgb,var(--wb-urgent) 12%,var(--wb-card))}
+body{margin:0;padding:18px 22px 26px}
+[hidden]{display:none!important}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:20px;font-weight:650;letter-spacing:-.02em;margin:0}
+h2{font-size:13px;font-weight:600;margin:18px 2px 8px}
+.muted{color:var(--wb-muted);font-size:12px;margin:0}
+header button{font:inherit;display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:inherit}
+header .inline{all:unset;display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:12px;color:var(--wb-accent);padding:1px 4px;border-radius:5px}
+header .inline:hover{background:var(--wb-soft)}header .inline:focus-visible,header .quiet:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+header .quiet{font-size:12.5px;padding:5px 11px;border-radius:8px;border:1px solid var(--wb-line);background:var(--wb-card);white-space:nowrap}
+header .quiet:hover{border-color:color-mix(in srgb,var(--wb-muted) 55%,var(--wb-line))}
+.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.brand-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sched-pill{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:5px;padding:1px 9px;border-radius:999px;font-size:11.5px;background:var(--wb-soft);color:var(--wb-accent);cursor:pointer;white-space:nowrap}
+.sched-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+</style>
+<style>
+:root{color-scheme:light}
+body{background:var(--magpie-bg,#f7f8f6);color:var(--magpie-fg,#272d29);padding-bottom:44px}
+.mock-banner{border:1px solid var(--wb-line);border-left:3px solid var(--wb-accent);border-radius:0 10px 10px 0;background:var(--wb-card);padding:9px 12px;font-size:12px;line-height:1.55;color:var(--wb-muted);margin:0 0 12px}
+.mock-banner strong{color:inherit}
+.mock-controls{border:1px dashed var(--wb-line);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:5px;margin:0 0 16px}
+.mock-control-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--wb-muted)}
+.mock-control-head strong{font-size:12px;color:inherit}
+.mock-control-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--wb-muted)}
+.mock-control-row>strong{font-weight:600;min-width:68px;color:inherit}
+.mock-control-row .wb-segs{margin-left:auto}
+.mock-section{margin:18px 0}
+.mock-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 2px 8px}
+.mock-section-head h2{margin:0}
+.mock-btn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:5px;font:inherit;font-size:12px;padding:4px 11px;border-radius:7px;border:1px solid var(--wb-line);background:var(--wb-card);color:inherit;cursor:pointer;white-space:nowrap}
+.mock-btn:hover{border-color:color-mix(in srgb,var(--wb-muted) 55%,var(--wb-line))}
+.mock-btn:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+.mock-btn.primary{background:var(--wb-accent);border-color:var(--wb-accent);color:#fff}
+.mock-btn.primary:hover{filter:brightness(.96)}
+.mock-btn:disabled{opacity:.55;cursor:not-allowed;filter:none}
+.mock-toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:30;background:var(--wb-accent);color:#fff;font-size:12.5px;line-height:1.4;padding:7px 14px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:calc(100vw - 32px);text-align:center}
+.mock-dark{color-scheme:dark;--magpie-bg:#151a17;--magpie-fg:#e6ece8;--magpie-card:#1d2320;--magpie-line:#35403a;--magpie-muted:#9aa79f;--magpie-accent:#8fc9a8;--magpie-accent-soft:#243a2e;background:#151a17;color:#e6ece8}
+
+/* ---- v0.7.5: account pool health table ---- */
+.mock-health{border:1px solid var(--wb-line);border-radius:12px;overflow:hidden;background:var(--wb-card)}
+.mock-health-head,.mock-health-row{display:grid;grid-template-columns:22px minmax(130px,1.2fr) 96px minmax(0,1.6fr) 92px minmax(0,1.4fr) auto;gap:10px;align-items:center;padding:8px 14px}
+.mock-health-head{padding:7px 14px 6px;font-size:11.5px;color:var(--wb-muted);border-bottom:1px solid var(--wb-line)}
+.mock-health-row{border-top:1px solid color-mix(in srgb,var(--wb-line) 60%,transparent);font-size:12.5px;transition:background-color 120ms ease-out}
+.mock-health-row:hover{background:var(--wb-hover)}
+.mock-health-row.is-off{color:var(--wb-muted)}
+.mock-check{appearance:none;width:15px;height:15px;margin:0 0 0 1px;border:1.5px solid var(--wb-line);border-radius:4.5px;background:var(--wb-card);cursor:pointer;flex:none;transition:background-color 120ms ease-out,border-color 120ms ease-out}
+.mock-check:checked{background:var(--wb-accent);border-color:var(--wb-accent);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4.5 8.4 2.3 2.3 4.8-5.2' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-size:11px;background-position:center;background-repeat:no-repeat}
+.mock-check:focus-visible{outline:2px solid var(--wb-accent);outline-offset:1px}
+.mock-check:disabled{opacity:.4;cursor:default}
+.mock-hwho{display:flex;align-items:center;gap:8px;min-width:0}
+.mock-avatar{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--wb-soft);color:var(--wb-accent);font-weight:600;font-size:11px;flex:none}
+.mock-hwho-text{min-width:0}
+.mock-hwho-text strong{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mock-hwho-text small{display:block;margin-top:1px;font-size:10.5px;color:var(--wb-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mock-status{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.mock-status::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--tone,var(--wb-accent));flex:none}
+.mock-status.ok{--tone:var(--wb-accent);color:var(--wb-accent)}
+.mock-status.warn{--tone:var(--wb-warn);color:var(--wb-warn)}
+.mock-status.urgent{--tone:var(--wb-urgent);color:var(--wb-urgent)}
+.mock-status.info{--tone:var(--wb-go);color:var(--wb-go)}
+.mock-status.idle{--tone:var(--wb-muted);color:var(--wb-muted)}
+.mock-hdetail{min-width:0;font-size:11.5px;color:var(--wb-muted);line-height:1.4}
+.mock-hdetail .warn{color:var(--wb-warn)}
+.mock-hnum{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:11.5px;color:var(--wb-muted)}
+.mock-hnum{color:var(--magpie-fg,#272d29);font-weight:600;font-variant-numeric:tabular-nums}
+.mock-hnext{min-width:0}
+.mock-hnext strong{display:block;font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mock-hnext small{display:block;margin-top:1px;font-size:10.5px;color:var(--wb-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mock-hactions{display:flex;gap:5px;flex-wrap:nowrap}
+.mock-hbtn{all:unset;box-sizing:border-box;font:inherit;font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--wb-line);color:var(--wb-muted);cursor:pointer;white-space:nowrap}
+.mock-hbtn:hover{border-color:color-mix(in srgb,var(--wb-muted) 55%,var(--wb-line));color:inherit}
+.mock-hbtn.accent{color:var(--wb-accent);border-color:color-mix(in srgb,var(--wb-accent) 40%,var(--wb-line))}
+.mock-hbtn.accent:hover{background:var(--wb-soft)}
+.mock-hbtn:disabled{opacity:.45;cursor:default}
+.mock-hbtn:focus-visible{outline:2px solid var(--wb-accent);outline-offset:1px}
+.mock-bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;padding:9px 12px;border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);font-size:12px}
+.mock-bulk strong{font-weight:600;font-variant-numeric:tabular-nums}
+.mock-bulk .wb-sub{margin-left:auto}
+.mock-health-note{margin:9px 2px 0;font-size:11.5px;color:var(--wb-muted);line-height:1.55}
+
+/* drawer inside the account detail panel: per-account quick ops land here */
+.mock-detail-health{display:flex;flex-direction:column;gap:7px;border:1px solid var(--wb-line);border-radius:10px;background:var(--wb-card);padding:8px 10px;margin-bottom:8px}
+.mock-detail-health .mock-hbtn{font-size:11.5px;padding:4px 10px}
+.mock-detail-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+@media(max-width:720px){
+  .mock-health-head{display:none}
+  .mock-health-row{grid-template-columns:22px minmax(0,1fr) auto;grid-template-areas:"check who status" "check detail detail" "check next actions";row-gap:4px}
+  .mock-check{grid-area:check;align-self:start;margin-top:3px}
+  .mock-hwho{grid-area:who}
+  .mock-status{grid-area:status;align-self:start;margin-top:3px}
+  .mock-hdetail{grid-area:detail}
+  .mock-hnum{display:none}
+  .mock-hnext{grid-area:next}
+  .mock-hactions{grid-area:actions;justify-content:flex-end}
+}
+@media(max-width:640px){.mock-control-row>strong{min-width:100%}.mock-control-row .wb-segs{margin-left:0}}
+@media(prefers-reduced-motion:reduce){.mock-health-row,.mock-check{transition:none}}
+</style>
+</head>
+<body class="wb-board">
+<header>
+  <div>
+    <div class="brand-title"><h1>WorkBuddy Plus</h1><span class="sched-pill">定时运行中 · 下次 21:01</span></div>
+    <p class="muted">余额更新于 14:40 <button class="inline" type="button">刷新</button></p>
+  </div>
+  <div class="header-actions">
+    <button class="quiet" type="button" id="theme-toggle">深色</button>
+    <button class="quiet" type="button">设置</button>
+  </div>
+</header>
+
+<p class="mock-banner"><strong>样稿 · v0.7.5 账号健康总览</strong>：在现有「账号列表」上面加一张账号池健康表，一行一个账号的状态、最近成功、失败次数、冷却与下一次定时；行内是最常用的快捷操作，勾选后走批量。这张表是「概览」级别的，看细节仍进账号详情。上方「样稿控制」只用于评审。</p>
+
+<section class="mock-controls" aria-label="样稿控制">
+  <div class="mock-control-head"><strong>样稿控制</strong><span>切换状态，不会出现在产品里</span></div>
+  <div class="mock-control-row"><strong>筛选</strong><div class="wb-segs"><button type="button" class="wb-seg-btn on" data-filter="all">全部 6</button><button type="button" class="wb-seg-btn" data-filter="attention">需留意 3</button><button type="button" class="wb-seg-btn" data-filter="paused">已暂停 1</button></div></div>
+</section>
+
+<section class="mock-section" aria-label="账号健康总览">
+  <div class="mock-section-head"><h2>账号健康</h2><span class="muted">6 个账号 · 3 个需留意 · 冷却与倒计时来自后台服务</span></div>
+  <div class="mock-health" id="health">
+    <div class="mock-health-head" aria-hidden="true">
+      <span><input type="checkbox" class="mock-check" id="check-all" aria-label="全选"></span>
+      <span>账号</span><span>状态</span><span>说明</span><span>失败</span><span>下一次定时</span><span style="text-align:right">快捷操作</span>
+    </div>
+
+    <div class="mock-health-row" data-attention="1">
+      <input type="checkbox" class="mock-check" aria-label="选择主力号">
+      <span class="mock-hwho"><span class="mock-avatar">主</span><span class="mock-hwho-text"><strong>主力号</strong><small>国内版 · 个人</small></span></span>
+      <span class="mock-status ok">正常</span>
+      <span class="mock-hdetail">最近成功 14:40 · 今日任务 5/9</span>
+      <span class="mock-hnum"><span class="mock-hnum">0</span> 次</span>
+      <span class="mock-hnext"><strong>21:00</strong><small>活跃 · 旅行 · 福利</small></span>
+      <span class="mock-hactions">
+        <button type="button" class="mock-hbtn" data-op="刷新余额">余额</button>
+        <button type="button" class="mock-hbtn" data-op="执行任务">任务</button>
+        <button type="button" class="mock-hbtn" data-op="猫猫旅行">旅行</button>
+        <button type="button" class="mock-hbtn" data-op="暂停任务">暂停</button>
+      </span>
+    </div>
+
+    <div class="mock-health-row" data-attention="1">
+      <input type="checkbox" class="mock-check" aria-label="选择备用号">
+      <span class="mock-hwho"><span class="mock-avatar">备</span><span class="mock-hwho-text"><strong>备用号</strong><small>国内版 · 个人</small></span></span>
+      <span class="mock-status warn">登录将过期</span>
+      <span class="mock-hdetail"><span class="warn">访问凭证 2 天后到期</span> · 上次成功 09:01</span>
+      <span class="mock-hnum"><span class="mock-hnum">0</span> 次</span>
+      <span class="mock-hnext"><strong>22:01</strong><small>登录续期检查</small></span>
+      <span class="mock-hactions">
+        <button type="button" class="mock-hbtn accent" data-op="续期登录">续期</button>
+        <button type="button" class="mock-hbtn" data-op="刷新余额">余额</button>
+        <button type="button" class="mock-hbtn" data-op="暂停任务">暂停</button>
+      </span>
+    </div>
+
+    <div class="mock-health-row" data-attention="1">
+      <input type="checkbox" class="mock-check" aria-label="选择公司账号">
+      <span class="mock-hwho"><span class="mock-avatar" style="background:color-mix(in srgb,var(--wb-warn) 12%,var(--wb-card));color:var(--wb-warn)">企</span><span class="mock-hwho-text"><strong>公司账号</strong><small>国内版 · 企业</small></span></span>
+      <span class="mock-status info">限流中</span>
+      <span class="mock-hdetail">上游风控，今日自动任务暂停 · <span class="mock-hnum">冷却 42:18</span></span>
+      <span class="mock-hnum"><span class="mock-hnum">3</span> 次</span>
+      <span class="mock-hnext"><strong>明日 09:01</strong><small>风控解除后恢复</small></span>
+      <span class="mock-hactions">
+        <button type="button" class="mock-hbtn" data-op="刷新余额">余额</button>
+        <button type="button" class="mock-hbtn" data-op="清除风控">解除</button>
+      </span>
+    </div>
+
+    <div class="mock-health-row" data-attention="1">
+      <input type="checkbox" class="mock-check" aria-label="选择薅毛号">
+      <span class="mock-hwho"><span class="mock-avatar">薅</span><span class="mock-hwho-text"><strong>薅毛号</strong><small>国内版 · 个人</small></span></span>
+      <span class="mock-status urgent">连续失败</span>
+      <span class="mock-hdetail">成长任务连续 3 次 400 · 自动上报已暂停</span>
+      <span class="mock-hnum"><span class="mock-hnum">3</span> 次</span>
+      <span class="mock-hnext"><strong>手动重试</strong><small>清除后恢复定时</small></span>
+      <span class="mock-hactions">
+        <button type="button" class="mock-hbtn accent" data-op="重试任务">重试</button>
+        <button type="button" class="mock-hbtn" data-op="清除失败">清除</button>
+        <button type="button" class="mock-hbtn" data-op="暂停任务">暂停</button>
+      </span>
+    </div>
+
+    <div class="mock-health-row" data-paused="1">
+      <input type="checkbox" class="mock-check" aria-label="选择测试号">
+      <span class="mock-hwho"><span class="mock-avatar" style="background:color-mix(in srgb,var(--wb-muted) 14%,var(--wb-card));color:var(--wb-muted)">测</span><span class="mock-hwho-text"><strong>测试号</strong><small>国内版 · 个人</small></span></span>
+      <span class="mock-status idle">已暂停</span>
+      <span class="mock-hdetail">只停自动任务 · 登录续期与看板照常</span>
+      <span class="mock-hnum">—</span>
+      <span class="mock-hnext"><strong>—</strong><small>任务已暂停</small></span>
+      <span class="mock-hactions">
+        <button type="button" class="mock-hbtn accent" data-op="恢复任务">恢复</button>
+        <button type="button" class="mock-hbtn" data-op="刷新余额">余额</button>
+      </span>
+    </div>
+
+    <div class="mock-health-row">
+      <input type="checkbox" class="mock-check" aria-label="选择海外号">
+      <span class="mock-hwho"><span class="mock-avatar" style="background:color-mix(in srgb,var(--wb-go) 12%,var(--wb-card));color:var(--wb-go)">海</span><span class="mock-hwho-text"><strong>海外号</strong><small>国际版 · Free</small></span></span>
+      <span class="mock-status ok">正常</span>
+      <span class="mock-hdetail">最近成功 10:30 · 网页会话已跑</span>
+      <span class="mock-hnum"><span class="mock-hnum">0</span> 次</span>
+      <span class="mock-hnext"><strong>明日 10:30</strong><small>网页会话</small></span>
+      <span class="mock-hactions">
+        <button type="button" class="mock-hbtn" data-op="刷新余额">余额</button>
+        <button type="button" class="mock-hbtn" data-op="执行任务">任务</button>
+        <button type="button" class="mock-hbtn" data-op="暂停任务">暂停</button>
+      </span>
+    </div>
+  </div>
+
+  <div class="mock-bulk" id="bulk" hidden>
+    <span>已选 <strong id="bulk-count">0</strong> 个账号</span>
+    <button type="button" class="mock-btn" data-bulk="刷新余额">刷新余额</button>
+    <button type="button" class="mock-bbtn mock-btn" data-bulk="执行任务">执行任务</button>
+    <button type="button" class="mock-btn" data-bulk="暂停任务">暂停</button>
+    <button type="button" class="mock-btn" data-bulk="恢复任务">恢复</button>
+    <span class="wb-sub">批量操作按账号串行执行，互相之间保留间隔，避免触发风控。</span>
+  </div>
+
+  <p class="mock-health-note">状态优先级：连续失败 &gt; 登录将过期 &gt; 限流中 &gt; 额度用完 &gt; 已暂停 &gt; 正常。「暂停」只停自动任务，登录续期、看板刷新和手动执行不受影响；「已停用」整体停用账号（含续期），仍走设置页管理，不进这张表的快捷操作。</p>
+</section>
+
+<section class="mock-section" aria-label="账号详情内的快捷操作">
+  <div class="mock-section-head"><h2>同一套操作，在账号详情里</h2><span class="muted">点开账号行后的面板顶部</span></div>
+  <div style="border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);padding:10px 14px;max-width:560px">
+    <div class="mock-detail-health">
+      <div class="wb-line"><span class="wb-label">备用号</span><span class="mock-status warn">登录将过期</span></div>
+      <div class="wb-sub">访问凭证 2 天后到期 · 上次成功 09:01 · 失败 0 次</div>
+      <div class="mock-detail-actions">
+        <button type="button" class="mock-hbtn accent" data-op="续期登录">续期登录</button>
+        <button type="button" class="mock-hbtn" data-op="刷新余额">刷新余额</button>
+        <button type="button" class="mock-hbtn" data-op="执行任务">执行任务</button>
+        <button type="button" class="mock-hbtn" data-op="猫猫旅行">猫猫旅行</button>
+        <button type="button" class="mock-hbtn" data-op="暂停任务">暂停任务</button>
+      </div>
+    </div>
+    <div class="wb-sub">详情其余部分（积分流水、成长、旅行）不变。</div>
+  </div>
+</section>
+
+<div class="mock-toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = message => {
+    const node = $("toast");
+    node.textContent = message;
+    node.hidden = false;
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => { node.hidden = true; }, 2600);
+  };
+
+  $("theme-toggle").addEventListener("click", () => {
+    const dark = document.body.classList.toggle("mock-dark");
+    $("theme-toggle").textContent = dark ? "浅色" : "深色";
+  });
+
+  // Filter segments
+  const rows = [...document.querySelectorAll(".mock-health-row")];
+  const setSeg = (selector, active) => {
+    for (const button of document.querySelectorAll(selector)) {
+      button.classList.toggle("on", button.dataset.filter === active);
+    }
+  };
+  document.addEventListener("click", event => {
+    const seg = event.target.closest("[data-filter]");
+    if (!seg) return;
+    setSeg("[data-filter]", seg.dataset.filter);
+    for (const row of rows) {
+      const show = seg.dataset.filter === "all"
+        || (seg.dataset.filter === "attention" && row.dataset.attention)
+        || (seg.dataset.filter === "paused" && row.dataset.paused);
+      row.hidden = !show;
+    }
+  });
+
+  // Batch selection
+  const bulk = $("bulk"), bulkCount = $("bulk-count"), checkAll = $("check-all");
+  const syncBulk = () => {
+    const boxes = rows.filter(r => !rowHidden(r)).map(r => r.querySelector(".mock-check"));
+    const on = boxes.filter(b => b.checked);
+    bulk.hidden = on.length === 0;
+    bulkCount.textContent = on.length;
+    checkAll.checked = boxes.length > 0 && on.length === boxes.length;
+    checkAll.indeterminate = on.length > 0 && on.length < boxes.length;
+  };
+  const rowHidden = r => r.hidden;
+  document.addEventListener("change", event => {
+    if (event.target === checkAll) {
+      for (const row of rows) if (!rowHidden(row)) row.querySelector(".mock-check").checked = checkAll.checked;
+    }
+    if (event.target.classList?.contains("mock-check") || event.target === checkAll) syncBulk();
+  });
+
+  // Quick ops (mock only)
+  document.addEventListener("click", event => {
+    const op = event.target.closest("[data-op]");
+    if (op) toast(`${op.dataset.op}：已加入队列（样稿，不真正执行）`);
+    const b = event.target.closest("[data-bulk]");
+    if (b) toast(`批量${b.dataset.bulk}：已选 ${bulkCount.textContent} 个账号，将串行执行（样稿）`);
+  });
+
+  // Cooldown countdown demo: tick the 42:18 down once so评审能看到它是活的
+  const cd = document.querySelector(".mock-hdetail .mock-hnum");
+  if (cd) {
+    let s = 42 * 60 + 18;
+    setInterval(() => {
+      s = Math.max(0, s - 1);
+      cd.textContent = `冷却 ${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+    }, 1000);
+  }
+})();
+</script>
+</body>
+</html>

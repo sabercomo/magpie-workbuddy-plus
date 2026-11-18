@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkBuddy Plus · 导航切换样稿</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --magpie-bg: #f4f4f6; --magpie-fg: #1f1f24; --magpie-card: #fff;
+  --magpie-line: #e3e3e8; --magpie-muted: #6e6e78;
+  --magpie-accent: #4f46e5; --magpie-accent-soft: #eeedfd;
+  --move: 240ms cubic-bezier(.2,.8,.2,1);
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --magpie-bg: #1a1a1e; --magpie-fg: #ececf1; --magpie-card: #232327;
+    --magpie-line: #34343b; --magpie-muted: #9a9aa6;
+    --magpie-accent: #8b84ff; --magpie-accent-soft: #2b2850;
+  }
+}
+* { box-sizing: border-box }
+body { margin: 0; background: var(--magpie-bg); color: var(--magpie-fg) }
+button { font: inherit; color: inherit; cursor: pointer }
+button:focus-visible, [role="separator"]:focus-visible {
+  outline: 2px solid var(--magpie-accent); outline-offset: 2px;
+}
+[hidden] { display: none !important }
+svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
+.app { --rail: min(var(--rail-width, 152px), 36vw); --content-gutter: 24px; padding: 16px 22px 24px }
+.header { display: grid; grid-template-columns: 32px minmax(0,1fr) auto; gap: 8px 10px; align-items: start; margin-bottom: 13px }
+.layout-toggle { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 7px; color: var(--magpie-muted); background: transparent }
+.layout-toggle:hover, .layout-toggle[aria-pressed="true"] { color: var(--magpie-accent); background: var(--magpie-accent-soft) }
+.layout-toggle:active { scale: .96 }
+.brand { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; min-height: 32px }
+h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.025em; line-height: 1.2 }
+.status { background: var(--magpie-accent-soft); color: var(--magpie-accent); padding: 2px 8px; border-radius: 99px; white-space: nowrap; font-size: 11px }
+.status::before { content: "●"; font-size: 8px; margin-right: 5px }
+.meta { margin: 3px 0 0; color: var(--magpie-muted); font-size: 12px }
+.refresh { margin-left: 7px; color: var(--magpie-accent) }
+.header-actions, .brief-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 7px }
+.action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 31px; padding: 4px 10px; background: var(--magpie-card); border: 1px solid var(--magpie-line); border-radius: 8px; white-space: nowrap }
+.action.primary { background: var(--magpie-accent); color: white; border-color: transparent }
+.action.link { background: transparent; color: var(--magpie-accent); border-color: transparent }
+.shell { display: grid; grid-template-columns: 0px minmax(0,1fr); transition: grid-template-columns var(--move); min-height: calc(100dvh - 115px) }
+.side-mode .shell { grid-template-columns: var(--rail) minmax(0,1fr) }
+.dragging .shell, .dragging .content { transition: none }
+.dragging { user-select: none; cursor: col-resize }
+.sidebar { position: relative; min-width: 0; border: 0 }
+.sidebar-clip { position: absolute; inset: 0; overflow: clip }
+.sidebar-nav { width: var(--rail); height: 100%; padding: 7px 11px 0 0; transform: translateX(-10px); opacity: 0; transition: transform var(--move), opacity 160ms ease }
+.side-mode .sidebar-nav { transform: none; opacity: 1 }
+.divider { position: absolute; right: -5px; inset-block: 0; width: 10px; z-index: 1; cursor: col-resize; touch-action: none; opacity: 0; pointer-events: none; transition: opacity 140ms ease }
+.side-mode .divider { opacity: 1; pointer-events: auto }
+.divider::before { content: ""; position: absolute; inset: 0 auto 0 4px; width: 1px; background: var(--magpie-line) }
+.divider:hover::before, .dragging .divider::before, .divider:focus-visible::before { width: 2px; background: var(--magpie-accent) }
+.workspace { min-width: 0 }
+.top-slot { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows var(--move), opacity 160ms ease }
+.side-mode .top-slot { grid-template-rows: 0fr; opacity: 0 }
+.top-clip { overflow: hidden; min-height: 0; min-width: 0 }
+.top-nav { display: flex; gap: 2px; border-bottom: 1px solid var(--magpie-line); overflow-x: auto; scrollbar-width: none }
+.tab { position: relative; display: flex; align-items: center; gap: 7px; padding: 8px 12px; border: 0; background: transparent; color: var(--magpie-muted); white-space: nowrap }
+.tab:hover, .tab[aria-current="page"] { color: var(--magpie-fg) }
+.tab[aria-current="page"] { font-weight: 600 }
+.tab:focus-visible { outline-offset: -2px }
+.top-nav .tab[aria-current="page"]::after { content: ""; position: absolute; inset: auto 10px 0; height: 2px; border-radius: 2px 2px 0 0; background: var(--magpie-accent) }
+.sidebar-nav .tab { width: 100%; min-height: 34px; border-radius: 7px; justify-content: flex-start; margin: 0 0 2px; padding-inline: 9px }
+.sidebar-nav .tab:hover { background: color-mix(in srgb,var(--magpie-muted) 8%,transparent) }
+.sidebar-nav .tab[aria-current="page"] { background: var(--magpie-card); box-shadow: 0 1px 2px rgba(0,0,0,.08) }
+.badge { padding: 0 6px; border-radius: 99px; background: var(--magpie-accent-soft); color: var(--magpie-accent); font-size: 11px; font-weight: 500 }
+.sidebar-nav .badge { margin-left: auto }
+.content { container-type: inline-size; padding: 15px 0 0; transition: padding-inline-start var(--move) }
+.side-mode .content { padding-inline-start: var(--content-gutter) }
+.brief, .sample { max-width: 1000px }
+h2 { margin: 0; font-size: 30px; line-height: 1.15; font-weight: 650; letter-spacing: -.035em }
+.lead { margin: 13px 0 4px; font-size: 15px }
+.brief-actions { margin: 12px 0 16px }
+.section { border-top: 1px solid var(--magpie-line); margin-top: 13px }
+h3 { margin: 9px 0 3px; font-size: 12.5px; font-weight: 650 }
+.section h3 small { margin-left: 7px; color: var(--magpie-muted); font-weight: 400; font-size: 11.5px }
+.row { min-height: 62px; display: grid; grid-template-columns: minmax(130px, .9fr) minmax(0, 2.5fr) auto; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid color-mix(in srgb,var(--magpie-line) 68%,transparent) }
+.row:last-child { border-bottom: 0 }
+.row strong { font-weight: 600 }
+.row .meta { margin: 0; overflow-wrap: anywhere }
+.row > :last-child { justify-self: end }
+details { margin-top: 12px; padding-block: 9px; border-top: 1px solid var(--magpie-line) }
+summary { color: var(--magpie-muted); cursor: pointer }
+@container (max-width: 520px) {
+  .row { grid-template-columns: minmax(0,1fr) auto; gap: 3px 10px; min-height: 58px }
+  .row > .description { grid-column: 1; grid-row: 2 }
+  .row > :last-child { grid-column: 2; grid-row: 1 / span 2 }
+}
+@media (max-width: 710px) {
+  .header { grid-template-columns: 32px minmax(0,1fr) }
+  .header-actions { grid-column: 2 }
+}
+@media (max-width: 600px) {
+  .app { --rail: 38px; --content-gutter: 12px; padding-inline: 12px }
+  .sidebar-nav { padding-right: 5px }
+  .sidebar-nav .tab { justify-content: center; padding-inline: 0 }
+  .sidebar-nav .label, .sidebar-nav .badge { display: none }
+  .divider, .side-mode .divider { pointer-events: none }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <button class="layout-toggle" type="button" aria-label="显示侧边栏" title="显示侧边栏" aria-pressed="false">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.6" width="13" height="10.8" rx="2.2"/><path d="M6 2.6v10.8"/></svg>
+    </button>
+    <div>
+      <div class="brand"><h1>WorkBuddy Plus</h1><span class="status">定时运行中 · 下次 21:10</span></div>
+      <p class="meta">余额更新于 11/17 20:56 <span class="refresh">⟳ 刷新</span></p>
+    </div>
+    <div class="header-actions">
+      <span class="action primary">▶ 立即执行 ⌄</span><span class="action">＋ 添加账号 ⌄</span><span class="action">⚙ 设置</span>
+    </div>
+  </header>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-clip"><nav class="sidebar-nav" aria-label="侧栏导航" inert></nav></div>
+      <div class="divider" role="separator" aria-label="侧栏宽度" aria-orientation="vertical" aria-hidden="true" aria-controls="workspace" aria-valuemin="144" aria-valuemax="224" aria-valuenow="152" tabindex="-1"></div>
+    </aside>
+    <main class="workspace" id="workspace">
+      <div class="top-slot"><div class="top-clip"><nav class="top-nav" aria-label="顶栏导航"></nav></div></div>
+      <div class="content">
+        <section class="sample" data-panel="board" hidden>
+          <h2>看板</h2><p class="lead">国内版 · 3,869 积分</p>
+          <div class="section"><div class="row"><strong>主力号</strong><span class="meta description">已签到 +100</span><span>2,173 积分</span></div><div class="row"><strong>备用号</strong><span class="meta description">已签到 +100</span><span>1,696 积分</span></div></div>
+        </section>
+        <section class="sample" data-panel="accounts" hidden>
+          <h2>账号</h2><div class="section"><div class="row"><strong>主力号</strong><span class="meta description">国内版 · 个人</span><span>已登录</span></div><div class="row"><strong>备用号</strong><span class="meta description">国内版 · 个人</span><span>已登录</span></div></div>
+        </section>
+        <section class="brief" data-panel="tasks">
+          <h2>今天</h2>
+          <p class="meta">11月17日，星期二</p>
+          <p class="lead">4 项任务会自动完成。2 件需要你处理。</p>
+          <p class="meta">只列国内个人账号的任务。</p>
+          <div class="brief-actions"><span class="action primary">现在全部执行</span><span class="action link">补领奖励</span></div>
+          <div class="section">
+            <h3>需要你处理</h3>
+            <div class="row"><strong>官方补偿</strong><span class="meta description">主力号有 500 积分待领，11/22 23:59 截止。</span><span class="action">领取</span></div>
+            <div class="row"><strong>新专家任务</strong><span class="meta description">主力号有一个新任务，暂时还不能自动做。</span><span class="action">查看</span></div>
+          </div>
+          <div class="section">
+            <h3>可选</h3>
+            <div class="row"><strong>Buddy 盲盒</strong><span class="meta description">主力号能量 340，可开 2 个。开盒会消耗成长能量。</span><span class="action">开盲盒</span></div>
+          </div>
+          <div class="section">
+            <h3>自动执行 <small>下一次 21:10</small></h3>
+            <div class="row"><strong>体验专家团队协作</strong><span class="meta description">主力号 · 已完成，待领奖</span><span class="meta">待领奖</span></div>
+            <div class="row"><strong>连续 3 天使用 Skill</strong><span class="meta description">主力号 · 定时会自动完成</span><span class="meta">可自动</span></div>
+            <div class="row"><strong>连续 3 天使用 Skill</strong><span class="meta description">备用号 · 定时会自动完成</span><span class="meta">可自动</span></div>
+          </div>
+          <details><summary>查看全部任务（7 项）</summary><p class="meta">国内个人账号的成长任务、猫猫旅行与活动奖励。</p></details>
+        </section>
+        <section class="sample" data-panel="schedule" hidden>
+          <h2>定时与记录</h2><div class="section"><div class="row"><strong>活跃 · 旅行 · 福利</strong><span class="meta description">国内版</span><span>21:10</span></div><div class="row"><strong>登录续期</strong><span class="meta description">国际版</span><span>22:10</span></div></div>
+        </section>
+        <section class="sample" data-panel="models" hidden>
+          <h2>模型</h2><div class="section"><div class="row"><strong>DeepSeek V4.1 Flash</strong><span class="meta description">国内版</span><span>1×</span></div><div class="row"><strong>Kimi K3.1 Pro</strong><span class="meta description">国内版</span><span>3×</span></div></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+const app = document.querySelector(".app");
+const toggle = document.querySelector(".layout-toggle");
+const divider = document.querySelector(".divider");
+const sidebar = document.querySelector(".sidebar");
+const horizontalNav = document.querySelector(".top-nav");
+const verticalNav = document.querySelector(".sidebar-nav");
+const compact = matchMedia("(max-width: 600px)");
+const tabs = [
+  ["board", "看板", "4 账号", '<rect x="2" y="2" width="4.7" height="4.7" rx="1"/><rect x="9.3" y="2" width="4.7" height="4.7" rx="1"/><rect x="2" y="9.3" width="4.7" height="4.7" rx="1"/><rect x="9.3" y="9.3" width="4.7" height="4.7" rx="1"/>'],
+  ["accounts", "账号", "", '<circle cx="6" cy="5.2" r="2.1"/><path d="M2 13v-1a4 4 0 0 1 8 0v1M10.5 3.3a2.1 2.1 0 0 1 0 4.1M14 13v-1a3.6 3.6 0 0 0-2.2-3.3"/>'],
+  ["tasks", "任务", "7 待办", '<path d="M2 4h9M2 8h6M2 12h5m3-2 1.5 1.5L14 9"/>'],
+  ["schedule", "定时与记录", "", '<circle cx="8" cy="8" r="5.9"/><path d="M8 4.5v3.6l2.4 1.5"/>'],
+  ["models", "模型", "", '<path d="m8 1.8 5.6 3.1v6.2L8 14.2l-5.6-3.1V4.9L8 1.8Zm0 6.3 5.6-3.2M8 8.1 2.4 4.9M8 8.1v6.1"/>']
+];
+for (const nav of [horizontalNav, verticalNav]) {
+  for (const [key, label, badge, icon] of tabs) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tab";
+    button.dataset.tab = key;
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    button.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' + icon + '</svg><span class="label">' + label + '</span>' + (badge ? '<span class="badge">' + badge + '</span>' : '');
+    button.addEventListener("click", () => select(key));
+    nav.append(button);
+  }
+}
+function select(key) {
+  for (const button of document.querySelectorAll("[data-tab]")) {
+    if (button.dataset.tab === key) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+  for (const panel of document.querySelectorAll("[data-panel]")) panel.hidden = panel.dataset.panel !== key;
+}
+select("tasks");
+function setLayout(open) {
+  app.classList.toggle("side-mode", open);
+  toggle.setAttribute("aria-pressed", String(open));
+  toggle.setAttribute("aria-label", open ? "收起侧边栏" : "显示侧边栏");
+  toggle.title = toggle.getAttribute("aria-label");
+  verticalNav.inert = !open;
+  horizontalNav.inert = open;
+  const canResize = open && !compact.matches;
+  divider.tabIndex = canResize ? 0 : -1;
+  divider.setAttribute("aria-hidden", String(!canResize));
+}
+toggle.addEventListener("click", () => setLayout(!app.classList.contains("side-mode")));
+compact.addEventListener("change", () => setLayout(app.classList.contains("side-mode")));
+
+let grab;
+function resize(width) {
+  const max = Math.min(224, Math.floor(innerWidth * .36));
+  const next = Math.round(Math.max(144, Math.min(max, width)));
+  app.style.setProperty("--rail-width", next + "px");
+  divider.setAttribute("aria-valuemax", String(max));
+  divider.setAttribute("aria-valuenow", String(next));
+}
+divider.addEventListener("pointerdown", event => {
+  if (event.button !== 0 || compact.matches) return;
+  const width = sidebar.getBoundingClientRect().width;
+  grab = { width, x: event.clientX };
+  app.classList.add("dragging");
+  resize(width);
+  divider.setPointerCapture(event.pointerId);
+});
+divider.addEventListener("pointermove", event => {
+  if (grab) resize(grab.width + event.clientX - grab.x);
+});
+divider.addEventListener("lostpointercapture", () => {
+  grab = undefined;
+  app.classList.remove("dragging");
+});
+divider.addEventListener("keydown", event => {
+  const direction = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+  if (!direction) return;
+  event.preventDefault();
+  resize(sidebar.getBoundingClientRect().width + direction * 12);
+});
+</script>
+</body>
+</html>

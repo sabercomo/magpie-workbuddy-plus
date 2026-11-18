@@ -7,9 +7,12 @@
 </head>
 <body class="wb-board">
   <header>
-    <div>
-      <div class="brand-title"><h1>WorkBuddy Plus</h1><button type="button" class="sched-pill" id="sched-pill" title="查看今日定时与执行记录" hidden></button></div>
-      <p class="muted"><span id="state">读取中…</span><button type="button" class="inline" data-action="refresh"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg>刷新</button></p>
+    <div class="wb-header-brand">
+      <button type="button" class="wb-nav-toggle" id="wb-nav-toggle" aria-label="显示侧边栏" aria-pressed="false" title="显示侧边栏" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="2.2"/><path d="M6.5 2.8v10.4"/></svg></button>
+      <div>
+        <div class="brand-title"><h1>WorkBuddy Plus</h1><button type="button" class="sched-pill" id="sched-pill" title="查看今日定时与执行记录" hidden></button></div>
+        <p class="muted"><span id="state">读取中…</span><button type="button" class="inline" data-action="refresh"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg>刷新</button></p>
+      </div>
     </div>
     <div class="header-actions">
       <details class="run-menu" id="run-menu"><summary><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7-4.5z"/></svg>立即执行<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg></summary>
@@ -35,10 +38,6 @@
   <p id="note" class="note" role="status" hidden></p>
   <div id="main-view">
     <section id="board"></section>
-    <section id="jobs-section">
-      <div class="section-head"><h2>执行记录</h2><span class="muted">点击任意一行展开各账号明细</span></div>
-      <div id="jobs"></div>
-    </section>
   </div>
   <section id="settings" hidden aria-label="设置">
     <div class="settings-head"><button type="button" class="back" id="close-settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>返回</button></div>
@@ -54,7 +53,6 @@
               <label>成长任务<input name="tasks" placeholder="09:11, 21:11"></label>
               <label>补领清扫<input name="sweep" placeholder="10:01, 22:11"></label>
               <label>夜猫子任务<input name="night" placeholder="01:01"></label>
-              <label>登录续期检查<input name="keepalive" placeholder="22:01"></label>
             </div>
           </section>
           <section class="settings-schedule intl-only" id="preview-intl-schedule" aria-label="国际版定时">
@@ -62,7 +60,6 @@
             <div class="settings-time-grid">
               <label>连登活跃 / 签到 / 连登福利<input name="intl-daily" placeholder="09:01, 21:01"></label>
               <label>网页会话<input name="intl-web" placeholder="10:31"></label>
-              <label>登录续期检查<input name="intl-keepalive" placeholder="22:01"></label>
             </div>
           </section>
         </div>
@@ -72,6 +69,7 @@
         <p class="hint">这些开关控制会实际创建内容或调用模型的操作；普通成长任务的上报不受影响。</p>
         <label class="toggle"><input type="checkbox" name="campaign-app"><span class="knob" aria-hidden="true"></span><span>自动完成活动 App 对话<small>国内版活动的「解锁 App 强大能力」会创建真实云端会话，调用模型并可能扣除积分；模型由上游选择。默认关闭，关闭后定时和「执行所有任务」跳过此项，其他活动任务照常执行。</small></span></label>
         <label class="toggle"><input type="checkbox" name="skill-share"><span class="knob" aria-hidden="true"></span><span>自动分享技能给好友<small>开启后会在 WorkBuddy 创建真实分享链接并上报复制动作。关掉后定时和「执行所有任务」会跳过这一项；需要时可在「任务」页单独执行。</small></span></label>
+        <label class="toggle"><input type="checkbox" name="buddy-auto"><span class="knob" aria-hidden="true"></span><span>旅行后自动开 Buddy 盲盒<small>会消耗成长能量，默认关闭。开启后，猫猫旅行领奖后、派出前自动开盒；开出的 Buddy 可参加随后旅行。手动「开盲盒」不受此开关影响。</small></span></label>
         <div class="settings-conversation intl-only" id="preview-intl-conversation">
           <label class="toggle"><input type="checkbox" name="intl-web-on"><span class="knob" aria-hidden="true"></span><span>每天跑一次国际版网页会话<small>WorkBuddy AI 的每日活跃奖励（30/50 积分）只认网页端跑完的会话。关掉后连登照常，但拿不到这份奖励。</small></span></label>
           <div class="field settings-model-field"><span>网页会话用的模型</span><input type="hidden" name="intl-model" value="auto"><div id="intl-model-pick"></div><small>自动时优先当前免费模型；没有免费模型或运行失败时，改用 DeepSeek-V4.1-Flash，可能扣除积分。</small></div>
@@ -88,6 +86,5 @@
       <div class="save"><button type="button" id="save-settings">保存设置</button><span class="muted" id="save-status" role="status">保存后由 Magpie 重载插件交给后台服务。</span></div>
     </form>
   </section>
-  <footer class="muted">余额与旅行状态由后台服务约每 3 分钟刷新；按钮会让 Magpie 重载插件后交给后台服务执行。完整日志在本机面板 <span id="panel">http://127.0.0.1:3439</span>（与 Magpie 在同一台电脑上时可打开）。</footer>
 </body>
 </html>

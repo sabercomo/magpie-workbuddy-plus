@@ -106,7 +106,7 @@ export const WorkBuddyPlusPlugin = async (input, options) => {
     },
     run: {
       description: "启动 WorkBuddy Plus 账号操作（国内版与国际版），返回执行编号，随后用 status 查看结果。all 包含连登活跃、成长任务、猫猫旅行和连登福利（国际版另含签到和领每日活跃奖励的网页会话；web 只跑这次网页会话，每天一次）；国内版每日签到由 Magpie 的 WorkBuddy 插件负责。",
-      args: { type: "object", properties: { action: { type: "string", enum: ["all", "activity", "tasks", "sweep", "task", "travel", "bonus", "night", "keepalive", "web", "inspect"] }, accounts: { type: "array", items: { type: "string" }, description: "status 返回的账号 id；不填代表全部已启用账号" }, task: { type: "string", description: "action=task 时的任务码，来自 board 的任务列表" } }, required: ["action"], additionalProperties: false },
+      args: { type: "object", properties: { action: { type: "string", enum: ["all", "activity", "tasks", "sweep", "task", "travel", "bonus", "night", "web", "inspect"] }, accounts: { type: "array", items: { type: "string" }, description: "status 返回的账号 id；不填代表全部已启用账号" }, task: { type: "string", description: "action=task 时的任务码，来自 board 的任务列表" } }, required: ["action"], additionalProperties: false },
       execute: args => rpc("/api/run", args)
     },
     board: {

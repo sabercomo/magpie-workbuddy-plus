@@ -1,8 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import { open, stat, unlink } from "node:fs/promises";
-import { setTimeout as delay } from "node:timers/promises";
 
 export const dataDir = process.env.WORKBUDDY_PLUS_DIR || join(homedir(), ".config", "workbuddy-plus");
 export const magpieDir = process.env.WORKBUDDY_PLUS_MAGPIE_DIR || join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "magpie");
@@ -17,6 +15,12 @@ export const defaults = {
   intlWebModel: "auto",
   // An App conversation is a real model call, so it stays off unless asked for.
   campaignApp: false,
+  // Opening Buddy blind boxes spends growth energy; only do it when the user
+  // has asked, after a trip's reward and before the next departure.
+  buddyAuto: false,
+  concurrency: 1,
+  tasksCacheTtl: 20,
+  progressCacheHours: 6,
   // Sharing a skill creates a real link on WorkBuddy's side; off, only the
   // task center's one-task button runs it.
   skillShare: true,
@@ -34,16 +38,16 @@ export const defaults = {
     daily: ["09:01", "21:01"],
     tasks: ["09:11", "21:11"],
     sweep: ["10:01", "22:11"],
-    night: ["01:01"],
-    keepalive: ["22:01"]
+    night: ["01:01"]
   },
   // No growth-task slot: WorkBuddy AI's tasks count real use of its client.
   intlSchedules: {
     daily: ["09:01", "21:01"],
-    web: ["10:31"],
-    keepalive: ["22:01"]
+    web: ["10:31"]
   },
-  disabledAccounts: []
+  disabledAccounts: [],
+  // Accounts whose tasks stay paused while the board keeps updating.
+  pausedAccounts: []
 };
 
 export function readJSON(file) {
@@ -73,45 +77,25 @@ export function initialize(dir = dataDir) {
 // its saved defaults is moved with it; a custom schedule is left exactly as it
 // is, and is marked so a later rollback of the minutes stays custom too.
 export const legacySchedules = {
-  schedules: { daily: ["09:00", "21:00"], tasks: ["09:10", "21:10"], sweep: ["10:00", "22:10"], night: ["01:00"], keepalive: ["22:00"] },
-  intlSchedules: { daily: ["09:00", "21:00"], web: ["10:30"], keepalive: ["22:00"] }
+  schedules: { daily: ["09:00", "21:00"], tasks: ["09:10", "21:10"], sweep: ["10:00", "22:10"], night: ["01:00"] },
+  intlSchedules: { daily: ["09:00", "21:00"], web: ["10:30"] }
 };
 
-export function migrateSchedules(config) {
-  if (config.scheduleDefaults === 2) return config;
-  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b), next = { ...config, scheduleDefaults: 2 };
-  if (same(config.schedules, legacySchedules.schedules)) next.schedules = defaults.schedules;
-  if (config.intlSchedules && same(config.intlSchedules, legacySchedules.intlSchedules)) next.intlSchedules = defaults.intlSchedules;
-  return next;
+// Drop the former renewal slot without disturbing the remaining saved times.
+function withoutKeepalive(value = {}) {
+  const { keepalive: _, ...slots } = value;
+  return slots;
 }
 
-// Uses Magpie's own lock filenames. A refresh and the following merge must
-// not race its gateway/CLI, both of which can rotate the same refresh token.
-export async function withLock(file, staleMs, run) {
-  const started = Date.now();
-  for (;;) {
-    let handle;
-    try {
-      handle = await open(file, "wx", 0o600);
-    } catch (e) {
-      if (e.code !== "EEXIST") throw e;
-      try {
-        if (Date.now() - (await stat(file)).mtimeMs > staleMs) await unlink(file);
-      } catch (e) {
-        if (e.code !== "ENOENT") throw e;
-      }
-      if (Date.now() - started > staleMs * 2) throw new Error(`等待账号锁超时：${file}`);
-      await delay(50);
-      continue;
-    }
-    try {
-      await handle.writeFile(JSON.stringify({ pid: process.pid, at: Date.now() }));
-      await handle.close();
-      return await run();
-    } finally {
-      await unlink(file);
-    }
-  }
+export function migrateSchedules(config) {
+  const next = { ...config, scheduleDefaults: 2 };
+  if (next.schedules) next.schedules = withoutKeepalive(next.schedules);
+  if (next.intlSchedules) next.intlSchedules = withoutKeepalive(next.intlSchedules);
+  if (config.scheduleDefaults === 2) return next;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  if (same(next.schedules, legacySchedules.schedules)) next.schedules = defaults.schedules;
+  if (same(next.intlSchedules, legacySchedules.intlSchedules)) next.intlSchedules = defaults.intlSchedules;
+  return next;
 }
 
 export function accounts(config) {
@@ -123,12 +107,12 @@ export function accounts(config) {
     if (!realm || auth.type !== "oauth") continue;
     if (!auth.access || !auth.uid) continue;
     const id = `${realm}:${auth.uid}`;
-    found.set(id, { id, realm, name: auth.accountId || auth.uid, auth, source: "magpie", file, key });
+    found.set(id, { id, realm, name: auth.accountId || auth.uid, auth, source: "magpie", key });
   }
   // Personal accounts first, enterprise last; the board still groups by realm.
   const rank = a => (a.realm === "intl" ? 2 : 0) + (a.enterprise ? 1 : 0);
   return [...found.values()]
-    .map(a => ({ ...a, enabled: !config.disabledAccounts.includes(a.id), enterprise: !!a.auth.enterpriseId }))
+    .map(a => ({ ...a, enabled: !config.disabledAccounts.includes(a.id), paused: (config.pausedAccounts || []).includes(a.id), enterprise: !!a.auth.enterpriseId }))
     .sort((a, b) => rank(a) - rank(b));
 }
 
@@ -137,7 +121,7 @@ export function intlAccount(config) {
   const file = join(config.magpieDir, "plugin-auth.json");
   const saved = existsSync(file) ? readJSON(file) : {};
   const [key, auth] = Object.entries(saved).find(([k, a]) => k.split("#")[0] === "workbuddy-ai" && a?.type === "oauth" && a.access) || [];
-  return key ? { id: `intl:${auth.uid}`, realm: "intl", name: auth.accountId || auth.uid, auth, key, file } : null;
+  return key ? { id: `intl:${auth.uid}`, realm: "intl", name: auth.accountId || auth.uid, auth } : null;
 }
 
 // The daily check-in is Magpie's: its switch, and what it recorded per login
@@ -149,7 +133,7 @@ export function checkins(config) {
 }
 
 export function publicAccount(a) {
-  return { id: a.id, name: a.name, realm: a.realm, source: a.source, enabled: a.enabled, ...(a.intlOff ? { intlOff: true } : {}), enterprise: a.enterprise, expires: a.auth.expires };
+  return { id: a.id, name: a.name, realm: a.realm, source: a.source, enabled: a.enabled, paused: !!a.paused, ...(a.intlOff ? { intlOff: true } : {}), enterprise: a.enterprise, expires: a.auth.expires };
 }
 
 export function calendar(now, timezone) {
@@ -169,9 +153,9 @@ export const newer = (a, b) => { const x = String(a).split(".").map(Number), y =
 // China's times, the web conversation at 10:30 unless activity was off.
 // Its growth-task slot (through 0.5.8) is dropped: it never had a task it could do.
 export function intlSchedules(config) {
-  if (config.intlSchedules) { const { tasks: _, ...kept } = config.intlSchedules; return kept; }
+  if (config.intlSchedules) { const { tasks: _, ...kept } = withoutKeepalive(config.intlSchedules); return kept; }
   const s = config.schedules || defaults.schedules;
-  return { daily: s.daily || [], web: s.daily?.length ? [...defaults.intlSchedules.web] : [], keepalive: s.keepalive || [] };
+  return { daily: s.daily || [], web: s.daily?.length ? [...defaults.intlSchedules.web] : [] };
 }
 
 // Settings as they read now. Before 0.5.7 one switch ran both builds'
@@ -179,8 +163,8 @@ export function intlSchedules(config) {
 // switch takes over both, and its slots carry on from China's times.
 export function settle(config) {
   const { intl: _, ...rest } = config;
-  const schedules = { ...defaults.schedules, ...(rest.schedules || {}) };
-  return { ...rest, campaignApp: rest.campaignApp === true, skillShare: rest.skillShare !== false, schedules, intlEnabled: intlOn(config), intlSchedules: intlSchedules({ ...rest, schedules }) };
+  const schedules = { ...defaults.schedules, ...withoutKeepalive(rest.schedules || {}) };
+  return { ...rest, concurrency: rest.concurrency ?? 1, tasksCacheTtl: rest.tasksCacheTtl ?? 20, progressCacheHours: rest.progressCacheHours ?? 6, campaignApp: rest.campaignApp === true, skillShare: rest.skillShare !== false, schedules, intlEnabled: intlOn(config), intlSchedules: intlSchedules({ ...rest, schedules }), disabledAccounts: Array.isArray(rest.disabledAccounts) ? rest.disabledAccounts : [], pausedAccounts: Array.isArray(rest.pausedAccounts) ? rest.pausedAccounts : [] };
 }
 
 // Every kind of slot, the build it serves and what it runs. WorkBuddy AI's
@@ -190,10 +174,8 @@ export const slotKinds = {
   tasks: { realm: "cn", actions: ["tasks"] },
   sweep: { realm: "cn", actions: ["sweep"] },
   night: { realm: "cn", actions: ["night"] },
-  keepalive: { realm: "cn", actions: ["keepalive"] },
   "intl-daily": { realm: "intl", actions: ["activity", "bonus"] },
-  "intl-web": { realm: "intl", actions: ["web"] },
-  "intl-keepalive": { realm: "intl", actions: ["keepalive"] }
+  "intl-web": { realm: "intl", actions: ["web"] }
 };
 // Whether WorkBuddy AI's schedule runs, for settings saved before it had a switch.
 export const intlOn = config => typeof config.intlEnabled === "boolean" ? config.intlEnabled : config.enabled === true && config.intl !== false;
@@ -219,14 +201,21 @@ export function validateConfig(value) {
   if (value.intlEnabled !== undefined && typeof value.intlEnabled !== "boolean") throw new Error("国际版定时开关无效");
   if (value.intlWeb !== undefined && typeof value.intlWeb !== "boolean") throw new Error("国际版网页会话开关无效");
   if (value.campaignApp !== undefined && typeof value.campaignApp !== "boolean") throw new Error("活动 App 对话开关无效");
+  if (value.buddyAuto !== undefined && typeof value.buddyAuto !== "boolean") throw new Error("自动开盲盒开关无效");
   if (value.skillShare !== undefined && typeof value.skillShare !== "boolean") throw new Error("自动分享技能开关无效");
+  if (value.concurrency !== undefined && ![1, 2, 3].includes(value.concurrency)) throw new Error("账号并发应为 1–3");
+  if (value.tasksCacheTtl !== undefined && !(Number.isInteger(value.tasksCacheTtl) && value.tasksCacheTtl >= 0 && value.tasksCacheTtl <= 120)) throw new Error("任务列表缓存应为 0–120 秒");
+  if (value.progressCacheHours !== undefined && !(Number.isInteger(value.progressCacheHours) && value.progressCacheHours >= 0 && value.progressCacheHours <= 24)) throw new Error("展示进度缓存应为 0–24 小时");
   if (value.spread !== undefined && !(Number.isInteger(value.spread) && value.spread >= 0 && value.spread <= 60)) throw new Error("随机错开应为 0–60 分钟");
   if (!Array.isArray(value.disabledAccounts) || value.disabledAccounts.some(a => typeof a !== "string")) throw new Error("账号停用列表无效");
+  if (!Array.isArray(value.pausedAccounts) || value.pausedAccounts.some(a => typeof a !== "string")) throw new Error("暂停任务列表无效");
   if (value.intlWebModel !== undefined && !(typeof value.intlWebModel === "string" && /^[\w.:-]{1,80}$/.test(value.intlWebModel))) throw new Error("国际版网页会话模型无效");
-  const schedules = { ...defaults.schedules, ...(value.schedules || {}) };
+  const schedules = { ...defaults.schedules, ...withoutKeepalive(value.schedules || {}) };
   times(schedules, "schedules");
-  if (value.intlSchedules !== undefined) times(intlSchedules({ ...value, schedules }), "intlSchedules");
-  return { ...value, schedules };
+  if (value.intlSchedules === undefined) return { ...value, schedules };
+  const intl = intlSchedules({ ...value, schedules });
+  times(intl, "intlSchedules");
+  return { ...value, schedules, intlSchedules: intl };
 }
 
 // A proxy's credentials never reach the page: it sees user:pass as ***.

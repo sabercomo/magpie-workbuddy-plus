@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { readJSON, writeJSON, withLock } from "./storage.mjs";
 import { channel } from "./events.mjs";
 import { note as noteLimit, forget as forgetLimit } from "./limits.mjs";
 
@@ -47,8 +46,10 @@ export function backoff(response, attempt) {
 }
 
 export class WorkBuddyClient {
-  constructor(account, config, { fetcher = fetch, gap = 1000, signal, wait = delay, limits = null } = {}) {
+  constructor(account, config, { fetcher = fetch, gap = 1000, signal, wait = delay, limits = null, taskCache, onRetry } = {}) {
     this.account = account;
+    this.taskCache = taskCache;
+    this.onRetry = onRetry;
     this.wait = wait;
     this.config = config;
     this.fetcher = fetcher;
@@ -97,27 +98,48 @@ export class WorkBuddyClient {
 
   // `extra` adds headers to this client's own; `headers` replaces them (a
   // report sent as the desktop, web or mini-program client would).
-  async request(path, { body, billing = false, renew = true, envelope = false, base = billing ? this.site.billing : this.site.origin, extra, headers } = {}) {
-    if (renew) await this.refresh();
-    let response;
+  async request(path, { body, billing = false, envelope = false, base = billing ? this.site.billing : this.site.origin, extra, headers } = {}) {
+    const cacheable = body === undefined && path === "/v2/activity/growth/tasks" && this.taskCache && this.config.tasksCacheTtl > 0;
+    const scope = `${this.account.id}:${base}:`;
+    const fingerprint = headers ? headers() : extra || {};
+    const cacheKey = scope + JSON.stringify(Object.fromEntries(["X-IDE-Type", "X-IDE-Name", "X-Client-Platform", "X-Client-Product", "User-Agent"].map(key => [key, fingerprint[key] || ""])));
+    if (cacheable) {
+      const saved = this.taskCache.get(cacheKey);
+      if (saved && Date.now() - saved.at < this.config.tasksCacheTtl * 1000) return structuredClone(envelope ? saved.payload : saved.payload.data);
+    }
+    const cacheTicket = { at: 0 };
+    if (cacheable) this.taskCache.set(cacheKey, cacheTicket);
+    // Mutations invalidate both desktop and mini-program task lists, including
+    // ambiguous failures: a write may have reached upstream before it timed out.
+    const changesTasks = path === "/v2/report" || /^\/(?:v2\/)?activity\/growth\/.*(?:accept|claim|depart|open|redeem|use)$/.test(path);
+    if (body !== undefined && changesTasks && this.taskCache) for (const key of this.taskCache.keys()) if (key.startsWith(`${this.account.id}:`)) this.taskCache.delete(key);
+    const request = randomUUID();
+    let response, retried = false, finalAttempt;
     for (let attempt = 0; ; attempt++) {
       response = await this.fetch(base + path, {
         method: body === undefined ? "GET" : "POST", headers: headers ? headers() : { ...this.headers(), ...extra },
         ...(body === undefined ? {} : { body: JSON.stringify(body) })
       });
+      finalAttempt = attempt + 1;
       if (response.status !== 429) break;
+      retried = true;
       let payload = {};
       try { payload = JSON.parse(await response.text()); } catch {}
       this.recordLimit(body?.model, payload);
+      const waitMs = attempt === 2 ? 0 : backoff(response, attempt);
+      this.onRetry?.({ request, path, at: new Date().toISOString(), status: 429, attempt: attempt + 1, waitMs, error: true });
       if (attempt === 2) throw new RateLimited(path, payload);
-      await this.wait(backoff(response, attempt), undefined, { signal: this.signal });
+      await this.wait(waitMs, undefined, { signal: this.signal });
     }
     const text = await response.text();
     let payload;
     try { payload = JSON.parse(text); }
     catch { throw new Error(`${path}: HTTP ${response.status}，上游返回 ${response.headers.get("content-type") || "未知类型"}，不是 JSON`); }
-    if (!response.ok || (payload.code !== undefined && payload.code !== 0)) throw new UpstreamError(path, response.status, payload);
+    const refused = !response.ok || (payload.code !== undefined && payload.code !== 0);
+    if (retried) this.onRetry?.({ request, path, at: new Date().toISOString(), status: response.status, attempt: finalAttempt, waitMs: 0, error: refused });
+    if (refused) throw new UpstreamError(path, response.status, payload);
     if (body?.model) this.clearLimit(body.model);
+    if (cacheable && this.taskCache.get(cacheKey) === cacheTicket) this.taskCache.set(cacheKey, { at: Date.now(), payload: structuredClone(payload) });
     return envelope ? payload : payload.data;
   }
 
@@ -127,39 +149,5 @@ export class WorkBuddyClient {
     const as = via && channel(via, this.account);
     if (!as) return this.request("/v2/report", { body: events });
     return this.request("/v2/report", { body: events.map(e => ({ ...as.stamp, ...e })), base: as.base, headers: () => channel(via, this.account).headers });
-  }
-
-  async refresh(force = false) {
-    const account = this.account;
-    if (!force && (!account.auth.expires || account.auth.expires > Date.now() + 2 * 3600_000)) return false;
-    const refreshLocked = async () => {
-      const rows = readJSON(account.file);
-      const auth = rows[account.key];
-      account.auth = auth;
-      if (!force && auth.expires > Date.now() + 2 * 3600_000) return false;
-      if (!auth.refresh) throw new Error("账号登录已过期，请在 Magpie 重新登录");
-      const response = await this.fetch(this.site.origin + "/v2/plugin/auth/token/refresh", {
-        method: "POST", headers: { ...this.headers(), "X-Refresh-Token": auth.refresh, "X-Auth-Refresh-Source": "plugin" }, body: "{}"
-      });
-      const result = await response.json();
-      if (!response.ok || result.code !== 0) throw new UpstreamError("刷新登录", response.status, result);
-      const got = result.data;
-      if (!got?.accessToken) throw new Error("刷新响应缺少 accessToken");
-      const next = { ...auth, access: got.accessToken, refresh: got.refreshToken || auth.refresh, expires: got.expiresAt || Date.now() + got.expiresIn * 1000 };
-      if (!Number.isFinite(next.expires)) throw new Error("刷新响应缺少有效到期时间");
-      for (const key of ["domain", "tokenType", "refreshExpiresAt"]) if (got[key] !== undefined) next[key] = got[key];
-      if (got.refreshExpiresIn) next.refreshExpiresAt = Date.now() + got.refreshExpiresIn * 1000;
-      await withLock(account.file + ".lock", 10_000, async () => {
-          const current = readJSON(account.file);
-          if (current[account.key].refresh !== auth.refresh) throw new Error("账号在刷新期间被修改，请重试");
-          writeJSON(account.file + ".bak", current);
-          current[account.key] = next;
-          writeJSON(account.file, current);
-      });
-      account.auth = next;
-      return true;
-    };
-    const digest = createHash("sha256").update(account.key).digest("hex").slice(0, 16);
-    return withLock(`${account.file}.renew-${digest}.lock`, 60_000, refreshLocked);
   }
 }

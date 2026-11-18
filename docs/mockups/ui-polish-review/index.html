@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data:; base-uri 'none'">
+  <title>WorkBuddy Plus · UI 优化样稿</title>
+  <link rel="stylesheet" href="tokens.css?v=4">
+  <link rel="stylesheet" href="original.css">
+  <link rel="stylesheet" href="shell.css">
+  <link rel="stylesheet" href="review.css?v=5">
+  <script src="data.js"></script>
+  <script src="setup.js"></script>
+  <script src="renderer.js?v=4"></script>
+  <script src="preview.js?v=4" defer></script>
+</head>
+<body class="wb-board review-on">
+  <aside class="preview-controls" aria-label="样稿控制">
+    <span>交互样稿 · 全部为示例数据</span>
+    <div class="preview-tools">
+      <div class="preview-compare" aria-label="前后对比">
+        <button type="button" data-ui="before" aria-pressed="false">当前界面</button>
+        <button type="button" data-ui="after" aria-pressed="true">优化后</button>
+      </div>
+      <select id="scenario" aria-label="示例状态"><option value="normal">正常状态</option><option value="attention">待办与异常</option></select>
+      <button type="button" id="theme">切换深色</button>
+      <button type="button" id="show-footer">看底部</button>
+    </div>
+  </aside>
+  <main>
+    <header>
+      <div class="wb-header-brand">
+        <button type="button" id="wb-nav-toggle" class="wb-nav-toggle" aria-label="切换导航布局"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M6 3v10"/></svg></button>
+        <div><div class="brand-title"><h1>WorkBuddy Plus</h1><span class="sched-pill">定时运行中</span></div><p class="muted"><span id="updated">余额更新于 11/18 16:48</span><button type="button" id="refresh" class="inline">↻ 刷新</button></p></div>
+      </div>
+      <div class="header-actions">
+        <details class="run-menu"><summary>立即执行 <span aria-hidden="true">⌄</span></summary><div class="menu"><button type="button" data-run="all">执行所有任务</button><button type="button" data-run="sweep">补领奖励</button></div></details>
+        <button type="button" class="quiet" id="settings">任务设置</button>
+      </div>
+    </header>
+    <section id="board" aria-label="WorkBuddy Plus 工作区"></section>
+    <section id="schedule-extras">
+      <details class="review-execution">
+        <summary>选择账号执行</summary>
+        <div class="review-execution-head"><h2>账号作用域与单项操作</h2><p class="wb-sub">勾选指定账号；空选使用全部已启用账号</p></div>
+        <div class="review-execution-accounts" id="execution-accounts"></div>
+        <div class="review-execution-actions" aria-label="手动操作">
+          <button type="button" class="primary" data-run="all">执行所有任务</button>
+          <button type="button" data-run="activity">连登活跃</button>
+          <button type="button" data-run="tasks">成长任务</button>
+          <button type="button" data-run="sweep">补领奖励</button>
+          <button type="button" data-run="travel">猫猫旅行</button>
+          <button type="button" data-run="bonus">连登福利</button>
+          <button type="button" data-run="night">夜猫子任务</button>
+          <button type="button" data-run="web">国际版网页会话</button>
+          <button type="button" data-run="inspect">查询上游状态</button>
+        </div>
+      </details>
+    </section>
+    <footer class="review-footer">
+      <span id="footer-copy">后台自动更新 · 完整记录可在本机面板查看</span>
+      <div><a href="http://127.0.0.1:3439" target="_blank" rel="noreferrer">打开本机面板 ↗</a><details><summary>使用说明</summary><p>余额与旅行状态约每 3 分钟刷新。页面操作由后台服务执行；本机面板需在运行 Magpie 的电脑上打开。</p></details></div>
+    </footer>
+    <p class="preview-feedback" id="feedback" role="status"></p>
+  </main>
+</body>
+</html>

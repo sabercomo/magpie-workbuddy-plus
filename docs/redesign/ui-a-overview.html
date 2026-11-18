@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WorkBuddy Plus · 今天</title>
+  <link rel="stylesheet" href="redesign.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail" aria-label="主导航">
+      <div class="brand">
+        <img src="../../page/icon.svg" alt="">
+        <div><strong>WorkBuddy Plus</strong><small>工作台</small></div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item" aria-current="page">
+          <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.2"/><path d="M8 1.4v1.5M8 13.1v1.5M1.4 8h1.5M13.1 8h1.5"/></svg>
+          今天
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 16 16"><rect x="2.2" y="3" width="11.6" height="10" rx="2.2"/><path d="M5 6.4h6M5 9.2h4"/></svg>
+          账号
+          <span class="nav-count">4</span>
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 16 16"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="3"/><path d="m5.1 8 1.9 1.9 3.9-4"/></svg>
+          任务
+          <span class="nav-count">6</span>
+        </button>
+        <div class="rail-rule"></div>
+        <button class="nav-item">
+          <svg viewBox="0 0 16 16"><path d="m8 1.8 5.5 3.2v6L8 14.2 2.5 11V5z"/><path d="M2.8 5.2 8 8.4l5.2-3.2M8 8.4v5.6"/></svg>
+          模型
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.1"/><path d="M8 1.6v1.7M8 12.7v1.7M1.6 8h1.7M12.7 8h1.7M3.5 3.5l1.2 1.2M11.3 11.3l1.2 1.2M12.5 3.5l-1.2 1.2M4.7 11.3l-1.2 1.2"/></svg>
+          设置
+        </button>
+      </nav>
+      <div class="rail-bottom">
+        <div class="service"><i class="dot"></i>服务运行中 · 3439</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="crumbs">工作台 <span>/</span> <strong>今天</strong></div>
+        <div class="top-actions">
+          <span class="sync"><i class="dot"></i>更新于 14:40</span>
+          <button class="icon-btn model-only" aria-label="模型">
+            <svg viewBox="0 0 16 16"><path d="m8 1.8 5.5 3.2v6L8 14.2 2.5 11V5z"/><path d="M2.8 5.2 8 8.4l5.2-3.2M8 8.4v5.6"/></svg>
+          </button>
+          <button class="icon-btn" aria-label="刷新">
+            <svg viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg>
+          </button>
+          <button class="btn primary">
+            <svg viewBox="0 0 16 16"><path d="M5 3.5v9l7-4.5z" fill="currentColor" stroke="none"/></svg>
+            执行全部待办
+          </button>
+        </div>
+      </header>
+
+      <div class="page">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow">Monday · 11月16日</div>
+            <h1 class="page-title">今天</h1>
+            <p class="page-sub">4 个账号 · 6 项待办 · 2 项需要你处理</p>
+          </div>
+          <div class="head-meta"><strong>下一次 21:00</strong>活跃 · 旅行 · 福利</div>
+        </div>
+
+        <section class="attention" aria-label="需要你处理">
+          <div class="attention-item"><i class="dot warn"></i><span><strong>120 积分</strong>明天作废</span></div>
+          <div class="attention-item"><i class="dot"></i><span><strong>备用号</strong>猫猫已归来，待领奖</span></div>
+          <div class="attention-item"><i class="dot urgent"></i><span><strong>公司账号</strong>Kimi-K3.1-Pro 排队 257 位</span></div>
+          <span class="attention-more">查看全部</span>
+        </section>
+
+        <div class="section-head">
+          <div class="section-title"><h2>账号</h2><span>按状态排序</span></div>
+          <div class="section-actions"><button class="text-btn">筛选</button></div>
+        </div>
+
+        <section class="account-grid" aria-label="账号">
+          <article class="account-card">
+            <div class="card-top">
+              <span class="avatar">主</span>
+              <div class="who"><strong>主力号</strong><small>国内版 · 个人 · 连登 12 天</small></div>
+              <span class="state"><i class="dot"></i>活跃</span>
+            </div>
+            <div class="card-main">
+              <div class="credits">
+                <div class="amount">1,863.5<small>/ 3,300</small></div>
+                <div class="meta">3 个积分包 · 最早明天作废</div>
+                <div class="meter"><span class="urgent" style="width:18%"></span><span class="soon" style="width:24%"></span><span class="soft" style="width:30%"></span></div>
+              </div>
+              <svg class="rings" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="track" cx="26" cy="26" r="20"/>
+                <circle class="a" cx="26" cy="26" r="20" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 26 26)"/>
+                <circle class="track" cx="26" cy="26" r="14.5"/>
+                <circle class="b" cx="26" cy="26" r="14.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 26 26)"/>
+                <circle class="track" cx="26" cy="26" r="9"/>
+                <circle class="c" cx="26" cy="26" r="9" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 26 26)"/>
+              </svg>
+            </div>
+            <div class="card-pulse">
+              <div class="pulse-list">
+                <div><span>活跃</span><strong>已亮灯</strong></div>
+                <div><span>旅行</span><strong>团子在敦煌</strong></div>
+                <div><span>任务</span><strong>4 / 4 已领</strong></div>
+              </div>
+              <span class="state">今日完成</span>
+            </div>
+            <div class="card-foot"><span class="foot-note">今日已完成 · <em>下一次 21:00</em></span><button class="btn quiet small">查看</button></div>
+          </article>
+
+          <article class="account-card">
+            <div class="card-top">
+              <span class="avatar">备</span>
+              <div class="who"><strong>备用号</strong><small>国内版 · 个人 · 连登 5 天</small></div>
+              <span class="state"><i class="dot"></i>活跃</span>
+            </div>
+            <div class="card-main">
+              <div class="credits">
+                <div class="amount">412<small>/ 1,300</small></div>
+                <div class="meta">2 个积分包 · 5 天后作废</div>
+                <div class="meter"><span style="width:16%"></span><span class="soft" style="width:16%"></span></div>
+              </div>
+              <svg class="rings" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="track" cx="26" cy="26" r="20"/>
+                <circle class="a" cx="26" cy="26" r="20" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 26 26)"/>
+                <circle class="track" cx="26" cy="26" r="14.5"/>
+                <circle class="b" cx="26" cy="26" r="14.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 26 26)"/>
+                <circle class="track" cx="26" cy="26" r="9"/>
+                <circle class="c" cx="26" cy="26" r="9" pathLength="100" stroke-dasharray="72 100" transform="rotate(-90 26 26)"/>
+              </svg>
+            </div>
+            <div class="card-pulse">
+              <div class="pulse-list">
+                <div><span>活跃</span><strong>已亮灯</strong></div>
+                <div><span>旅行</span><strong>芝麻已归来</strong></div>
+                <div><span>任务</span><strong>4 / 4 已领</strong></div>
+              </div>
+              <span class="state" style="color:var(--accent)">待领奖</span>
+            </div>
+            <div class="card-foot"><span class="foot-note"><span class="warn">猫猫旅行 +30 积分</span> 等你领取</span><button class="btn primary small">领取</button></div>
+          </article>
+
+          <article class="account-card">
+            <div class="card-top">
+              <span class="avatar firm">企</span>
+              <div class="who"><strong>公司账号</strong><small>国内版 · 企业 · 月度额度</small></div>
+              <span class="state"><i class="dot info"></i>2 天后重置</span>
+            </div>
+            <div class="card-main">
+              <div class="credits">
+                <div class="amount">597.21<small>/ 2,000</small></div>
+                <div class="meta">本月已用 1,402.79 · 团队共用</div>
+                <div class="meter"><span style="width:30%"></span><span class="soft" style="width:55%"></span></div>
+              </div>
+              <svg class="rings" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="track" cx="26" cy="26" r="20"/>
+                <circle class="a" cx="26" cy="26" r="20" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 26 26)"/>
+                <circle class="track" cx="26" cy="26" r="14.5"/>
+                <circle class="track" cx="26" cy="26" r="9"/>
+              </svg>
+            </div>
+            <div class="card-pulse">
+              <div class="pulse-list">
+                <div><span>每日签到</span><strong>今日未签</strong></div>
+                <div><span>模型</span><strong>Kimi 排队中</strong></div>
+                <div><span>额度</span><strong>2 天后重置</strong></div>
+              </div>
+              <span class="state">企业</span>
+            </div>
+            <div class="card-foot"><span class="foot-note"><span class="warn">Kimi-K3.1-Pro · 第 257 位</span> 预计 52 分钟</span><button class="btn quiet small">查看</button></div>
+          </article>
+
+          <article class="account-card">
+            <div class="card-top">
+              <span class="avatar intl">海</span>
+              <div class="who"><strong>海外号</strong><small>国际版 · Free · 连登 9 天</small></div>
+              <span class="state"><i class="dot"></i>奖励到账</span>
+            </div>
+            <div class="card-main">
+              <div class="credits">
+                <div class="amount">530<small>/ 800</small></div>
+                <div class="meta">Bonus Pack +30 · 30 天后作废</div>
+                <div class="meter"><span style="width:4%"></span><span class="soft" style="width:62%"></span></div>
+              </div>
+              <svg class="rings" viewBox="0 0 52 52" aria-hidden="true">
+                <circle class="track" cx="26" cy="26" r="20"/>
+                <circle class="a" cx="26" cy="26" r="20" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 26 26)"/>
+                <circle class="track" cx="26" cy="26" r="14.5"/>
+                <circle class="track" cx="26" cy="26" r="9"/>
+                <circle class="c" cx="26" cy="26" r="9" pathLength="100" stroke-dasharray="20 100" transform="rotate(-90 26 26)"/>
+              </svg>
+            </div>
+            <div class="card-pulse">
+              <div class="pulse-list">
+                <div><span>活跃</span><strong>已亮灯</strong></div>
+                <div><span>每日奖励</span><strong>今日到账 +30</strong></div>
+                <div><span>任务</span><strong>1 / 5</strong></div>
+              </div>
+              <span class="state">国际版</span>
+            </div>
+            <div class="card-foot"><span class="foot-note">网页会话 <em>10:30</em> · 今日已完成</span><button class="btn quiet small">查看</button></div>
+          </article>
+        </section>
+
+        <section class="schedule" aria-label="今日节奏">
+          <div class="schedule-head"><h2>今日节奏</h2><span>下一次 <strong style="color:var(--accent)">21:00</strong></span></div>
+          <div class="timeline">
+            <div class="stop done"><i class="dot"></i><time>09:00</time><span>活跃 · 旅行</span></div>
+            <div class="stop done"><i class="dot"></i><time>09:10</time><span>成长任务</span></div>
+            <div class="stop done"><i class="dot"></i><time>10:00</time><span>补领</span></div>
+            <div class="stop done"><i class="dot"></i><time>10:30</time><span>网页会话</span></div>
+            <div class="stop next"><i class="dot"></i><time>21:00</time><span>活跃 · 旅行</span></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <nav class="tabbar" aria-label="主导航">
+    <button class="tab" aria-current="page">
+      <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.2"/><path d="M8 1.4v1.5M8 13.1v1.5M1.4 8h1.5M13.1 8h1.5"/></svg>
+      今天
+    </button>
+    <button class="tab">
+      <svg viewBox="0 0 16 16"><rect x="2.2" y="3" width="11.6" height="10" rx="2.2"/><path d="M5 6.4h6M5 9.2h4"/></svg>
+      账号
+    </button>
+    <button class="tab">
+      <svg viewBox="0 0 16 16"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="3"/><path d="m5.1 8 1.9 1.9 3.9-4"/></svg>
+      任务<span class="tab-badge">6</span>
+    </button>
+  </nav>
+</body>
+</html>

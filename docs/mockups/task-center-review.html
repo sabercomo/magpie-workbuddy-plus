@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WorkBuddy Plus · 任务页改版样稿</title>
+  <style>
+    /* Hallmark · pre-emit critique: P5 H4 E5 S5 R5 V4
+     * macrostructure: Workbench · genre: modern-minimal · design-system: DESIGN.md · designed-as-app
+     * spacing: 4pt semantic scale · contrast: pass (40–41) · mobile: pass (34,49,50–57)
+     */
+    :root {
+      color-scheme: light dark;
+      --color-paper: oklch(96.4% 0.003 286);
+      --color-surface: oklch(100% 0 0);
+      --color-inset: oklch(98.4% 0.002 286);
+      --color-ink: oklch(25.5% 0.011 285);
+      --color-muted: oklch(53.5% 0.018 285);
+      --color-rule: oklch(91.2% 0.006 286);
+      --color-accent: oklch(54.5% 0.23 285);
+      --color-accent-ink: oklch(100% 0 0);
+      --color-accent-soft: oklch(94.5% 0.035 285);
+      --color-ok: oklch(53.5% 0.12 150);
+      --color-warn: oklch(55% 0.12 65);
+      --color-bad: oklch(50% 0.15 30);
+      --color-track: oklch(53.5% 0.018 285 / 0.12);
+      --color-transparent: transparent;
+      --shadow-control: 0 1px 2px oklch(20% 0.01 285 / 0.16);
+      --shadow-toast: 0 10px 28px oklch(20% 0.01 285 / 0.15);
+      --bg: var(--color-paper);
+      --card: var(--color-surface);
+      --inset: var(--color-inset);
+      --fg: var(--color-ink);
+      --muted: var(--color-muted);
+      --line: var(--color-rule);
+      --accent: var(--color-accent);
+      --accent-ink: var(--color-accent-ink);
+      --soft: var(--color-accent-soft);
+      --ok: var(--color-ok);
+      --warn: var(--color-warn);
+      --bad: var(--color-bad);
+      --track: var(--color-track);
+      --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", system-ui, sans-serif;
+      --font-display: var(--font-body);
+      --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --space-3xs: 0.125rem;
+      --space-2xs: 0.25rem;
+      --space-xs: 0.5rem;
+      --space-sm: 0.75rem;
+      --space-md: 1rem;
+      --space-lg: 1.5rem;
+      --space-xl: 2.5rem;
+      --space-2xl: 4rem;
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --dur-short: 160ms;
+      --dur-medium: 200ms;
+      --radius-control: 7px;
+      --radius-card: 12px;
+      --radius-pill: 999px;
+      font: 13px/1.5 var(--font-body);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-paper: oklch(23.5% 0.009 285);
+        --color-surface: oklch(28.5% 0.009 285);
+        --color-inset: oklch(26.5% 0.009 285);
+        --color-ink: oklch(93.5% 0.007 285);
+        --color-muted: oklch(68% 0.015 285);
+        --color-rule: oklch(34% 0.012 285);
+        --color-accent: oklch(73% 0.14 285);
+        --color-accent-ink: oklch(18% 0.01 285);
+        --color-accent-soft: oklch(30% 0.07 285);
+        --color-ok: oklch(78% 0.10 150);
+        --color-warn: oklch(80% 0.09 65);
+        --color-bad: oklch(77% 0.10 30);
+        --color-track: oklch(93.5% 0.007 285 / 0.10);
+        --shadow-control: 0 1px 2px oklch(5% 0 0 / 0.3);
+        --shadow-toast: 0 10px 28px oklch(5% 0 0 / 0.3);
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { overflow-x: clip; }
+    html { background: var(--color-paper); }
+    body {
+      margin: 0;
+      background: var(--color-paper);
+      color: var(--color-ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, strong, .account-name, .page-title { min-width: 0; overflow-wrap: anywhere; }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; white-space: nowrap; }
+    button:disabled { cursor: not-allowed; opacity: .5; }
+    button:active:not(:disabled) { transform: scale(.98); }
+    button:focus-visible, summary:focus-visible, input:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: var(--space-3xs);
+    }
+    .shell { width: min(1190px, 100%); margin: 0 auto; padding: var(--space-md) var(--space-lg) var(--space-xl); }
+    .topbar, .brandline, .header-actions, .nav, .page-meta, .completion, .action-card-head,
+    .completion-copy, .action-title, .row-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+    .topbar { justify-content: space-between; flex-wrap: wrap; gap: var(--space-md); padding: 0 0 var(--space-md); }
+    .brandline { flex-wrap: wrap; gap: var(--space-xs); }
+    .brand-toggle {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: var(--radius-control);
+      background: transparent;
+      color: var(--muted);
+    }
+    .brand-toggle:hover { background: var(--track); color: var(--fg); }
+    h1 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: -.02em; font-weight: 650; }
+    .pill {
+      padding: var(--space-3xs) var(--space-xs);
+      border-radius: var(--radius-pill);
+      background: var(--soft);
+      color: var(--accent);
+      font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .header-actions { margin-left: auto; gap: var(--space-xs); flex-wrap: wrap; }
+    .button {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-control);
+      background: var(--card);
+      padding: var(--space-xs) var(--space-sm);
+      font-size: 12px;
+      transition: background-color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
+    }
+    .button:hover { background: var(--soft); }
+    .primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+    .primary:hover { background: var(--accent); filter: brightness(1.07); }
+    .nav {
+      gap: var(--space-2xs);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: var(--space-xs) 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .nav span { display: inline-flex; align-items: center; gap: var(--space-xs); padding: var(--space-2xs) var(--space-xs); }
+    .nav .active { color: var(--fg); font-weight: 600; position: relative; }
+    .nav .active::after {
+      content: "";
+      position: absolute;
+      left: var(--space-xs);
+      right: var(--space-xs);
+      bottom: calc(var(--space-2xs) * -2);
+      height: 2px;
+      border-radius: 2px;
+      background: var(--accent);
+    }
+    .nav-badge {
+      padding: 0 var(--space-xs);
+      border-radius: var(--radius-pill);
+      background: var(--track);
+      font-size: 10.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .nav .active .nav-badge { background: var(--soft); color: var(--accent); }
+    main {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-lg);
+      padding-top: var(--space-md);
+    }
+    .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); flex-wrap: wrap; }
+    .page-title { margin: 0; font-size: 30px; line-height: 1.08; letter-spacing: -.035em; font-weight: 650; }
+    .page-meta { gap: var(--space-xs); margin-top: var(--space-2xs); color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    .link {
+      border: 0;
+      padding: var(--space-3xs) var(--space-2xs);
+      border-radius: 5px;
+      background: transparent;
+      color: var(--accent);
+      font-size: 11.5px;
+    }
+    .link:hover { background: var(--soft); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+    }
+    .completion { padding: var(--space-md); justify-content: space-between; gap: var(--space-lg); }
+    .completion-main { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+    .done-mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      flex: none;
+      border-radius: 50%;
+      color: var(--ok);
+      background: color-mix(in srgb, var(--ok) 10%, var(--card));
+    }
+    .done-mark svg { width: 19px; height: 19px; }
+    .completion-copy { display: block; min-width: 0; }
+    .completion-copy strong { display: block; font-size: 13.5px; font-weight: 650; }
+    .completion-copy p { margin: var(--space-2xs) 0 0; color: var(--muted); font-size: 11.5px; }
+    .completion-action { flex: none; align-self: center; }
+    .action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
+    .action-card { min-width: 0; overflow: hidden; }
+    .action-card-head {
+      min-height: 48px;
+      justify-content: space-between;
+      padding: var(--space-sm) var(--space-md);
+      border-bottom: 1px solid var(--line);
+    }
+    .action-title { gap: var(--space-xs); font-size: 12px; font-weight: 650; }
+    .count {
+      min-width: 19px;
+      height: 19px;
+      display: inline-grid;
+      place-items: center;
+      padding: 0 var(--space-xs);
+      border-radius: var(--radius-pill);
+      color: var(--muted);
+      background: var(--track);
+      font-size: 10.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .action-row {
+      min-height: 60px;
+      display: grid;
+      grid-template-columns: minmax(80px, .72fr) minmax(0, 1.8fr) auto;
+      align-items: center;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      border-top: 1px solid var(--line);
+    }
+    .action-row:first-of-type { border-top: 0; }
+    .account-label { min-width: 0; display: flex; align-items: center; gap: var(--space-xs); }
+    .avatar {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      flex: none;
+      border-radius: 50%;
+      background: var(--soft);
+      color: var(--accent);
+      font-size: 10.5px;
+      font-weight: 650;
+    }
+    .account-name { min-width: 0; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .action-copy { min-width: 0; font-size: 11.5px; color: var(--muted); }
+    .action-copy strong { color: var(--fg); font-weight: 600; }
+    .action-copy .urgent { color: var(--bad); }
+    .action-copy .warn { color: var(--warn); }
+    .mini-button {
+      min-width: 58px;
+      min-height: 29px;
+      padding: var(--space-2xs) var(--space-xs);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-control);
+      background: var(--card);
+      color: var(--accent);
+      font-size: 11.5px;
+    }
+    .mini-button:hover { background: var(--soft); }
+    .claim {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-weight: 600;
+    }
+    .claim:hover { background: var(--accent); filter: brightness(1.07); }
+    .buddy-main, .setting-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); }
+    .buddy-main { border-top: 1px solid var(--line); }
+    .buddy-main:first-of-type { border-top: 0; }
+    .buddy-info { min-width: 0; }
+    .buddy-info strong { display: block; font-size: 12px; font-weight: 600; }
+    .buddy-info span { display: block; margin-top: var(--space-3xs); color: var(--muted); font-size: 10.5px; }
+    .buddy-action { display: flex; align-items: center; gap: var(--space-xs); flex: none; }
+    .setting-row { border-top: 1px solid var(--line); min-height: 56px; }
+    .setting-copy strong { display: block; font-size: 11.5px; font-weight: 600; }
+    .setting-copy span { display: block; margin-top: var(--space-3xs); color: var(--muted); font-size: 10.5px; }
+    .switch {
+      width: 38px;
+      height: 22px;
+      flex: none;
+      padding: var(--space-3xs);
+      border: 0;
+      border-radius: var(--radius-pill);
+      background: var(--track);
+      transition: background-color var(--dur-short) var(--ease-out);
+    }
+    .switch span {
+      display: block;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--card);
+      box-shadow: var(--shadow-control);
+      transition: transform var(--dur-short) var(--ease-out);
+    }
+    .switch[aria-checked="true"] { background: var(--ok); }
+    .switch[aria-checked="true"] span { transform: translateX(16px); }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    .muted { color: var(--muted); }
+    .catalog { overflow: hidden; }
+    .catalog > summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .catalog > summary::-webkit-details-marker { display: none; }
+    .catalog > summary::after { content: "›"; color: var(--muted); font-size: 18px; transition: transform 160ms ease; }
+    .catalog[open] > summary::after { transform: rotate(90deg); }
+    .catalog-body { border-top: 1px solid var(--line); padding: var(--space-2xs) var(--space-md) var(--space-sm); background: var(--inset); }
+    .task-line {
+      min-height: 40px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 110px 130px;
+      align-items: center;
+      gap: var(--space-sm);
+      border-top: 1px solid var(--line);
+      font-size: 11.5px;
+    }
+    .task-line:first-child { border-top: 0; }
+    .task-line span:nth-child(2), .task-line span:nth-child(3) { color: var(--muted); }
+    .task-line span:last-child { text-align: right; }
+    .footer-note { margin: 0 var(--space-3xs); color: var(--muted); font-size: 10.5px; }
+    #toast {
+      position: fixed;
+      right: var(--space-lg);
+      bottom: var(--space-lg);
+      z-index: 500;
+      min-width: 220px;
+      max-width: min(320px, calc(100vw - 32px));
+      padding: var(--space-sm) var(--space-md);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-control);
+      background: color-mix(in srgb, var(--card) 94%, transparent);
+      box-shadow: var(--shadow-toast);
+      backdrop-filter: blur(18px);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(var(--space-xs));
+      transition: opacity var(--dur-short) var(--ease-out), transform var(--dur-medium) var(--ease-out);
+    }
+    #toast.visible { opacity: 1; transform: translateY(0); }
+    #toast strong { display: block; font-size: 11.5px; }
+    #toast span { display: block; margin-top: var(--space-2xs); color: var(--muted); font-size: 10.5px; }
+    @media (max-width: 760px) {
+      .shell { padding: var(--space-md) var(--space-sm) var(--space-xl); }
+      .header-actions { width: auto; }
+      .page-title { font-size: 28px; }
+      .completion { align-items: flex-start; flex-direction: column; }
+      .completion-action { align-self: flex-start; }
+      .action-grid { grid-template-columns: 1fr; }
+      .task-line { grid-template-columns: minmax(0,1fr) auto; padding: var(--space-xs) 0; }
+      .task-line span:nth-child(2) { display: none; }
+      .task-line span:last-child { grid-column: 2; }
+    }
+    @media (max-width: 460px) {
+      .brandline h1 { font-size: 19px; }
+      .header-actions { width: 100%; }
+      .header-actions .button { flex: 1; text-align: center; }
+      .action-row { grid-template-columns: minmax(0,1fr) auto; gap: var(--space-2xs) var(--space-xs); }
+      .action-copy { grid-column: 1 / -1; grid-row: 2; }
+      .buddy-main { align-items: flex-start; }
+      .buddy-action { flex-wrap: wrap; justify-content: flex-end; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      #toast { background: var(--card); backdrop-filter: none; }
+    }
+    @media (prefers-contrast: more) {
+      .card, .button, .mini-button { border-color: var(--fg); }
+    }
+    @media (pointer: coarse) {
+      .button, .mini-button, .brand-toggle, .switch, summary { min-height: 44px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="topbar">
+        <div class="brandline">
+          <button class="brand-toggle" type="button" aria-label="切换导航样式">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6.5 3v10"/>
+            </svg>
+          </button>
+          <h1>WorkBuddy Plus</h1>
+          <span class="pill">● 定时运行中 · 下次 21:10</span>
+        </div>
+        <div class="header-actions">
+          <button class="button primary" type="button" data-demo="立即执行">▶ 立即执行</button>
+          <button class="button" type="button" data-demo="添加账号">＋ 添加账号</button>
+          <button class="button" type="button" data-demo="设置">设置</button>
+        </div>
+      </div>
+      <nav class="nav" aria-label="主导航">
+        <span>看板 <small class="nav-badge">6 账号</small></span>
+        <span>账号与健康</span>
+        <span class="active">任务 <small class="nav-badge">2 待办</small></span>
+        <span>定时与记录</span>
+        <span>模型</span>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-head">
+        <div>
+          <h2 class="page-title">今天</h2>
+          <div class="page-meta">11月18日，星期三 · 余额更新于 15:42 <button class="link" type="button" data-demo="刷新状态">刷新</button></div>
+        </div>
+      </section>
+
+      <section class="card completion" aria-label="今日任务摘要">
+        <div class="completion-main">
+          <span class="done-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 4 4L19 6"/></svg>
+          </span>
+          <div class="completion-copy">
+            <strong>今天 6 项任务已自动完成</strong>
+            <p>3 个国内个人账号的签到、成长任务和福利活动均已检查；只需处理补偿与可选盲盒。</p>
+          </div>
+        </div>
+        <button class="button claim completion-action" type="button" data-demo="补领奖励">补领奖励</button>
+      </section>
+
+      <section class="action-grid" aria-label="需要处理与可选任务">
+        <section class="card action-card">
+          <div class="action-card-head">
+            <div class="action-title">需要你处理 <span class="count" id="pending-count">2</span></div>
+            <button class="link" type="button" id="claim-all">全部领取</button>
+          </div>
+          <div class="action-row" id="claim-row">
+            <div class="account-label"><span class="avatar">主</span><span class="account-name">主力号</span></div>
+            <div class="action-copy"><strong>官方补偿 +200 积分</strong><br><span class="bad">剩 1 天 6 小时，过期将无法领取</span></div>
+            <button class="mini-button claim" type="button" id="claim-one">领取</button>
+          </div>
+          <div class="action-row" id="retry-row">
+            <div class="account-label"><span class="avatar">备</span><span class="account-name">备用号</span></div>
+            <div class="action-copy"><strong>补偿状态查询失败</strong><br><span class="bad">接口超时，暂时不能判断是否有补偿</span></div>
+            <button class="mini-button" type="button" id="retry-one">重新查询</button>
+          </div>
+        </section>
+
+        <section class="card action-card">
+          <div class="action-card-head">
+            <div class="action-title">Buddy 盲盒</div>
+            <button class="link" type="button" data-demo="打开全部盲盒">打开全部</button>
+          </div>
+          <div class="buddy-main">
+            <div class="buddy-info"><strong>主力号</strong><span>能量 50 · 可开 5 个</span></div>
+            <div class="buddy-action">
+              <button class="mini-button" type="button" id="open-boxes">开 5 个</button>
+            </div>
+          </div>
+          <div class="buddy-main">
+            <div class="buddy-info"><strong>备用号</strong><span>能量 20 · 可开 2 个</span></div>
+            <div class="buddy-action">
+              <button class="mini-button" type="button" data-demo="打开备用号盲盒">开 2 个</button>
+            </div>
+          </div>
+          <div class="buddy-main">
+            <div class="buddy-info"><strong>松哥</strong><span>能量 10 · 可开 1 个</span></div>
+            <div class="buddy-action">
+              <button class="mini-button" type="button" data-demo="打开松哥盲盒">开 1 个</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-copy">
+              <strong>旅行领奖后自动开盲盒</strong>
+              <span id="auto-copy">默认关闭 · 开启后会在旅行领奖或猫猫空闲时检查配额</span>
+            </div>
+            <button class="switch" type="button" role="switch" aria-checked="false" aria-label="旅行领奖后自动开盲盒" id="auto-switch"><span></span></button>
+          </div>
+        </section>
+      </section>
+
+      <details class="card catalog">
+        <summary>全部任务 8 项</summary>
+        <div class="catalog-body">
+          <div class="task-line"><span>每日签到与 Buddy 加油站核对</span><span>3/3</span><span class="ok">已完成</span></div>
+          <div class="task-line"><span>成长任务与动态专家任务</span><span>12/12</span><span class="ok">已领奖</span></div>
+          <div class="task-line"><span>记者节福利活动</span><span>9/9</span><span class="ok">已领奖</span></div>
+          <div class="task-line"><span>猫猫旅行与连登福利</span><span>3/3</span><span class="ok">已检查</span></div>
+          <div class="task-line"><span>补领清扫</span><span>22:07</span><span class="muted">待执行</span></div>
+        </div>
+      </details>
+
+      <p class="footer-note">余额与旅行状态由后台服务约每 3 分钟刷新；完整日志在本机面板 127.0.0.1:3439。</p>
+    </main>
+  </div>
+  <div id="toast" role="status" aria-live="polite"><strong></strong><span></span></div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    let toastTimer;
+    function toast(title, text = "样稿演示：已提交，真实结果以后台回传为准。") {
+      clearTimeout(toastTimer);
+      $("toast").querySelector("strong").textContent = title;
+      $("toast").querySelector("span").textContent = text;
+      $("toast").classList.add("visible");
+      toastTimer = setTimeout(() => $("toast").classList.remove("visible"), 2600);
+    }
+    for (const button of document.querySelectorAll("[data-demo]")) {
+      button.onclick = () => toast(button.dataset.demo);
+    }
+    function claim(row, button) {
+      button.disabled = true;
+      button.className = "mini-button";
+      button.textContent = "已领取";
+      const copy = row.querySelector(".action-copy");
+      copy.replaceChildren();
+      const ok = document.createElement("span");
+      ok.className = "ok";
+      ok.textContent = "领取成功，积分已入账";
+      copy.append(ok);
+      syncPending();
+      toast("官方补偿领取成功", "样稿演示：主力号 +200 积分");
+    }
+    function syncPending() {
+      const left = [...document.querySelectorAll(".action-row")].filter(row => !row.querySelector(".mini-button").disabled).length;
+      $("pending-count").textContent = String(left);
+    }
+    $("claim-one").onclick = () => claim($("claim-row"), $("claim-one"));
+    $("claim-all").onclick = () => {
+      if (!$("claim-one").disabled) claim($("claim-row"), $("claim-one"));
+      if (!$("retry-one").disabled) $("retry-one").click();
+    };
+    $("retry-one").onclick = () => {
+      const button = $("retry-one");
+      button.disabled = true;
+      button.textContent = "查询中…";
+      setTimeout(() => {
+        button.textContent = "已核实";
+        const copy = $("retry-row").querySelector(".action-copy");
+        copy.replaceChildren();
+        const title = document.createElement("strong");
+        title.textContent = "当前没有待领补偿";
+        const note = document.createElement("div");
+        note.className = "muted";
+        note.textContent = "查询成功，接口返回 active=false";
+        copy.append(title, note);
+        syncPending();
+        toast("补偿状态查询成功", "备用号当前没有待领补偿");
+      }, 450);
+    };
+    $("open-boxes").onclick = () => {
+      $("open-boxes").disabled = true;
+      $("open-boxes").textContent = "已开启";
+      toast("Buddy 盲盒开启成功", "样稿演示：主力号开启 5 个盲盒");
+    };
+    $("auto-switch").onclick = event => {
+      const button = event.currentTarget;
+      const next = button.getAttribute("aria-checked") !== "true";
+      button.setAttribute("aria-checked", String(next));
+      $("auto-copy").textContent = next
+        ? "已开启 · 旅行领奖后检查配额并自动开盒"
+        : "默认关闭 · 开启后会在旅行领奖或猫猫空闲时检查配额";
+      toast("设置已保存", next ? "已开启旅行后自动开盲盒" : "已关闭旅行后自动开盲盒");
+    };
+  </script>
+</body>
+</html>

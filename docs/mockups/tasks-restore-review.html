@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkBuddy Plus · 任务页恢复样稿</title>
+<style>
+/* 样稿：恢复 v0.7.3 任务页结构，并加入官方补偿与 Buddy 盲盒。
+ * 结构与样式按 page/board.css 的既有组件重排，仅此文件，不影响生产。 */
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{
+  --magpie-bg:#f4f4f6;--magpie-fg:#1f1f24;--magpie-card:#fff;--magpie-line:#e3e3e8;
+  --magpie-muted:#6e6e78;--magpie-accent:#4f46e5;--magpie-accent-soft:#eeedfd;
+  --wb-card:var(--magpie-card);--wb-line:var(--magpie-line);--wb-muted:var(--magpie-muted);
+  --wb-accent:var(--magpie-accent);--wb-soft:var(--magpie-accent-soft);
+  --wb-warn:#b4691b;--wb-urgent:#c0392b;--wb-go:#2d61a0;--wb-ok:var(--wb-accent);
+  --wb-hover:color-mix(in srgb,var(--wb-muted) 9%,transparent);
+  min-height:100vh;background:var(--magpie-bg);color:var(--magpie-fg);
+  font:13px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",system-ui,sans-serif;
+  font-optical-sizing:auto;-webkit-font-smoothing:antialiased;padding:18px 22px 32px;
+}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit}
+button:focus-visible,label:focus-within{outline:2px solid var(--wb-accent);outline-offset:2px}
+.wb-sub{font-size:12px;color:var(--wb-muted)}
+.wb-line{display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0}
+
+/* —— 样稿控制条（不进入生产） —— */
+.mock-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px dashed color-mix(in srgb,var(--wb-line) 70%,var(--wb-muted));border-radius:10px;padding:8px 12px;margin:0 auto 14px;max-width:1280px;font-size:11.5px;color:var(--wb-muted)}
+.mock-banner strong{color:var(--magpie-fg);font-weight:600}
+.mock-banner .mock-side{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mock-btn{font-size:11.5px;padding:3px 9px;border-radius:7px;border:1px solid var(--wb-line);background:var(--wb-card);cursor:pointer;white-space:nowrap}
+.mock-btn:hover{background:var(--wb-hover)}
+
+/* —— 页面外壳（沿用生产页的标题与导航） —— */
+.wb-shell{max-width:1280px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand-toggle{width:30px;height:30px;flex:none;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;cursor:pointer;color:var(--wb-muted)}
+.brand-toggle:hover{background:var(--wb-hover)}
+.brand-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+h1{font-size:20px;font-weight:650;letter-spacing:-.02em;margin:0}
+.sched-pill{display:inline-flex;align-items:center;gap:5px;padding:1px 9px;border-radius:999px;font-size:11.5px;background:var(--wb-soft);color:var(--wb-accent);white-space:nowrap}
+.sched-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px;font-size:12px;color:var(--wb-muted)}
+.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.quiet{font-size:12.5px;padding:5px 11px;border-radius:8px;border:1px solid var(--wb-line);background:var(--wb-card);cursor:pointer;white-space:nowrap}
+.quiet:hover{border-color:color-mix(in srgb,var(--wb-muted) 55%,var(--wb-line))}
+.quiet.primary{background:var(--wb-accent);border-color:var(--wb-accent);color:#fff;font-weight:600}
+.quiet.primary:hover{filter:brightness(1.06)}
+.inline{all:unset;display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:12px;color:var(--wb-accent);padding:1px 4px;border-radius:5px}
+.inline:hover{background:var(--wb-soft)}
+.wb-nav{display:flex;align-items:center;gap:2px;border-bottom:1px solid var(--wb-line);margin-bottom:18px;overflow-x:auto;scrollbar-width:none}
+.wb-nav-tab{all:unset;box-sizing:border-box;position:relative;display:inline-flex;align-items:center;gap:6px;padding:8px 13px 9px;font-size:13px;font-weight:500;color:var(--wb-muted);white-space:nowrap;cursor:pointer}
+.wb-nav-tab:hover{color:var(--magpie-fg)}
+.wb-nav-tab.active{color:var(--magpie-fg);font-weight:600}
+.wb-nav-tab.active::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;border-radius:2px 2px 0 0;background:var(--wb-accent)}
+.wb-nav-badge{font-size:11.5px;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--wb-muted) 12%,transparent);color:var(--wb-muted);font-variant-numeric:tabular-nums}
+.wb-nav-tab.active .wb-nav-badge{background:var(--wb-soft);color:var(--wb-accent)}
+.wb-nav-badge.hot{background:var(--wb-soft);color:var(--wb-accent);font-weight:600}
+
+/* —— 旧任务页：摘要与筛选 —— */
+.wb-task-summary{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.wb-task-summary-l{display:flex;flex-direction:column;gap:2px;min-width:0}
+.wb-task-summary-l strong{font-size:15px;font-weight:650}
+.wb-task-summary-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wb-task-run-all{font-size:12px;font-weight:600;padding:5px 12px;border-radius:8px;border:1px solid var(--wb-accent);background:var(--wb-accent);color:#fff;cursor:pointer;white-space:nowrap}
+.wb-task-run-all:hover{filter:brightness(1.06)}
+.wb-task-run-all:active{transform:scale(.98)}
+.wb-task-sweep{font-size:12px;padding:5px 11px;border-radius:8px;border:1px solid var(--wb-line);background:var(--wb-card);cursor:pointer;white-space:nowrap}
+.wb-task-sweep:hover{background:var(--wb-hover)}
+.wb-board-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
+.wb-board-filters,.wb-view-switch{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wb-filter-btn{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--wb-line);background:var(--wb-card);color:var(--wb-muted);cursor:pointer;white-space:nowrap}
+.wb-filter-btn:hover{background:var(--wb-hover);color:inherit}
+.wb-filter-btn.on{background:var(--wb-soft);border-color:color-mix(in srgb,var(--wb-accent) 45%,var(--wb-line));color:var(--wb-accent);font-weight:600}
+.wb-filter-count{font-variant-numeric:tabular-nums}
+
+/* —— 旧任务页：分组与账号卡 —— */
+.wb-group+.wb-group{margin-top:18px}
+.wb-group-head{padding:0 4px 8px}
+.wb-group-top{align-items:baseline;flex-wrap:wrap}
+.wb-group-name{font-size:13.5px;font-weight:600}
+.wb-group-total{font-size:12px;color:var(--wb-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.wb-group-total strong{font-size:17px;font-weight:650;letter-spacing:-.01em;margin-right:2px;color:var(--magpie-fg)}
+.wb-task-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.wb-task-card{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.wb-task-card>.wb-line{padding-bottom:2px}
+.wb-task-card>.wb-line strong{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-task{border-top:1px solid var(--wb-line);padding:8px 0 6px;display:flex;align-items:baseline;gap:10px;min-width:0}
+.wb-task-card>.wb-line+.wb-task{border-top:none}
+.wb-task-main{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.wb-task-title{display:inline-flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;font-weight:600;font-size:12.5px;line-height:1.4}
+.wb-task-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--wb-muted)}
+.wb-mini-bar{width:54px;height:5px;border-radius:999px;background:var(--wb-soft);overflow:hidden;flex:none}
+.wb-mini-bar span{display:block;height:100%;border-radius:999px;background:var(--wb-go)}
+.wb-mini-bar span.ok{background:var(--wb-accent)}
+.wb-pill{flex:none;font-size:11.5px;padding:1px 8px;border-radius:10px;background:var(--wb-soft);white-space:nowrap;font-weight:500}
+.wb-pill.ok{color:var(--wb-accent)}
+.wb-pill.warn{color:var(--wb-warn);background:color-mix(in srgb,var(--wb-warn) 11%,var(--wb-card))}
+.wb-pill.go{color:var(--wb-go);background:color-mix(in srgb,var(--wb-go) 10%,var(--wb-card))}
+.wb-pill.urgent{color:var(--wb-urgent);background:color-mix(in srgb,var(--wb-urgent) 12%,var(--wb-card))}
+.wb-task-run{flex:none;width:64px;font-size:12px;padding:4px 0;border-radius:7px;border:1px solid var(--wb-accent);background:transparent;color:var(--wb-accent);cursor:pointer;text-align:center;white-space:nowrap}
+.wb-task-run:hover{background:var(--wb-soft)}
+.wb-task-run.claim{background:var(--wb-accent);border-color:var(--wb-accent);color:#fff;font-weight:600}
+.wb-task-run.claim:hover{filter:brightness(1.06);background:var(--wb-accent)}
+.wb-task-run:disabled{opacity:.55;cursor:default}
+.wb-task-why{flex:none;white-space:nowrap;width:64px;text-align:right;font-size:11.5px;color:var(--wb-muted)}
+.wb-segs{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:var(--wb-soft);max-width:100%;overflow-x:auto;scrollbar-width:none}
+.wb-seg-btn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;font-size:12.5px;color:var(--wb-muted);white-space:nowrap;cursor:pointer}
+.wb-seg-btn:hover{color:inherit}
+.wb-seg-btn.on{background:var(--wb-card);color:inherit;font-weight:600;box-shadow:0 1px 2px rgba(15,23,42,.08)}
+.wb-empty{margin:4px 0 0;padding:14px;border:1px dashed var(--wb-line);border-radius:12px;color:var(--wb-muted);font-size:12px;text-align:center}
+
+/* —— 下方四张工作卡：旅行 / 盲盒 / 补偿 / 运营活动 —— */
+.wb-companions-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px;align-items:stretch}
+.wb-task-card>.wb-line>strong{font-size:15px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.wb-task .wb-line{gap:8px}
+.wb-task-main>.wb-sub{overflow-wrap:anywhere;line-height:1.45}
+.wb-task.switch-row{align-items:center}
+.wb-task-run-all:disabled{opacity:.55;cursor:default}
+.wb-link-btn{all:unset;box-sizing:border-box;font-size:12px;font-weight:500;color:var(--wb-accent);cursor:pointer;padding:2px 6px;border-radius:6px;white-space:nowrap}
+.wb-link-btn:hover{background:var(--wb-soft)}
+.wb-pill-switch{appearance:none;-webkit-appearance:none;width:36px;height:20px;flex:none;border-radius:999px;background:color-mix(in srgb,var(--wb-muted) 35%,var(--wb-line));position:relative;cursor:pointer;transition:background-color 180ms cubic-bezier(.16,1,.3,1);margin:0}
+.wb-pill-switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--wb-card);box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform 220ms cubic-bezier(.16,1,.3,1)}
+.wb-pill-switch:checked{background:var(--wb-accent)}
+.wb-pill-switch:checked::after{transform:translateX(16px)}
+.wb-legend{font-size:11.5px;color:var(--wb-muted);margin:14px 2px 0;line-height:1.5}
+
+/* —— 提示 —— */
+.mock-toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:30;background:var(--wb-accent);color:#fff;font-size:12.5px;line-height:1.4;padding:7px 14px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:calc(100vw - 32px);text-align:center}
+
+/* —— 深色预览 —— */
+.mock-dark{
+  color-scheme:dark;--magpie-bg:#151a17;--magpie-fg:#e6ece8;--magpie-card:#1d2320;--magpie-line:#35403a;
+  --magpie-muted:#9aa79f;--magpie-accent:#8fc9a8;--magpie-accent-soft:#243a2e;
+  --wb-warn:#e0a45c;--wb-urgent:#f08a7e;--wb-go:#8bb8ea;background:#151a17;color:#e6ece8;
+}
+.mock-dark .quiet.primary,.mock-dark .wb-task-run-all,.mock-dark .wb-task-run.claim{color:#102019}
+.mock-dark .wb-pill.warn{color:var(--wb-warn);background:color-mix(in srgb,var(--wb-warn) 14%,var(--wb-card))}
+
+@media (max-width:820px){
+  .wb-companions-2{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  body{padding:14px 14px 26px}
+  .wb-task-cards{grid-template-columns:1fr}
+  .wb-task-summary{align-items:flex-start}
+  .wb-task-summary-r{width:100%}
+  .wb-task-summary-r .wb-task-run-all{flex:1}
+  .wb-extra-head{flex-wrap:wrap}
+  .wb-nav{margin-bottom:14px}
+}
+@media (prefers-reduced-motion:reduce){
+  .wb-task-run-all:active{transform:none}
+  .wb-pill-switch,.wb-pill-switch::after{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="mock-banner">
+  <span><strong>样稿</strong> · 恢复旧任务页，并加入「官方补偿」「Buddy 盲盒」；猫猫旅行与盲盒一排，补偿与运营活动一排。未改生产文件。</span>
+  <span class="mock-side"><button class="mock-btn" type="button" id="theme-toggle">深色预览</button></span>
+</div>
+
+<div class="wb-shell">
+<header>
+  <div class="brand">
+    <button class="brand-toggle" type="button" aria-label="切换侧栏">▤</button>
+    <div class="brand-title">
+      <h1>WorkBuddy Plus</h1>
+      <span class="sched-pill">定时运行中 · 下次 21:00</span>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="quiet primary" type="button">▶ 立即执行</button>
+    <button class="quiet" type="button">＋ 添加账号</button>
+    <button class="quiet" type="button">设置</button>
+  </div>
+</header>
+
+<nav class="wb-nav" aria-label="主导航">
+  <button class="wb-nav-tab" type="button">看板<span class="wb-nav-badge">5 账号</span></button>
+  <button class="wb-nav-tab" type="button">账号与健康</button>
+  <button class="wb-nav-tab active" type="button" aria-current="page">任务<span class="wb-nav-badge hot">2 待办</span></button>
+  <button class="wb-nav-tab" type="button">定时与记录</button>
+  <button class="wb-nav-tab" type="button">模型</button>
+</nav>
+
+<main id="main-view">
+  <section class="wb-task-summary" aria-label="今日任务摘要">
+    <div class="wb-task-summary-l">
+      <strong>2 项可以自动做</strong>
+      <span class="wb-sub">5 项待办 · 2 项需手动 · 1 项未解锁 · 合计 +200 积分</span>
+    </div>
+    <div class="wb-task-summary-r">
+      <button class="wb-task-sweep" type="button" data-toast="已提交补领奖励：只接取和领取，不发行为事件">补领奖励</button>
+      <button class="wb-task-run-all" type="button" data-toast="已提交 2 个账号的待办任务；账号内串行执行">执行全部待办 · 2 个账号</button>
+    </div>
+  </section>
+
+  <div class="wb-board-toolbar">
+    <div class="wb-board-filters" role="group" aria-label="任务筛选">
+      <button class="wb-filter-btn on" type="button" data-filter="all" aria-pressed="true">全部 <span class="wb-filter-count">5</span></button>
+      <button class="wb-filter-btn" type="button" data-filter="claimable" aria-pressed="false">可领奖 <span class="wb-filter-count">0</span></button>
+      <button class="wb-filter-btn" type="button" data-filter="auto" aria-pressed="false">可自动 <span class="wb-filter-count">2</span></button>
+      <button class="wb-filter-btn" type="button" data-filter="manual" aria-pressed="false">需手动 <span class="wb-filter-count">2</span></button>
+      <button class="wb-filter-btn" type="button" data-filter="locked" aria-pressed="false">未解锁 <span class="wb-filter-count">1</span></button>
+    </div>
+    <div class="wb-view-switch" role="group" aria-label="分组方式">
+      <div class="wb-segs">
+        <button class="wb-seg-btn on" type="button" data-group="account">按账号分组</button>
+        <button class="wb-seg-btn" type="button" data-group="status">按状态分组</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="wb-group" id="realm-cn" aria-label="国内版任务">
+    <div class="wb-group-head">
+      <div class="wb-line wb-group-top">
+        <span class="wb-group-name">国内版</span>
+        <span class="wb-group-total"><strong>2,687.5</strong>积分 · 3 个账号</span>
+      </div>
+    </div>
+    <div class="wb-task-cards" id="account-cards">
+      <article class="wb-task-card" data-account="主力号">
+        <div class="wb-line">
+          <strong>主力号</strong>
+          <span class="wb-sub">1/4 已领 · 2 项待办</span>
+        </div>
+        <div class="wb-task" data-state="auto">
+          <div class="wb-task-main">
+            <div class="wb-task-title">与 AI 对话 5 次 <span class="wb-pill go">定时会完成</span></div>
+            <div class="wb-task-meta"><span class="wb-mini-bar"><span style="width:40%"></span></span><span>2/5 · +100 积分 · +2 能量 · 11/19 截止</span></div>
+          </div>
+          <button class="wb-task-run" type="button" data-toast="已提交主力号的「与 AI 对话 5 次」">执行</button>
+        </div>
+        <div class="wb-task" data-state="manual">
+          <div class="wb-task-main">
+            <div class="wb-task-title">关注公众号 <span class="wb-pill warn">需手动</span></div>
+            <div class="wb-task-meta"><span class="wb-mini-bar"><span class="ok" style="width:0%"></span></span><span>0/1 · +100 积分 · +5 能量 · 需要关注官方公众号</span></div>
+          </div>
+          <span class="wb-task-why">官方客户端</span>
+        </div>
+      </article>
+
+      <article class="wb-task-card" data-account="备用号">
+        <div class="wb-line">
+          <strong>备用号</strong>
+          <span class="wb-sub">1/4 已领 · 2 项待办</span>
+        </div>
+        <div class="wb-task" data-state="auto">
+          <div class="wb-task-main">
+            <div class="wb-task-title">与 AI 对话 5 次 <span class="wb-pill go">定时会完成</span></div>
+            <div class="wb-task-meta"><span class="wb-mini-bar"><span style="width:40%"></span></span><span>2/5 · +100 积分 · +2 能量 · 11/19 截止</span></div>
+          </div>
+          <button class="wb-task-run" type="button" data-toast="已提交备用号的「与 AI 对话 5 次」">执行</button>
+        </div>
+        <div class="wb-task" data-state="manual">
+          <div class="wb-task-main">
+            <div class="wb-task-title">关注公众号 <span class="wb-pill warn">需手动</span></div>
+            <div class="wb-task-meta"><span class="wb-mini-bar"><span class="ok" style="width:0%"></span></span><span>0/1 · +100 积分 · +5 能量 · 需要关注官方公众号</span></div>
+          </div>
+          <span class="wb-task-why">官方客户端</span>
+        </div>
+      </article>
+
+      <article class="wb-task-card" data-account="测试号">
+        <div class="wb-line">
+          <strong>测试号</strong>
+          <span class="wb-sub">3/5 已领 · 1 项待办</span>
+        </div>
+        <div class="wb-task" data-state="locked">
+          <div class="wb-task-main">
+            <div class="wb-task-title">连续 3 天使用 Skill <span class="wb-pill">11/19 00:00 解锁</span></div>
+            <div class="wb-task-meta"><span class="wb-mini-bar"><span style="width:33%"></span></span><span>1/3 · +50 积分 · +10 能量 · 明天 00:00 解锁</span></div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <div class="wb-companions-2">
+    <section class="wb-task-card" aria-labelledby="travel-title">
+      <div class="wb-line">
+        <strong id="travel-title">猫猫旅行快捷处理</strong>
+        <button class="wb-task-run" type="button" data-toast="已提交猫猫旅行：先领奖，再派出">一键收派</button>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-line"><span class="wb-name">主力号 · 设计喵</span><span class="wb-pill">今日已旅行</span></div>
+          <div class="wb-sub">明天的第一次定时会再出发</div>
+        </div>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-line"><span class="wb-name">备用号 · 斜杠喵</span><span class="wb-pill">今日已旅行</span></div>
+          <div class="wb-sub">明天的第一次定时会再出发</div>
+        </div>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-line"><span class="wb-name">测试号 · 团团</span><span class="wb-pill">在家</span></div>
+          <div class="wb-sub">下一次「猫猫旅行」会派出</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="wb-task-card" aria-labelledby="blind-title">
+      <div class="wb-line">
+        <strong id="blind-title">Buddy 盲盒</strong>
+        <button class="wb-task-run-all" type="button" data-toast="已提交 2 个 Buddy 盲盒；会消耗成长能量">打开全部 · 2 个</button>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-name">主力号</div>
+          <div class="wb-sub">能量 340 · 可开 2 个</div>
+        </div>
+        <button class="wb-task-run" type="button" data-toast="已提交主力号开 2 个盲盒">开 2 个</button>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-name">备用号</div>
+          <div class="wb-sub">盲盒配额尚未读取</div>
+        </div>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-name">测试号</div>
+          <div class="wb-sub">盲盒配额尚未读取</div>
+        </div>
+      </div>
+      <div class="wb-task switch-row">
+        <div class="wb-task-main">
+          <div class="wb-name">旅行领奖后自动开盲盒</div>
+          <div class="wb-sub">默认关闭，开启后会消耗成长能量</div>
+        </div>
+        <input class="wb-pill-switch" type="checkbox" role="switch" aria-label="旅行领奖后自动开盲盒">
+      </div>
+    </section>
+
+    <section class="wb-task-card" aria-labelledby="comp-title">
+      <div class="wb-line">
+        <strong id="comp-title">官方补偿</strong>
+        <button class="wb-link-btn" type="button" data-toast="已提交全部账号的补偿领取">全部领取</button>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-name">主力号</div>
+          <div class="wb-sub">官方补偿 +500 积分 · 剩余 5 天</div>
+        </div>
+        <button class="wb-task-run claim" type="button" data-toast="已提交主力号领取官方补偿 +500 积分">领取</button>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-name">备用号</div>
+          <div class="wb-sub">补偿状态尚未读取</div>
+        </div>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-name">测试号</div>
+          <div class="wb-sub">补偿状态尚未读取</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="wb-task-card" aria-labelledby="campaign-title">
+      <div class="wb-line">
+        <strong id="campaign-title">运营活动任务</strong>
+        <span class="wb-sub">4 个活动</span>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-name">星巴克协作 · 邀请好友</div>
+          <div class="wb-sub">主力号 · 0/1</div>
+        </div>
+        <span class="wb-pill warn">需手动</span>
+        <span class="wb-sub wb-task-why">官方客户端</span>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main"><div class="wb-sub">主力号 · 记者节福利活动：已全部领取</div></div>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main">
+          <div class="wb-name">星巴克协作 · 邀请好友</div>
+          <div class="wb-sub">备用号 · 0/1</div>
+        </div>
+        <span class="wb-pill warn">需手动</span>
+        <span class="wb-sub wb-task-why">官方客户端</span>
+      </div>
+      <div class="wb-task">
+        <div class="wb-task-main"><div class="wb-sub">备用号 · 记者节福利活动：已全部领取</div></div>
+      </div>
+    </section>
+  </div>
+
+  <p class="wb-legend">「执行」只处理这一项任务，可用来补跑失败或到期的任务；手动项仍需在官方客户端完成。国际版任务按客户端实际使用计入，不在这里列出。</p>
+  <p class="wb-empty" id="filter-empty" hidden>当前筛选下没有任务。</p>
+</main>
+</div>
+
+<div class="mock-toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let toastTimer;
+  const toast = message => {
+    const node = $("toast");
+    node.textContent = message;
+    node.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { node.hidden = true; }, 2400);
+  };
+  const clickToast = node => {
+    const message = node.closest("[data-toast]")?.dataset.toast;
+    if (message) toast(message);
+  };
+  document.addEventListener("click", event => {
+    const button = event.target.closest("[data-toast]");
+    if (button) { clickToast(button); return; }
+  });
+
+  $("theme-toggle").addEventListener("click", () => {
+    const dark = document.body.classList.toggle("mock-dark");
+    $("theme-toggle").textContent = dark ? "浅色预览" : "深色预览";
+  });
+
+  let filter = "all";
+  const applyFilter = () => {
+    let visible = 0;
+    for (const card of document.querySelectorAll(".wb-task-card")) {
+      let cardVisible = 0;
+      for (const task of card.querySelectorAll(".wb-task")) {
+        const show = filter === "all" || task.dataset.state === filter;
+        task.hidden = !show;
+        if (show) cardVisible += 1;
+      }
+      card.hidden = cardVisible === 0;
+      visible += cardVisible;
+    }
+    $("filter-empty").hidden = visible !== 0;
+  };
+  for (const button of document.querySelectorAll("[data-filter]")) {
+    button.addEventListener("click", () => {
+      filter = button.dataset.filter;
+      for (const other of document.querySelectorAll("[data-filter]")) {
+        const on = other === button;
+        other.classList.toggle("on", on);
+        other.setAttribute("aria-pressed", String(on));
+      }
+      applyFilter();
+    });
+  }
+
+  for (const button of document.querySelectorAll("[data-group]")) {
+    button.addEventListener("click", () => {
+      for (const other of document.querySelectorAll("[data-group]")) other.classList.toggle("on", other === button);
+      if (button.dataset.group === "status") toast("按状态分组：样稿仅展示按账号分组，正式版保持旧交互");
+    });
+  }
+})();
+</script>
+</body>
+</html>

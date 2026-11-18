@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WorkBuddy Plus · 任务</title>
+  <link rel="stylesheet" href="redesign.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail" aria-label="主导航">
+      <div class="brand">
+        <img src="../../page/icon.svg" alt="">
+        <div><strong>WorkBuddy Plus</strong><small>工作台</small></div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item">
+          <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.2"/><path d="M8 1.4v1.5M8 13.1v1.5M1.4 8h1.5M13.1 8h1.5"/></svg>
+          今天
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 16 16"><rect x="2.2" y="3" width="11.6" height="10" rx="2.2"/><path d="M5 6.4h6M5 9.2h4"/></svg>
+          账号
+          <span class="nav-count">4</span>
+        </button>
+        <button class="nav-item" aria-current="page">
+          <svg viewBox="0 0 16 16"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="3"/><path d="m5.1 8 1.9 1.9 3.9-4"/></svg>
+          任务
+          <span class="nav-count">6</span>
+        </button>
+        <div class="rail-rule"></div>
+        <button class="nav-item">
+          <svg viewBox="0 0 16 16"><path d="m8 1.8 5.5 3.2v6L8 14.2 2.5 11V5z"/><path d="M2.8 5.2 8 8.4l5.2-3.2M8 8.4v5.6"/></svg>
+          模型
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.1"/><path d="M8 1.6v1.7M8 12.7v1.7M1.6 8h1.7M12.7 8h1.7M3.5 3.5l1.2 1.2M11.3 11.3l1.2 1.2M12.5 3.5l-1.2 1.2M4.7 11.3l-1.2 1.2"/></svg>
+          设置
+        </button>
+      </nav>
+      <div class="rail-bottom"><div class="service"><i class="dot"></i>服务运行中 · 3439</div></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="crumbs">工作台 <span>/</span> <strong>任务</strong></div>
+        <div class="top-actions">
+          <span class="sync"><i class="dot"></i>更新于 14:40</span>
+          <button class="icon-btn" aria-label="刷新">
+            <svg viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg>
+          </button>
+          <button class="btn primary">
+            <svg viewBox="0 0 16 16"><path d="M5 3.5v9l7-4.5z" fill="currentColor" stroke="none"/></svg>
+            执行全部待办
+          </button>
+        </div>
+      </header>
+
+      <div class="page">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow">Monday · 11月16日</div>
+            <h1 class="page-title">任务</h1>
+            <p class="page-sub">6 项待办 · 3 项可自动 · 2 项需手动 · 合计 +230 积分</p>
+          </div>
+          <div class="head-meta"><strong>来自 2 个账号</strong>国际版任务不在此列</div>
+        </div>
+
+        <div class="tasks-layout">
+          <section class="task-panel" aria-label="待办任务">
+            <div class="task-toolbar">
+              <div class="segmented" role="group" aria-label="筛选任务">
+                <button class="seg" aria-pressed="true">全部 <strong>6</strong></button>
+                <button class="seg" aria-pressed="false">可自动 <strong>3</strong></button>
+                <button class="seg" aria-pressed="false">需手动 <strong>2</strong></button>
+                <button class="seg" aria-pressed="false">未解锁 <strong>1</strong></button>
+              </div>
+              <button class="btn quiet small">全部账号
+                <svg viewBox="0 0 16 16"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
+              </button>
+            </div>
+
+            <div class="account-block">
+              <div class="account-block-head">
+                <span class="avatar">主</span>
+                <strong>主力号</strong>
+                <span>4 项待办</span>
+                <span class="right">5/9 已领</span>
+              </div>
+              <div class="task-row">
+                <span class="task-state claim"><i class="dot"></i>可领奖</span>
+                <div class="task-main"><strong>体验专家团队协作</strong><small>1/1 · +80 积分 · 11/28 截止</small></div>
+                <div class="task-actions"><button class="btn primary small">领奖</button></div>
+              </div>
+              <div class="task-row">
+                <span class="task-state auto"><i class="dot info"></i>定时会完成</span>
+                <div class="task-main"><strong>连续 3 天使用 Skill</strong><small>2/3 · +100 积分 · 11/28 截止</small></div>
+                <div class="task-actions"><button class="btn quiet small">执行</button></div>
+              </div>
+              <div class="task-row">
+                <span class="task-state manual"><i class="dot warn"></i>需手动</span>
+                <div class="task-main"><strong>关注官方公众号</strong><small>需要关注官方公众号满 24 小时 · +50 积分</small></div>
+                <div class="task-actions"><span class="task-why">官方客户端</span></div>
+              </div>
+              <div class="task-row">
+                <span class="task-state"><i class="dot idle"></i>未解锁</span>
+                <div class="task-main"><strong>邀请好友体验</strong><small>明天 00:00 解锁 · +30 积分</small></div>
+                <div class="task-actions"><span class="task-why">等待解锁</span></div>
+              </div>
+            </div>
+
+            <div class="account-block">
+              <div class="account-block-head">
+                <span class="avatar">备</span>
+                <strong>备用号</strong>
+                <span>2 项待办</span>
+                <span class="right">7/9 已领</span>
+              </div>
+              <div class="task-row">
+                <span class="task-state auto"><i class="dot info"></i>定时会完成</span>
+                <div class="task-main"><strong>连续 3 天使用 Skill</strong><small>1/3 · +50 积分 · 11/28 截止</small></div>
+                <div class="task-actions"><button class="btn quiet small">执行</button></div>
+              </div>
+              <div class="task-row">
+                <span class="task-state manual"><i class="dot warn"></i>需手动</span>
+                <div class="task-main"><strong>在桌面端发起对话</strong><small>需要在桌面端发起对话 · +30 积分</small></div>
+                <div class="task-actions"><span class="task-why">官方客户端</span></div>
+              </div>
+            </div>
+          </section>
+
+          <aside class="queue-card" aria-label="执行队列">
+            <h3>执行队列</h3>
+            <p>按账号串行执行，一个账号完成后再处理下一个。</p>
+            <div class="queue-empty"><i class="dot"></i>队列空闲，没有执行中的任务</div>
+            <button class="btn primary">
+              <svg viewBox="0 0 16 16"><path d="M5 3.5v9l7-4.5z" fill="currentColor" stroke="none"/></svg>
+              执行全部待办
+            </button>
+            <div class="queue-foot">预计 4–6 分钟 · 可随时停止</div>
+          </aside>
+        </div>
+
+        <section class="recent" aria-label="最近完成">
+          <div class="section-head"><div class="section-title"><h2>最近完成</h2><span>今天</span></div><button class="text-btn">查看全部记录</button></div>
+          <div class="recent-panel">
+            <div class="recent-row"><time>14:32</time><span class="avatar">主</span><strong>主力号</strong><span class="recent-action">领取「体验专家团队协作」</span><span class="recent-gain">+80 积分</span></div>
+            <div class="recent-row"><time>14:18</time><span class="avatar">备</span><strong>备用号</strong><span class="recent-action">猫猫旅行归来</span><span class="recent-gain">+30 积分</span></div>
+            <div class="recent-row"><time>13:50</time><span class="avatar intl">海</span><strong>海外号</strong><span class="recent-action">网页会话完成</span><span class="recent-gain">每日奖励待入账</span></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <nav class="tabbar" aria-label="主导航">
+    <button class="tab">
+      <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.2"/><path d="M8 1.4v1.5M8 13.1v1.5M1.4 8h1.5M13.1 8h1.5"/></svg>
+      今天
+    </button>
+    <button class="tab">
+      <svg viewBox="0 0 16 16"><rect x="2.2" y="3" width="11.6" height="10" rx="2.2"/><path d="M5 6.4h6M5 9.2h4"/></svg>
+      账号
+    </button>
+    <button class="tab" aria-current="page">
+      <svg viewBox="0 0 16 16"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="3"/><path d="m5.1 8 1.9 1.9 3.9-4"/></svg>
+      任务<span class="tab-badge">6</span>
+    </button>
+  </nav>
+</body>
+</html>

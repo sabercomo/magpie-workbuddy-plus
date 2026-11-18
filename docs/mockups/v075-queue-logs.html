@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkBuddy Plus · v0.7.5 样稿：任务队列与日志</title>
+<style>
+/* page/board.css inlined for standalone preview (same tokens as p0-four-features.html) */
+.wb-board{--wb-card:var(--magpie-card,#fff);--wb-line:var(--magpie-line,#dce1d8);--wb-muted:var(--magpie-muted,#69746c);--wb-accent:var(--magpie-accent,#25583e);--wb-soft:var(--magpie-accent-soft,#eaf0e7);--wb-warn:#b4691b;--wb-urgent:#c0392b;--wb-go:#2d61a0;--wb-ok:var(--wb-accent);--wb-hover:color-mix(in srgb,var(--wb-muted) 9%,transparent)}
+.wb-sub{font-size:12px;color:var(--wb-muted)}
+.wb-label{font-size:12.5px;font-weight:600}
+.wb-line{display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0}
+.wb-segs{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:var(--wb-soft);max-width:100%;overflow-x:auto;scrollbar-width:none}
+.wb-seg-btn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;font-size:12.5px;color:var(--wb-muted);white-space:nowrap;cursor:pointer;transition:background-color 120ms ease-out,color 120ms ease-out}
+.wb-seg-btn:hover{color:inherit}.wb-seg-btn:focus-visible{outline:2px solid var(--wb-accent);outline-offset:-2px}
+.wb-seg-btn.on{background:var(--wb-card);color:inherit;font-weight:600;box-shadow:0 1px 2px rgba(15,23,42,.08)}
+.wb-pill{flex:none;font-size:11.5px;padding:1px 8px;border-radius:10px;background:var(--wb-soft);white-space:nowrap}
+.wb-pill.ok{color:var(--wb-accent)}.wb-pill.warn{color:var(--wb-warn)}.wb-pill.go{color:var(--wb-go)}.wb-pill.urgent{color:var(--wb-urgent);background:color-mix(in srgb,var(--wb-urgent) 12%,var(--wb-card))}
+body{margin:0;padding:18px 22px 26px}
+[hidden]{display:none!important}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:20px;font-weight:650;letter-spacing:-.02em;margin:0}
+h2{font-size:13px;font-weight:600;margin:18px 2px 8px}
+.muted{color:var(--wb-muted);font-size:12px;margin:0}
+header button{font:inherit;display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:inherit}
+header .inline{all:unset;display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:12px;color:var(--wb-accent);padding:1px 4px;border-radius:5px}
+header .inline:hover{background:var(--wb-soft)}header .inline:focus-visible,header .quiet:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+header .quiet{font-size:12.5px;padding:5px 11px;border-radius:8px;border:1px solid var(--wb-line);background:var(--wb-card);white-space:nowrap}
+header .quiet:hover{border-color:color-mix(in srgb,var(--wb-muted) 55%,var(--wb-line))}
+.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.brand-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sched-pill{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:5px;padding:1px 9px;border-radius:999px;font-size:11.5px;background:var(--wb-soft);color:var(--wb-accent);cursor:pointer;white-space:nowrap}
+.sched-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+/* settings bits reused */
+.group{border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px;align-items:stretch}
+.group h3{margin:0;font-size:13px;font-weight:600}
+.hint,.toggle small{font-size:11.5px;color:var(--wb-muted);line-height:1.5;margin:0}
+.group label.toggle{flex-direction:row;align-items:flex-start;gap:10px;font-size:12.5px;color:inherit;cursor:pointer;display:flex}
+.toggle span:last-child{display:flex;flex-direction:column;gap:2px}
+.toggle input{position:absolute;opacity:0;pointer-events:none}
+.toggle .knob{flex:none;width:28px;height:16px;margin-top:1px;border-radius:999px;background:color-mix(in srgb,var(--wb-muted) 35%,transparent);position:relative;transition:background 150ms ease}
+.toggle .knob::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform 150ms ease}
+.toggle input:checked+.knob{background:var(--wb-accent)}.toggle input:checked+.knob::after{transform:translateX(12px)}
+.toggle input:focus-visible+.knob{outline:2px solid var(--wb-accent);outline-offset:2px}
+.group label:not(.toggle){display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--wb-muted)}
+.group input:not([type=checkbox]){font:inherit;font-size:12.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--wb-line);background:transparent;color:inherit}
+</style>
+<style>
+:root{color-scheme:light}
+body{background:var(--magpie-bg,#f7f8f6);color:var(--magpie-fg,#272d29);padding-bottom:44px}
+.mock-banner{border:1px solid var(--wb-line);border-left:3px solid var(--wb-accent);border-radius:0 10px 10px 0;background:var(--wb-card);padding:9px 12px;font-size:12px;line-height:1.55;color:var(--wb-muted);margin:0 0 12px}
+.mock-banner strong{color:inherit}
+.mock-controls{border:1px dashed var(--wb-line);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:5px;margin:0 0 16px}
+.mock-control-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--wb-muted)}
+.mock-control-head strong{font-size:12px;color:inherit}
+.mock-control-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--wb-muted)}
+.mock-control-row>strong{font-weight:600;min-width:68px;color:inherit}
+.mock-control-row .wb-segs{margin-left:auto}
+.mock-section{margin:18px 0}
+.mock-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 2px 8px}
+.mock-section-head h2{margin:0}
+.mock-btn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:5px;font:inherit;font-size:12px;padding:4px 11px;border-radius:7px;border:1px solid var(--wb-line);background:var(--wb-card);color:inherit;cursor:pointer;white-space:nowrap}
+.mock-btn:hover{border-color:color-mix(in srgb,var(--wb-muted) 55%,var(--wb-line))}
+.mock-btn:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+.mock-btn.primary{background:var(--wb-accent);border-color:var(--wb-accent);color:#fff}
+.mock-btn:disabled{opacity:.55;cursor:not-allowed}
+.mock-toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:30;background:var(--wb-accent);color:#fff;font-size:12.5px;line-height:1.4;padding:7px 14px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:calc(100vw - 32px);text-align:center}
+.mock-dark{color-scheme:dark;--magpie-bg:#151a17;--magpie-fg:#e6ece8;--magpie-card:#1d2320;--magpie-line:#35403a;--magpie-muted:#9aa79f;--magpie-accent:#8fc9a8;--magpie-accent-soft:#243a2e;background:#151a17;color:#e6ece8}
+
+/* ---- v0.7.5: queue visualization ---- */
+.mock-queue{border:1px solid var(--wb-line);border-radius:12px;overflow:hidden;background:var(--wb-card)}
+.mock-qrow{display:grid;grid-template-columns:minmax(120px,1fr) minmax(0,1.5fr) 150px auto;gap:12px;align-items:center;padding:9px 14px;border-top:1px solid color-mix(in srgb,var(--wb-line) 60%,transparent);font-size:12.5px}
+.mock-qrow:first-child{border-top:0}
+.mock-qwho{display:flex;align-items:center;gap:8px;min-width:0}
+.mock-avatar{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--wb-soft);color:var(--wb-accent);font-weight:600;font-size:11px;flex:none}
+.mock-qwho strong{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mock-qbar{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mock-qsteps{display:flex;gap:3px;height:6px}
+.mock-qstep{flex:1;min-width:8px;border-radius:3px;background:color-mix(in srgb,var(--wb-muted) 18%,var(--wb-card))}
+.mock-qstep.done{background:var(--wb-accent)}
+.mock-qstep.running{background:var(--wb-go);animation:mock-pulse 1.4s ease-in-out infinite}
+.mock-qstep.failed{background:var(--wb-urgent)}
+.mock-qstep.waiting{background:color-mix(in srgb,var(--wb-muted) 18%,var(--wb-card))}
+@keyframes mock-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.mock-qcaption{font-size:11px;color:var(--wb-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mock-qstate{font-size:11.5px;font-weight:600;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.mock-qstate.go{color:var(--wb-go)}.mock-qstate.ok{color:var(--wb-accent)}.mock-qstate.warn{color:var(--wb-warn)}.mock-qstate.urgent{color:var(--wb-urgent)}.mock-qstate.idle{color:var(--wb-muted)}
+.mock-qops{display:flex;gap:5px}
+.mock-qbtn{all:unset;box-sizing:border-box;font:inherit;font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--wb-line);color:var(--wb-muted);cursor:pointer;white-space:nowrap}
+.mock-qbtn:hover{border-color:color-mix(in srgb,var(--wb-muted) 55%,var(--wb-line));color:inherit}
+.mock-qbtn.accent{color:var(--wb-accent);border-color:color-mix(in srgb,var(--wb-accent) 40%,var(--wb-line))}
+.mock-qbtn:focus-visible{outline:2px solid var(--wb-accent);outline-offset:1px}
+.mock-qbar-row{display:flex;align-items:center;gap:8px}
+.mock-qbar-track{flex:1;display:flex;gap:3px;height:6px}
+.mock-queue-meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--wb-line);font-size:11.5px;color:var(--wb-muted);background:color-mix(in srgb,var(--wb-muted) 5%,var(--wb-card))}
+.mock-queue-meta .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.mock-queue-meta strong{color:var(--magpie-fg,#272d29);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* failure retry chain */
+.mock-retry{display:flex;flex-direction:column;gap:0;border:1px solid var(--wb-line);border-radius:12px;overflow:hidden;background:var(--wb-card)}
+.mock-retry-row{display:grid;grid-template-columns:minmax(130px,1fr) minmax(0,2fr) auto;gap:10px;align-items:center;padding:9px 14px;border-top:1px solid color-mix(in srgb,var(--wb-line) 60%,transparent);font-size:12.5px}
+.mock-retry-row:first-child{border-top:0}
+.mock-retry-why{min-width:0;font-size:11.5px;color:var(--wb-muted)}
+.mock-retry-why .urgent{color:var(--wb-urgent);font-weight:600}
+.mock-chain{display:flex;align-items:center;gap:5px;margin-top:3px;font-variant-numeric:tabular-nums}
+.mock-chain-node{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--wb-muted);white-space:nowrap}
+.mock-chain-node i{width:6px;height:6px;border-radius:50%;background:var(--wb-muted);flex:none;font-style:normal}
+.mock-chain-node.failed i{background:var(--wb-urgent)}
+.mock-chain-node.failed{color:var(--wb-urgent)}
+.mock-chain-node.next i{background:var(--wb-go)}
+.mock-chain-node.next{color:var(--wb-go);font-weight:600}
+.mock-chain-node.ok i{background:var(--wb-accent)}
+.mock-chain-arrow{color:var(--wb-line);font-size:10px}
+
+/* log channels */
+.mock-logs{border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);overflow:hidden}
+.mock-log-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--wb-line)}
+.mock-log-body{max-height:300px;overflow-y:auto;padding:4px 0}
+.mock-log-line{display:grid;grid-template-columns:64px 76px minmax(0,1fr);gap:10px;padding:3px 14px;font-size:11.5px;line-height:1.55;align-items:baseline}
+.mock-log-line time{color:var(--wb-muted);font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px}
+.mock-log-line .mock-log-acct{color:var(--wb-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mock-log-msg{overflow-wrap:anywhere;min-width:0}
+.mock-log-msg .gain{color:var(--wb-accent);font-weight:600}
+.mock-log-line.warn .mock-log-msg{color:var(--wb-warn)}
+.mock-log-line.bad .mock-log-msg{color:var(--wb-urgent)}
+.mock-log-line[data-channel]{display:grid}
+.mock-log-empty{padding:18px 14px;font-size:12px;color:var(--wb-muted);text-align:center}
+
+.mock-pause-note{display:flex;gap:8px;align-items:flex-start;border:1px solid color-mix(in srgb,var(--wb-go) 35%,var(--wb-line));background:color-mix(in srgb,var(--wb-go) 5%,var(--wb-card));border-radius:10px;padding:8px 11px;font-size:11.5px;color:var(--wb-muted);line-height:1.5}
+.mock-pause-note strong{color:var(--wb-go);font-weight:600}
+@media(max-width:720px){
+  .mock-qrow{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"who state" "bar bar" "ops ops";row-gap:5px}
+  .mock-qwho{grid-area:who}.mock-qbar{grid-area:bar}.mock-qstate{grid-area:state}.mock-qops{grid-area:ops}
+  .mock-retry-row{grid-template-columns:minmax(0,1fr);gap:4px}
+  .mock-log-line{grid-template-columns:56px minmax(0,1fr)}
+  .mock-log-acct{display:none}
+  .mock-control-row>strong{min-width:100%}.mock-control-row .wb-segs{margin-left:0}
+}
+@media(prefers-reduced-motion:reduce){.mock-qstep.running{animation:none;opacity:.7}}
+</style>
+</head>
+<body class="wb-board">
+<header>
+  <div>
+    <div class="brand-title"><h1>WorkBuddy Plus</h1><span class="sched-pill">定时运行中 · 下次 21:01</span></div>
+    <p class="muted">余额更新于 14:40 <button class="inline" type="button">刷新</button></p>
+  </div>
+  <div class="header-actions">
+    <button class="quiet" type="button" id="theme-toggle">深色</button>
+    <button class="quiet" type="button">设置</button>
+  </div>
+</header>
+
+<p class="mock-banner"><strong>样稿 · v0.7.5 任务队列与日志</strong>：三块改动——①「定时与记录」页顶上加每号队列进度条，账号间并发可在设置里选 1–3（默认 1）；②失败行展开重试链，能看到每次尝试和原因；③日志分「任务 / 对话 / 系统」三个频道。缓存（任务快照 20s、任务进度 6 小时）是后台行为，界面上只体现为余额/进度旁边的「更新于」时间。</p>
+
+<section class="mock-controls" aria-label="样稿控制">
+  <div class="mock-control-head"><strong>样稿控制</strong><span>切换状态，不会出现在产品里</span></div>
+  <div class="mock-control-row"><strong>队列状态</strong><div class="wb-segs"><button type="button" class="wb-seg-btn on" data-q-state="running">执行中</button><button type="button" class="wb-seg-btn" data-q-state="idle">空闲</button><button type="button" class="wb-seg-btn" data-q-state="failed">有失败</button></div></div>
+  <div class="mock-control-row"><strong>日志频道</strong><div class="wb-segs"><button type="button" class="wb-seg-btn on" data-log="all">全部</button><button type="button" class="wb-seg-btn" data-log="task">任务</button><button type="button" class="wb-seg-btn" data-log="chat">对话</button><button type="button" class="wb-seg-btn" data-log="sys">系统</button></div></div>
+</section>
+
+<section class="mock-section" aria-label="任务队列">
+  <div class="mock-section-head"><h2>执行队列</h2><span class="muted">账号内串行 · 账号间并发 <strong>1</strong>（设置里可调 1–3）</span></div>
+  <div class="mock-queue" id="queue">
+    <div class="mock-queue-meta">
+      <span>正在执行 <strong id="q-running">1</strong> / 排队 <strong id="q-waiting">2</strong></span>
+      <span>任务缓存 20 秒 · 进度缓存 6 小时</span>
+      <span class="right"><button type="button" class="mock-qbtn" data-op="停止队列">停止</button><button type="button" class="mock-qbtn accent" data-op="执行所有任务">执行所有任务</button></span>
+    </div>
+    <div class="mock-qrow" data-state="running">
+      <span class="mock-qwho"><span class="mock-avatar">主</span><strong>主力号</strong></span>
+      <span class="mock-qbar">
+        <span class="mock-qbar-row"><span class="mock-qbar-track"><span class="mock-qstep done"></span><span class="mock-qstep done"></span><span class="mock-qstep done"></span><span class="mock-qstep running"></span><span class="mock-qstep waiting"></span></span></span>
+        <span class="mock-qcaption">成长任务 · 上报「连续 3 天使用 Skill」（3/5 步）</span>
+      </span>
+      <span class="mock-qstate go">执行中 · 还剩 2 步</span>
+      <span class="mock-qops"><button type="button" class="mock-qbtn" data-op="停止">停止</button></span>
+    </div>
+    <div class="mock-qrow" data-state="waiting">
+      <span class="mock-qwho"><span class="mock-avatar">备</span><strong>备用号</strong></span>
+      <span class="mock-qbar">
+        <span class="mock-qbar-row"><span class="mock-qbar-track"><span class="mock-qstep waiting"></span><span class="mock-qstep waiting"></span><span class="mock-qstep waiting"></span><span class="mock-qstep waiting"></span><span class="mock-qstep waiting"></span></span></span>
+        <span class="mock-qcaption">等主力号完成后开始（账号间并发 1）</span>
+      </span>
+      <span class="mock-qstate idle">排队中</span>
+      <span class="mock-qops"><button type="button" class="mock-qbtn" data-op="提前执行">提前</button><button type="button" class="mock-qbtn" data-op="移出队列">移出</button></span>
+    </div>
+    <div class="mock-qrow" data-state="waiting">
+      <span class="mock-qwho"><span class="mock-avatar" style="background:color-mix(in srgb,var(--wb-go) 12%,var(--wb-card));color:var(--wb-go)">海</span><strong>海外号</strong></span>
+      <span class="mock-qbar">
+        <span class="mock-qbar-row"><span class="mock-qbar-track"><span class="mock-qstep waiting"></span><span class="mock-qstep waiting"></span><span class="mock-qstep waiting"></span></span></span>
+        <span class="mock-qcaption">连登 · 签到 · 网页会话</span>
+      </span>
+      <span class="mock-qstate idle">排队中</span>
+      <span class="mock-qops"><button type="button" class="mock-qbtn" data-op="提前执行">提前</button><button type="button" class="mock-qbtn" data-op="移出队列">移出</button></span>
+    </div>
+  </div>
+</section>
+
+<section class="mock-section" aria-label="失败与重试">
+  <div class="mock-section-head"><h2>失败与重试</h2><span class="muted">每次尝试都留记录；到上限后停在队列里等手动处理</span></div>
+  <div class="mock-retry">
+    <div class="mock-retry-row">
+      <div>
+        <strong>薅毛号 · 成长任务</strong>
+        <div class="mock-retry-why"><span class="urgent">HTTP 400 · 连续 3 次</span>，自动上报已暂停</div>
+      </div>
+      <div>
+        <div class="mock-chain">
+          <span class="mock-chain-node failed"><i></i>14:02 · 400</span><span class="mock-chain-arrow">→</span>
+          <span class="mock-chain-node failed"><i></i>14:07 · 400</span><span class="mock-chain-arrow">→</span>
+          <span class="mock-chain-node failed"><i></i>14:12 · 400</span><span class="mock-chain-arrow">→</span>
+          <span class="mock-chain-node">已暂停，不再自动重试</span>
+        </div>
+        <div class="mock-retry-why">上游连续 3 天 400 会触发熔断；这条是连续 3 次 400 的单日熔断。</div>
+      </div>
+      <span class="mock-qops">
+        <button type="button" class="mock-qbtn accent" data-op="重试">重试</button>
+        <button type="button" class="mock-qbtn" data-op="清除失败">清除</button>
+      </span>
+    </div>
+    <div class="mock-retry-row">
+      <div>
+        <strong>海外号 · 网页会话</strong>
+        <div class="mock-retry-why"><span class="warn">429 限流</span> · 自动退避重试中</div>
+      </div>
+      <div>
+        <div class="mock-chain">
+          <span class="mock-chain-node failed"><i></i>10:30 · 429</span><span class="mock-chain-arrow">→</span>
+          <span class="mock-chain-node failed"><i></i>10:34 · 429</span><span class="mock-chain-arrow">→</span>
+          <span class="mock-chain-node next"><i></i>10:42 重试（第 3 次）</span>
+        </div>
+        <div class="mock-retry-why">429 按退避间隔自动重试，最多 5 次；不算失败，不占熔断次数。</div>
+      </div>
+      <span class="mock-qops">
+        <button type="button" class="mock-qbtn" data-op="立即重试">立即重试</button>
+      </span>
+    </div>
+    <div class="mock-retry-row">
+      <div>
+        <strong>备用号 · 猫猫旅行</strong>
+        <div class="mock-retry-why">已成功 · 第 2 次尝试</div>
+      </div>
+      <div>
+        <div class="mock-chain">
+          <span class="mock-chain-node failed"><i></i>09:01 · 网络中断</span><span class="mock-chain-arrow">→</span>
+          <span class="mock-chain-node ok"><i></i>09:06 · 成功 +30</span>
+        </div>
+        <div class="mock-retry-why">网络中断会自动重试一次；成功后的链保留在记录里。</div>
+      </div>
+      <span class="mock-qstate ok">已完成</span>
+    </div>
+  </div>
+</section>
+
+<section class="mock-section" aria-label="日志频道">
+  <div class="mock-section-head"><h2>日志</h2><span class="muted">按频道过滤 · 对话频道只记动作与结果，不记正文</span></div>
+  <div class="mock-logs">
+    <div class="mock-log-head">
+      <div class="wb-segs" id="log-segs">
+        <button type="button" class="wb-seg-btn on" data-log="all">全部</button>
+        <button type="button" class="wb-seg-btn" data-log="task">任务 <strong>24</strong></button>
+        <button type="button" class="wb-seg-btn" data-log="chat">对话 <strong>6</strong></button>
+        <button type="button" class="wb-seg-btn" data-log="sys">系统 <strong>9</strong></button>
+      </div>
+      <span class="wb-sub" style="margin-left:auto">14:40 更新</span>
+    </div>
+    <div class="mock-log-body" id="log-body">
+      <div class="mock-log-line" data-channel="task"><time>14:40:12</time><span class="mock-log-acct">主力号</span><span class="mock-log-msg">成长任务：领取「体验专家团队协作」<span class="gain">+80</span></span></div>
+      <div class="mock-log-line" data-channel="sys"><time>14:40:05</time><span class="mock-log-acct">系统</span><span class="mock-log-msg">快照已发布到 page/data.js（build 9f2c…）</span></div>
+      <div class="mock-log-line" data-channel="chat"><time>14:38:51</time><span class="mock-log-acct">公司账号</span><span class="mock-log-msg">活动 App 对话已创建（模型由上游选择，可能扣积分）</span></div>
+      <div class="mock-log-line warn" data-channel="task"><time>14:34:20</time><span class="mock-log-acct">薅毛号</span><span class="mock-log-msg">成长任务上报返回 HTTP 400（连续第 3 次），自动上报已暂停</span></div>
+      <div class="mock-log-line" data-channel="chat"><time>14:31:02</time><span class="mock-log-acct">海外号</span><span class="mock-log-msg">网页会话完成 · 用时 96 秒 · 奖励待入账</span></div>
+      <div class="mock-log-line" data-channel="task"><time>14:30:58</time><span class="mock-log-acct">备用号</span><span class="mock-log-msg">猫猫旅行：团子已派出 · 目的地 敦煌</span></div>
+      <div class="mock-log-line" data-channel="sys"><time>14:30:00</time><span class="mock-log-acct">系统</span><span class="mock-log-msg">定时 tick：活跃 · 旅行 · 福利（3 个账号）</span></div>
+      <div class="mock-log-line bad" data-channel="sys"><time>14:12:33</time><span class="mock-log-acct">系统</span><span class="mock-log-msg">公司账号触发上游风控，今日自动任务暂停</span></div>
+      <div class="mock-log-line" data-channel="task"><time>14:10:18</time><span class="mock-log-acct">主力号</span><span class="mock-log-msg">连登福利：已领 <span class="gain">+20</span></span></div>
+    </div>
+    <div class="mock-log-empty" id="log-empty" hidden>这个频道还没有记录。</div>
+  </div>
+</section>
+
+<section class="mock-section" aria-label="设置">
+  <div class="mock-section-head"><h2>设置里的新选项</h2><span class="muted">「定时安排」组</span></div>
+  <div class="group" style="max-width:560px">
+    <h3>执行与并发</h3>
+    <label>账号间并发（1–3，默认 1）
+      <input type="number" min="1" max="3" step="1" value="1" id="concurrency">
+    </label>
+    <p class="hint" id="concurrency-hint">1 = 严格按账号串行，最稳，不会触发风控；调高后多个账号同时跑，快但更耗上游配额。企业账号不受此设置影响，永远单独跑。</p>
+    <label class="toggle">
+      <input type="checkbox" id="pause-demo">
+      <span class="knob" aria-hidden="true"></span>
+      <span>账号级暂停（示例：测试号）
+        <small>「暂停」只停这个账号的自动任务，登录续期、看板刷新和手动执行照常；「停用」才是整体关闭。批量操作里也有这个选项。</small>
+      </span>
+    </label>
+    <div class="mock-pause-note" id="pause-note" hidden><span><strong>测试号已暂停</strong> · 自动任务不再进队列；登录续期与看板照常刷新。</span></div>
+  </div>
+</section>
+
+<div class="mock-toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = message => {
+    const node = $("toast");
+    node.textContent = message;
+    node.hidden = false;
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => { node.hidden = true; }, 2600);
+  };
+
+  $("theme-toggle").addEventListener("click", () => {
+    const dark = document.body.classList.toggle("mock-dark");
+    $("theme-toggle").textContent = dark ? "浅色" : "深色";
+  });
+
+  const setSeg = (selector, attr, active) => {
+    for (const button of document.querySelectorAll(selector)) {
+      button.classList.toggle("on", button.dataset[attr] === active);
+    }
+  };
+
+  // queue states
+  const qrows = [...document.querySelectorAll(".mock-qrow")];
+  const qStates = {
+    running: () => {
+      qrows[0].hidden = false; qrows[1].hidden = false; qrows[2].hidden = false;
+      $("q-running").textContent = "1"; $("q-waiting").textContent = "2";
+    },
+    idle: () => {
+      for (const r of qrows) r.hidden = true;
+      $("q-running").textContent = "0"; $("q-waiting").textContent = "0";
+    },
+    failed: () => {
+      qrows[0].hidden = false; qrows[1].hidden = true; qrows[2].hidden = false;
+      qrows[0].querySelectorAll(".mock-qstep")[3].className = "mock-qstep failed";
+      qrows[0].querySelector(".mock-qcaption").textContent = "成长任务上报失败（HTTP 400），等待重试";
+      qrows[0].querySelector(".mock-qstate").textContent = "失败 · 可重试";
+      qrows[0].querySelector(".mock-qstate").className = "mock-qstate urgent";
+      $("q-running").textContent = "0"; $("q-waiting").textContent = "1";
+    }
+  };
+  document.addEventListener("click", event => {
+    const seg = event.target.closest("[data-q-state]");
+    if (seg) { setSeg("[data-q-state]", "qState", seg.dataset.qState); qStates[seg.dataset.qState](); }
+  });
+
+  // log channels
+  const logLines = [...document.querySelectorAll(".mock-log-line")];
+  const applyLog = channel => {
+    let visible = 0;
+    for (const line of logLines) {
+      const show = channel === "all" || line.dataset.channel === channel;
+      line.hidden = !show;
+      if (show) visible++;
+    }
+    $("log-empty").hidden = visible > 0;
+  };
+  document.addEventListener("click", event => {
+    const seg = event.target.closest("[data-log]");
+    if (!seg) return;
+    setSeg("[data-log]", "log", seg.dataset.log);
+    applyLog(seg.dataset.log);
+  });
+
+  // ops
+  document.addEventListener("click", event => {
+    const op = event.target.closest("[data-op]");
+    if (op) toast(`${op.dataset.op}：样稿演示，不真正执行`);
+  });
+
+  $("concurrency").addEventListener("change", event => {
+    const v = Math.min(3, Math.max(1, Number(event.target.value) || 1));
+    event.target.value = v;
+    $("concurrency-hint").textContent = v === 1
+      ? "1 = 严格按账号串行，最稳，不会触发风控；调高后多个账号同时跑，快但更耗上游配额。企业账号不受此设置影响，永远单独跑。"
+      : `${v} = 最多 ${v} 个账号同时执行；注意上游限流与风控。`;
+  });
+
+  $("pause-demo").addEventListener("change", event => {
+    $("pause-note").hidden = !event.target.checked;
+    toast(event.target.checked ? "测试号已暂停：自动任务停止，续期与看板照常" : "测试号已恢复");
+  });
+})();
+</script>
+</body>
+</html>

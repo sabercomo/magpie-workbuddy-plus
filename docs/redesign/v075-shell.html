@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WorkBuddy Plus · v0.7.5 功能整合样稿</title>
+  <link rel="stylesheet" href="a2-shell.css">
+  <link rel="stylesheet" href="v075-shell.css">
+</head>
+<body data-view="today" data-detail="closed">
+  <a class="sr" href="#main">跳到主要内容</a>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand">
+        <img src="../../page/icon.svg" alt="">
+        <div class="brand-copy">
+          <strong>WorkBuddy Plus</strong>
+          <small>个人工作台</small>
+        </div>
+      </div>
+
+      <div class="nav-block">
+        <p class="nav-label">工作区</p>
+        <nav class="nav">
+          <button class="nav-item" type="button" data-view-link="today" aria-current="page">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><path d="M8 1.4v1.5M8 13.1v1.5M1.4 8h1.5M13.1 8h1.5"/></svg>
+            今天
+          </button>
+          <button class="nav-item" type="button" data-view-link="accounts">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="3" width="11.6" height="10" rx="2.2"/><path d="M5 6.4h6M5 9.2h4"/></svg>
+            账号
+            <span class="nav-count">6</span>
+          </button>
+          <button class="nav-item" type="button" data-view-link="tasks">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="3"/><path d="m5.1 8 1.9 1.9 3.9-4"/></svg>
+            任务
+            <span class="nav-count">6</span>
+          </button>
+          <button class="nav-item" type="button" data-view-link="activity">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8.2" r="5.5"/><path d="M8 5.2v3.2l2.1 1.2"/></svg>
+            定时与记录
+          </button>
+        </nav>
+      </div>
+
+      <div class="nav-block">
+        <p class="nav-label">工具</p>
+        <nav class="nav">
+          <button class="nav-item" type="button">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.8 5.5 3.2v6L8 14.2 2.5 11V5z"/><path d="M2.8 5.2 8 8.4l5.2-3.2M8 8.4v5.6"/></svg>
+            模型
+          </button>
+          <button class="nav-item" type="button" data-view-link="settings">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.1"/><path d="M8 1.6v1.7M8 12.7v1.7M1.6 8h1.7M12.7 8h1.7M3.5 3.5l1.2 1.2M11.3 11.3l1.2 1.2M12.5 3.5l-1.2 1.2M4.7 11.3l-1.2 1.2"/></svg>
+            设置
+          </button>
+        </nav>
+      </div>
+
+      <div class="sidebar-foot">
+        <div class="service"><i class="dot"></i>服务运行中<span class="mono">3439</span></div>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb">
+          <span class="desktop-context">工作台 <span aria-hidden="true">/</span></span>
+          <strong id="crumb">今天</strong>
+        </div>
+        <div class="mobile-brand">
+          <img src="../../page/icon.svg" alt="">
+          <span>WorkBuddy Plus</span>
+        </div>
+        <div class="topbar-actions">
+          <span class="sync"><i class="dot"></i>更新于 14:40</span>
+          <button class="icon-btn mobile-only" type="button" aria-label="模型">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.8 5.5 3.2v6L8 14.2 2.5 11V5z"/><path d="M2.8 5.2 8 8.4l5.2-3.2M8 8.4v5.6"/></svg>
+          </button>
+          <button class="icon-btn" type="button" aria-label="刷新">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg>
+          </button>
+          <button class="icon-btn mobile-only" type="button" aria-label="更多">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="13" cy="8" r=".9" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <div class="run-split">
+            <button class="run-main" type="button">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.4v9.2l7-4.6z"/></svg>
+              执行所有任务
+            </button>
+            <button class="run-more" type="button" aria-label="选择执行范围">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main id="main">
+        <div class="review-bar">
+          <strong>v0.7.5 功能整合样稿</strong>
+          <span>账号 / 任务 / 定时与记录可直接切换；所有数据均为虚构演示。</span>
+          <button class="text-btn" type="button" id="review-hide">隐藏提示</button>
+        </div>
+        <section class="view" id="view-today" aria-labelledby="today-title">
+          <div class="page-head">
+            <div>
+              <div class="eyebrow">11月16日 · 周一</div>
+              <h1 id="today-title">今天</h1>
+              <p class="page-sub">6 个账号 · 6 项待办 · 3 项需要留意</p>
+            </div>
+            <button class="btn primary mobile-run" type="button">执行所有任务</button>
+          </div>
+
+          <div class="metrics" aria-label="今日概览">
+            <div class="metric">
+              <span class="metric-label">账号</span>
+              <strong>6</strong>
+              <small>5 个国内版 · 1 个国际版</small>
+            </div>
+            <div class="metric">
+              <span class="metric-label">可用积分</span>
+              <strong>3,402.7</strong>
+              <small class="warn">120 明天作废</small>
+            </div>
+            <div class="metric">
+              <span class="metric-label">待办任务</span>
+              <strong>6</strong>
+              <small>3 项可以自动完成</small>
+            </div>
+            <div class="metric">
+              <span class="metric-label">下一次执行</span>
+              <strong>21:00</strong>
+              <small>活跃 · 旅行 · 福利</small>
+            </div>
+          </div>
+
+          <div class="section-head">
+            <h2>需要处理</h2>
+            <span class="meta"><strong>3</strong> 项</span>
+          </div>
+          <section class="surface" aria-label="需要处理">
+            <div class="compensation" id="compensation">
+              <div class="compensation-main">
+                <div class="compensation-title"><strong>官方补偿</strong><span>1,000 积分待领</span></div>
+                <p>DeepSeek 模型服务异常额外补偿</p>
+                <small>11月22日 23:59 截止 · 先查询，再领取</small>
+              </div>
+              <div class="compensation-side">
+                <span class="deadline" id="comp-deadline">剩 5 天</span>
+                <button class="btn primary" type="button" id="comp-claim">领取 2 个账号</button>
+              </div>
+            </div>
+            <div class="comp-error" id="comp-error" hidden><i class="dot danger"></i><span><strong>公司账号</strong>查询失败，无法确认是否有补偿；这不是「没有补偿」。</span><button class="text-btn" type="button" data-toast="已重新查询：公司账号待领 500 积分。">重新查询</button></div>
+            <div class="comp-attention" id="comp-attention" hidden><i class="dot warn"></i><span>没有生效中的官方补偿。<small>上游正常返回；无需操作。</small></span><button class="text-btn" type="button" id="comp-check">重新查询</button></div>
+            <div class="comp-state">
+              <span>样稿状态</span>
+              <div class="segmented" aria-label="官方补偿状态">
+                <button class="seg" type="button" data-comp="pending" aria-pressed="true">待领取</button>
+                <button class="seg" type="button" data-comp="none" aria-pressed="false">无补偿</button>
+                <button class="seg" type="button" data-comp="error" aria-pressed="false">查询失败</button>
+                <button class="seg" type="button" data-comp="claimed" aria-pressed="false">已领取</button>
+              </div>
+            </div>
+            <div class="attention-row">
+              <i class="dot warn"></i>
+              <div class="attention-copy"><strong>主力号</strong><span class="warn">120 积分明天作废</span></div>
+              <button class="text-btn" type="button">查看积分</button>
+            </div>
+            <div class="attention-row">
+              <i class="dot"></i>
+              <div class="attention-copy"><strong>备用号</strong>猫猫已从大理归来，<span>+30 积分</span> 待领取</div>
+              <button class="btn primary" type="button">领取</button>
+            </div>
+            <div class="attention-row">
+              <i class="dot info"></i>
+              <div class="attention-copy"><strong>公司账号</strong>Kimi-K3.1-Pro 排队中，当前第 257 位</div>
+              <button class="text-btn" type="button">查看模型</button>
+            </div>
+          </section>
+
+          <div class="today-grid">
+            <section aria-labelledby="account-status-title">
+              <div class="section-head">
+                <h2 id="account-status-title">账号状态</h2>
+                <button class="text-btn" type="button" data-view-link="accounts">查看全部</button>
+              </div>
+              <div class="surface">
+                <div class="account-table-head" aria-hidden="true">
+                  <span>账号</span>
+                  <span>今日</span>
+                  <span>积分</span>
+                  <span class="task-col">任务</span>
+                  <span class="next-col">下一次</span>
+                  <span></span>
+                </div>
+
+                <button class="account-row" type="button" data-view-link="accounts" data-account-open>
+                  <span class="account-cell">
+                    <span class="avatar">主</span>
+                    <span class="account-who"><strong>主力号</strong><small>国内版 · 个人 · 连登 12 天</small></span>
+                  </span>
+                  <span class="today-cell">
+                    <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                      <circle class="track" cx="20" cy="20" r="15.5"/>
+                      <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                      <circle class="track" cx="20" cy="20" r="10.9"/>
+                      <circle class="b" cx="20" cy="20" r="10.9" pathLength="100" stroke-dasharray="64 100" transform="rotate(-90 20 20)"/>
+                      <circle class="track" cx="20" cy="20" r="6.4"/>
+                      <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                    </svg>
+                    <span class="state-copy">
+                      <span class="state-dotline"><i class="dot"></i><strong>已完成</strong></span>
+                      <small>4 / 4 今日目标</small>
+                    </span>
+                  </span>
+                  <span class="credit-cell">
+                    <span class="credit-line"><strong>1,863.5</strong><small>/ 3,300</small></span>
+                    <span class="meter" aria-hidden="true"><span class="urgent" style="width:6%"></span><span class="soon" style="width:20%"></span><span class="soft" style="width:30%"></span></span>
+                  </span>
+                  <span class="task-cell"><span class="cell-main">5 / 9</span><span class="cell-sub">4 项待办</span></span>
+                  <span class="next-cell"><span class="cell-main">21:00</span><span class="cell-sub">活跃 · 旅行</span></span>
+                  <span class="chevron" aria-hidden="true">›</span>
+                </button>
+
+                <button class="account-row" type="button" data-view-link="accounts" data-account-open>
+                  <span class="account-cell">
+                    <span class="avatar">备</span>
+                    <span class="account-who"><strong>备用号</strong><small>国内版 · 个人 · 连登 5 天</small></span>
+                  </span>
+                  <span class="today-cell">
+                    <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                      <circle class="track" cx="20" cy="20" r="15.5"/>
+                      <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                      <circle class="track" cx="20" cy="20" r="10.9"/>
+                      <circle class="b" cx="20" cy="20" r="10.9" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                      <circle class="track" cx="20" cy="20" r="6.4"/>
+                      <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="72 100" transform="rotate(-90 20 20)"/>
+                    </svg>
+                    <span class="state-copy claim">
+                      <span class="state-dotline"><i class="dot"></i><strong>待领奖</strong></span>
+                      <small>旅行已归来</small>
+                    </span>
+                  </span>
+                  <span class="credit-cell">
+                    <span class="credit-line"><strong>412</strong><small>/ 1,300</small></span>
+                    <span class="meter" aria-hidden="true"><span style="width:16%"></span><span class="soft" style="width:16%"></span></span>
+                  </span>
+                  <span class="task-cell"><span class="cell-main">7 / 9</span><span class="cell-sub">2 项待办</span></span>
+                  <span class="next-cell"><span class="cell-main">+30</span><span class="cell-sub">领取奖励</span></span>
+                  <span class="chevron" aria-hidden="true">›</span>
+                </button>
+
+                <button class="account-row" type="button" data-view-link="accounts" data-account-open>
+                  <span class="account-cell">
+                    <span class="avatar firm">企</span>
+                    <span class="account-who"><strong>公司账号</strong><small>国内版 · 企业 · 月度额度</small></span>
+                  </span>
+                  <span class="today-cell">
+                    <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                      <circle class="track" cx="20" cy="20" r="15.5"/>
+                      <circle class="track" cx="20" cy="20" r="10.9"/>
+                      <circle class="track" cx="20" cy="20" r="6.4"/>
+                    </svg>
+                    <span class="state-copy queue">
+                      <span class="state-dotline"><i class="dot info"></i><strong>模型排队</strong></span>
+                      <small>Kimi 第 257 位</small>
+                    </span>
+                  </span>
+                  <span class="credit-cell">
+                    <span class="credit-line"><strong>597.21</strong><small>/ 2,000</small></span>
+                    <span class="meter" aria-hidden="true"><span style="width:30%"></span><span class="soft" style="width:40%"></span></span>
+                  </span>
+                  <span class="task-cell"><span class="cell-main">—</span><span class="cell-sub">企业账号</span></span>
+                  <span class="next-cell"><span class="cell-main">2 天后</span><span class="cell-sub">额度重置</span></span>
+                  <span class="chevron" aria-hidden="true">›</span>
+                </button>
+
+                <button class="account-row" type="button" data-view-link="accounts" data-account-open>
+                  <span class="account-cell">
+                    <span class="avatar intl">海</span>
+                    <span class="account-who"><strong>海外号</strong><small>国际版 · Free · 连登 9 天</small></span>
+                  </span>
+                  <span class="today-cell">
+                    <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                      <circle class="track" cx="20" cy="20" r="15.5"/>
+                      <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                      <circle class="track" cx="20" cy="20" r="10.9"/>
+                      <circle class="track" cx="20" cy="20" r="6.4"/>
+                      <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="20 100" transform="rotate(-90 20 20)"/>
+                    </svg>
+                    <span class="state-copy">
+                      <span class="state-dotline"><i class="dot"></i><strong>奖励到账</strong></span>
+                      <small>今日 +30</small>
+                    </span>
+                  </span>
+                  <span class="credit-cell">
+                    <span class="credit-line"><strong>530</strong><small>/ 800</small></span>
+                    <span class="meter" aria-hidden="true"><span style="width:4%"></span><span class="soft" style="width:62%"></span></span>
+                  </span>
+                  <span class="task-cell"><span class="cell-main">1 / 5</span><span class="cell-sub">已领取</span></span>
+                  <span class="next-cell"><span class="cell-main">10:30</span><span class="cell-sub">网页会话</span></span>
+                  <span class="chevron" aria-hidden="true">›</span>
+                </button>
+              </div>
+            </section>
+
+            <aside class="day-panel" aria-labelledby="today-plan-title">
+              <h2 id="today-plan-title">今日安排</h2>
+              <p class="panel-sub">下一次 <strong>21:00</strong> · 活跃、旅行、福利</p>
+              <ol class="timeline">
+                <li class="done"><time>09:00</time><i class="dot"></i><span class="tl-title">活跃 · 旅行</span></li>
+                <li class="done"><time>09:10</time><i class="dot"></i><span class="tl-title">成长任务</span></li>
+                <li class="done"><time>10:00</time><i class="dot"></i><span class="tl-title">补领奖励</span></li>
+                <li class="done"><time>10:30</time><i class="dot"></i><span class="tl-title">海外号网页会话</span></li>
+                <li class="next"><time>21:00</time><i class="dot"></i><span class="tl-title">活跃 · 旅行<small>3 个国内账号</small></span></li>
+                <li><time>21:10</time><i class="dot"></i><span class="tl-title">成长任务</span></li>
+              </ol>
+              <div class="recent">
+                <h2>最近完成</h2>
+                <div class="recent-row">
+                  <time>14:32</time>
+                  <div><strong>主力号</strong><small>领取「体验专家团队协作」</small></div>
+                  <span class="recent-gain">+80</span>
+                </div>
+                <div class="recent-row">
+                  <time>14:18</time>
+                  <div><strong>备用号</strong><small>猫猫旅行归来</small></div>
+                  <span class="recent-gain">+30</span>
+                </div>
+                <div class="recent-row">
+                  <time>13:50</time>
+                  <div><strong>海外号</strong><small>网页会话完成</small></div>
+                  <span class="recent-gain">待入账</span>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-accounts" aria-labelledby="accounts-title">
+          <div class="page-head accounts-head">
+            <div>
+              <div class="eyebrow">5 个国内版 · 1 个国际版</div>
+              <h1 id="accounts-title">账号</h1>
+              <p class="page-sub">6 个账号 · 2 个正常 · 3 个需留意 · 1 个已暂停</p>
+              <div class="health-scope">
+                <div class="segmented" role="group" aria-label="账号信息密度">
+                  <button class="seg" type="button" data-health-mode="overview" aria-pressed="true">概览</button>
+                  <button class="seg" type="button" data-health-mode="health" aria-pressed="false">健康</button>
+                </div>
+                <div class="health-filter" hidden>
+                  <button class="text-btn" type="button" data-health-filter="all" aria-pressed="true">全部 6</button>
+                  <button class="text-btn" type="button" data-health-filter="attention" aria-pressed="false">需留意 3</button>
+                  <button class="text-btn" type="button" data-health-filter="paused" aria-pressed="false">已暂停 1</button>
+                </div>
+              </div>
+              <div class="display-switch">
+                <span>显示方式</span>
+                <div class="segmented" role="group" aria-label="账号显示方式">
+                  <button class="seg" type="button" aria-pressed="true">列表</button>
+                  <button class="seg" type="button" aria-pressed="false">圆环</button>
+                  <button class="seg" type="button" aria-pressed="false" data-toast="小组件沿用现有账号看板；本稿聚焦新增的「健康」信息密度。">小组件</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="surface accounts-table">
+            <div class="account-table-head" aria-hidden="true">
+              <span>账号</span>
+              <span>今日</span>
+              <span>积分</span>
+              <span class="task-col">任务</span>
+              <span class="next-col">下一次</span>
+              <span></span>
+            </div>
+
+            <button class="account-row is-selected" type="button" data-account-open>
+              <span class="account-cell">
+                <span class="avatar">主</span>
+                <span class="account-who"><strong>主力号</strong><small>国内版 · 个人 · 连登 12 天</small></span>
+              </span>
+              <span class="today-cell">
+                <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                  <circle class="track" cx="20" cy="20" r="15.5"/>
+                  <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                  <circle class="track" cx="20" cy="20" r="10.9"/>
+                  <circle class="b" cx="20" cy="20" r="10.9" pathLength="100" stroke-dasharray="64 100" transform="rotate(-90 20 20)"/>
+                  <circle class="track" cx="20" cy="20" r="6.4"/>
+                  <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                </svg>
+                <span class="state-copy">
+                  <span class="state-dotline"><i class="dot"></i><strong>已完成</strong></span>
+                  <small>4 / 4 今日目标</small>
+                </span>
+              </span>
+              <span class="credit-cell">
+                <span class="credit-line"><strong>1,863.5</strong><small>/ 3,300</small></span>
+                <span class="meter" aria-hidden="true"><span class="urgent" style="width:6%"></span><span class="soon" style="width:20%"></span><span class="soft" style="width:30%"></span></span>
+              </span>
+              <span class="task-cell"><span class="cell-main">5 / 9</span><span class="cell-sub">4 项待办</span></span>
+              <span class="next-cell"><span class="cell-main">21:00</span><span class="cell-sub">活跃 · 旅行</span></span>
+              <span class="chevron" aria-hidden="true">›</span>
+            </button>
+
+            <button class="account-row" type="button" data-account-open>
+              <span class="account-cell">
+                <span class="avatar">备</span>
+                <span class="account-who"><strong>备用号</strong><small>国内版 · 个人 · 连登 5 天</small></span>
+              </span>
+              <span class="today-cell">
+                <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                  <circle class="track" cx="20" cy="20" r="15.5"/>
+                  <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                  <circle class="track" cx="20" cy="20" r="10.9"/>
+                  <circle class="b" cx="20" cy="20" r="10.9" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                  <circle class="track" cx="20" cy="20" r="6.4"/>
+                  <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="72 100" transform="rotate(-90 20 20)"/>
+                </svg>
+                <span class="state-copy claim">
+                  <span class="state-dotline"><i class="dot"></i><strong>待领奖</strong></span>
+                  <small>旅行已归来</small>
+                </span>
+              </span>
+              <span class="credit-cell">
+                <span class="credit-line"><strong>412</strong><small>/ 1,300</small></span>
+                <span class="meter" aria-hidden="true"><span style="width:16%"></span><span class="soft" style="width:16%"></span></span>
+              </span>
+              <span class="task-cell"><span class="cell-main">7 / 9</span><span class="cell-sub">2 项待办</span></span>
+              <span class="next-cell"><span class="cell-main">+30</span><span class="cell-sub">领取奖励</span></span>
+              <span class="chevron" aria-hidden="true">›</span>
+            </button>
+
+            <button class="account-row" type="button" data-account-open>
+              <span class="account-cell">
+                <span class="avatar firm">企</span>
+                <span class="account-who"><strong>公司账号</strong><small>国内版 · 企业 · 月度额度</small></span>
+              </span>
+              <span class="today-cell">
+                <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                  <circle class="track" cx="20" cy="20" r="15.5"/>
+                  <circle class="track" cx="20" cy="20" r="10.9"/>
+                  <circle class="track" cx="20" cy="20" r="6.4"/>
+                </svg>
+                <span class="state-copy queue">
+                  <span class="state-dotline"><i class="dot info"></i><strong>模型排队</strong></span>
+                  <small>Kimi 第 257 位</small>
+                </span>
+              </span>
+              <span class="credit-cell">
+                <span class="credit-line"><strong>597.21</strong><small>/ 2,000</small></span>
+                <span class="meter" aria-hidden="true"><span style="width:30%"></span><span class="soft" style="width:40%"></span></span>
+              </span>
+              <span class="task-cell"><span class="cell-main">—</span><span class="cell-sub">企业账号</span></span>
+              <span class="next-cell"><span class="cell-main">2 天后</span><span class="cell-sub">额度重置</span></span>
+              <span class="chevron" aria-hidden="true">›</span>
+            </button>
+
+            <button class="account-row" type="button" data-account-open>
+              <span class="account-cell">
+                <span class="avatar intl">海</span>
+                <span class="account-who"><strong>海外号</strong><small>国际版 · Free · 连登 9 天</small></span>
+              </span>
+              <span class="today-cell">
+                <svg class="rings-mini" viewBox="0 0 40 40" aria-hidden="true">
+                  <circle class="track" cx="20" cy="20" r="15.5"/>
+                  <circle class="a" cx="20" cy="20" r="15.5" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 20 20)"/>
+                  <circle class="track" cx="20" cy="20" r="10.9"/>
+                  <circle class="track" cx="20" cy="20" r="6.4"/>
+                  <circle class="c" cx="20" cy="20" r="6.4" pathLength="100" stroke-dasharray="20 100" transform="rotate(-90 20 20)"/>
+                </svg>
+                <span class="state-copy">
+                  <span class="state-dotline"><i class="dot"></i><strong>奖励到账</strong></span>
+                  <small>今日 +30</small>
+                </span>
+              </span>
+              <span class="credit-cell">
+                <span class="credit-line"><strong>530</strong><small>/ 800</small></span>
+                <span class="meter" aria-hidden="true"><span style="width:4%"></span><span class="soft" style="width:62%"></span></span>
+              </span>
+              <span class="task-cell"><span class="cell-main">1 / 5</span><span class="cell-sub">已领取</span></span>
+              <span class="next-cell"><span class="cell-main">10:30</span><span class="cell-sub">网页会话</span></span>
+              <span class="chevron" aria-hidden="true">›</span>
+            </button>
+          </div>
+          <div class="health-surface" id="health-surface" hidden>
+            <div class="health-table-head" aria-hidden="true"><span></span><span>账号</span><span>状态与最近一次成功</span><span>失败</span><span>下一次定时</span><span>操作</span></div>
+            <div class="health-account" data-health-kind="normal" data-health-name="主力号" data-realm="cn">
+              <div class="health-row">
+                <input class="health-check" type="checkbox" aria-label="选择主力号">
+                <span class="account-cell"><span class="avatar">主</span><span class="account-who"><strong>主力号</strong><small>国内版 · 个人</small></span></span>
+                <span class="health-state"><span class="state-dotline"><i class="dot"></i><strong>正常</strong></span><small>最近成功 14:40</small></span>
+                <span class="health-failures">0 次</span>
+                <span class="health-next"><strong>21:00</strong><small>活跃 · 旅行 · 福利</small></span>
+                <span class="health-actions"><button class="text-btn health-primary" type="button" data-account-open>查看详情</button><button class="icon-btn" type="button" data-account-menu aria-label="主力号更多操作">•••</button></span>
+              </div>
+              <div class="health-extra"><span>冷却 —</span><span>今日任务 5 / 9</span><span>登录有效</span><button class="text-btn" type="button" data-pause-account="主力号">暂停任务</button></div>
+            </div>
+            <div class="health-account" data-health-kind="attention" data-health-name="备用号" data-realm="cn">
+              <div class="health-row">
+                <input class="health-check" type="checkbox" aria-label="选择备用号">
+                <span class="account-cell"><span class="avatar">备</span><span class="account-who"><strong>备用号</strong><small>国内版 · 个人</small></span></span>
+                <span class="health-state warn"><span class="state-dotline"><i class="dot warn"></i><strong>登录将过期</strong></span><small>2 天后到期 · 成功 09:01</small></span>
+                <span class="health-failures">0 次</span>
+                <span class="health-next"><strong>22:01</strong><small>登录续期检查</small></span>
+                <span class="health-actions"><button class="text-btn health-primary" type="button" data-account-open>续期登录</button><button class="icon-btn" type="button" data-account-menu aria-label="备用号更多操作">•••</button></span>
+              </div>
+              <div class="health-extra"><span>凭证到期后需重新登录</span><button class="text-btn" type="button" data-toast="正在刷新备用号余额。">刷新余额</button><button class="text-btn" type="button" data-pause-account="备用号">暂停任务</button></div>
+            </div>
+            <div class="health-account" data-health-kind="attention" data-health-name="公司账号" data-realm="cn">
+              <div class="health-row">
+                <input class="health-check" type="checkbox" aria-label="选择公司账号">
+                <span class="account-cell"><span class="avatar firm">企</span><span class="account-who"><strong>公司账号</strong><small>国内版 · 企业 · 只跑续期</small></span></span>
+                <span class="health-state info"><span class="state-dotline"><i class="dot info"></i><strong>限流中</strong></span><small>上次成功 14:20</small></span>
+                <span class="health-failures">3 次</span>
+                <span class="health-next"><strong>明日 09:01</strong><small>风控解除后恢复</small></span>
+                <span class="health-actions"><button class="text-btn health-primary" type="button" data-account-open>查看详情</button><button class="icon-btn" type="button" data-account-menu aria-label="公司账号更多操作">•••</button></span>
+              </div>
+              <div class="health-extra"><span class="health-cooldown">冷却 <strong id="cooldown">42:18</strong></span><span>只读看板与续期照常</span><button class="text-btn" type="button" data-toast="已请求刷新风控状态；以最新上游响应为准。">刷新状态</button></div>
+            </div>
+            <div class="health-account" data-health-kind="attention" data-health-name="薅毛号" data-realm="cn">
+              <div class="health-row">
+                <input class="health-check" type="checkbox" aria-label="选择薅毛号">
+                <span class="account-cell"><span class="avatar">薅</span><span class="account-who"><strong>薅毛号</strong><small>国内版 · 个人</small></span></span>
+                <span class="health-state danger"><span class="state-dotline"><i class="dot danger"></i><strong>连续失败</strong></span><small>成长任务连续 3 次 400</small></span>
+                <span class="health-failures">3 次</span>
+                <span class="health-next"><strong>等待处理</strong><small>自动上报已暂停</small></span>
+                <span class="health-actions"><button class="text-btn health-primary" type="button" data-view-link="activity">查看重试</button><button class="icon-btn" type="button" data-account-menu aria-label="薅毛号更多操作">•••</button></span>
+              </div>
+              <div class="health-extra"><span>不会继续自动重试</span><button class="text-btn" type="button" data-toast="已加入手动重试队列。">重试任务</button><button class="text-btn" type="button" data-pause-account="薅毛号">暂停任务</button></div>
+            </div>
+            <div class="health-account" data-health-kind="paused" data-health-name="测试号" data-realm="cn">
+              <div class="health-row">
+                <input class="health-check" type="checkbox" aria-label="选择测试号">
+                <span class="account-cell"><span class="avatar idle">测</span><span class="account-who"><strong>测试号</strong><small>国内版 · 个人</small></span></span>
+                <span class="health-state idle"><span class="state-dotline"><i class="dot idle"></i><strong>已暂停</strong></span><small>只停自动任务</small></span>
+                <span class="health-failures">—</span>
+                <span class="health-next"><strong>不自动执行</strong><small>续期与看板照常</small></span>
+                <span class="health-actions"><button class="text-btn health-primary" type="button" data-resume-account="测试号">恢复任务</button><button class="icon-btn" type="button" data-account-menu aria-label="测试号更多操作">•••</button></span>
+              </div>
+              <div class="health-extra"><span>手动执行仍可使用</span><button class="text-btn" type="button" data-toast="正在刷新测试号余额。">刷新余额</button></div>
+            </div>
+            <div class="health-account" data-health-kind="normal" data-health-name="海外号" data-realm="intl">
+              <div class="health-row">
+                <input class="health-check" type="checkbox" aria-label="选择海外号">
+                <span class="account-cell"><span class="avatar intl">海</span><span class="account-who"><strong>海外号</strong><small>国际版 · Free</small></span></span>
+                <span class="health-state"><span class="state-dotline"><i class="dot"></i><strong>正常</strong></span><small>最近成功 10:30</small></span>
+                <span class="health-failures">0 次</span>
+                <span class="health-next"><strong>明日 10:30</strong><small>网页会话</small></span>
+                <span class="health-actions"><button class="text-btn health-primary" type="button" data-account-open>查看详情</button><button class="icon-btn" type="button" data-account-menu aria-label="海外号更多操作">•••</button></span>
+              </div>
+              <div class="health-extra"><span>登录有效</span><button class="text-btn" type="button" data-toast="海外号任务已加入队列。">执行任务</button><button class="text-btn" type="button" data-pause-account="海外号">暂停任务</button></div>
+            </div>
+            <div class="health-empty" hidden>没有符合筛选条件的账号。<button class="text-btn" type="button" data-health-filter="all">查看全部账号</button></div>
+          </div>
+          <div class="batch-bar" id="batch-bar" hidden aria-live="polite">
+            <strong>已选 <span id="batch-count">0</span> 个账号</strong>
+            <button class="btn quiet" type="button" data-batch="刷新余额">刷新余额</button>
+            <button class="btn quiet" type="button" data-batch="暂停任务">暂停任务</button>
+            <button class="btn quiet" type="button" data-batch="恢复任务">恢复任务</button>
+            <button class="text-btn" type="button" id="batch-clear">取消选择</button>
+          </div>
+          <p class="accounts-note"><span class="overview-note">列表、圆环和小组件展示同一批账号；切换只改变呈现方式。</span><span class="health-note" hidden>健康视图保留账号原有详情入口。暂停只停自动任务，续期与看板照常；批量操作串行执行，仍受各账号风控状态约束。</span></p>
+        </section>
+
+        <section class="view" id="view-tasks" aria-labelledby="tasks-title">
+          <div class="page-head">
+            <div>
+              <div class="eyebrow">来自 2 个国内版账号</div>
+              <h1 id="tasks-title">任务</h1>
+              <p class="page-sub">6 项待办 · 3 项可自动 · 2 项需手动 · 1 项未解锁</p>
+            </div>
+            <button class="btn primary mobile-run" type="button">执行所有任务</button>
+          </div>
+
+          <div class="tasks-toolbar">
+            <div class="segmented" role="group" aria-label="筛选任务">
+              <button class="seg" type="button" aria-pressed="true">全部 <strong>6</strong></button>
+              <button class="seg" type="button" aria-pressed="false">待你处理 <strong>2</strong></button>
+              <button class="seg" type="button" aria-pressed="false">可自动 <strong>3</strong></button>
+              <button class="seg" type="button" aria-pressed="false">需手动 <strong>2</strong></button>
+            </div>
+            <button class="filter-select" type="button">
+              全部账号
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
+            </button>
+          </div>
+
+          <div class="tasks-layout">
+            <section aria-label="待办任务">
+              <div class="surface">
+                <div class="task-group">
+                  <div class="task-group-head">
+                    <span class="avatar">主</span>
+                    <strong>主力号</strong>
+                    <span>4 项待办</span>
+                    <span class="right">5 / 9 已领</span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status claim"><i class="dot"></i>可领奖</span>
+                    <div class="task-main"><strong>体验专家团队协作</strong><small>1 / 1 · 11月28日截止</small></div>
+                    <span class="task-reward">+80</span>
+                    <span class="task-actions"><button class="btn primary" type="button">领奖</button></span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status auto"><i class="dot info"></i>定时完成</span>
+                    <div class="task-main"><strong>工作台搭建师</strong><small>自动识别 · 来源 jump_url</small></div>
+                    <span class="task-reward">+100</span>
+                    <span class="task-actions"><button class="btn quiet" type="button" data-toast="工作台搭建师任务已加入队列。">执行</button></span>
+                  </div>
+                  <div class="task-row expert-task">
+                    <span class="task-status manual"><i class="dot warn"></i><span id="expert-status">待适配</span></span>
+                    <div class="task-main"><strong>体验新专家</strong><small id="expert-source">jump_url 未解析到 expertId · 不会硬报进度</small></div>
+                    <span class="task-reward">+50</span>
+                    <span class="task-actions"><button class="btn quiet" type="button" id="expert-toggle">查看解析</button></span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status manual"><i class="dot warn"></i>需手动</span>
+                    <div class="task-main"><strong>关注官方公众号</strong><small>需要关注满 24 小时</small></div>
+                    <span class="task-reward">+50</span>
+                    <span class="task-actions"><span class="task-why">官方客户端</span></span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status"><i class="dot idle"></i>未解锁</span>
+                    <div class="task-main"><strong>邀请好友体验</strong><small>明天 00:00 解锁</small></div>
+                    <span class="task-reward">+30</span>
+                    <span class="task-actions"><span class="task-why">等待解锁</span></span>
+                  </div>
+                </div>
+
+                <div class="task-group">
+                  <div class="task-group-head">
+                    <span class="avatar">备</span>
+                    <strong>备用号</strong>
+                    <span>2 项待办</span>
+                    <span class="right">7 / 9 已领</span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status auto"><i class="dot info"></i>定时完成</span>
+                    <div class="task-main"><strong>连续 3 天使用 Skill</strong><small>1 / 3 · 11月28日截止</small></div>
+                    <span class="task-reward">+50</span>
+                    <span class="task-actions"><button class="btn quiet" type="button">执行</button></span>
+                  </div>
+                  <div class="task-row">
+                    <span class="task-status manual"><i class="dot warn"></i>需手动</span>
+                    <div class="task-main"><strong>在桌面端发起对话</strong><small>使用官方客户端完成</small></div>
+                    <span class="task-reward">+30</span>
+                    <span class="task-actions"><span class="task-why">官方客户端</span></span>
+                  </div>
+                </div>
+              </div>
+              <p class="tasks-note">「执行」只处理这一项任务，可用来补跑失败或到期的任务。手动项仍需在官方客户端完成；国际版任务按客户端实际使用计入，不在这里列出。</p>
+            </section>
+
+            <aside class="task-aside" aria-labelledby="queue-title">
+              <h2 id="queue-title">执行</h2>
+              <p class="panel-sub">账号内串行；账号间并发可在设置中调整。</p>
+              <button class="queue-link" type="button" data-view-link="activity">查看队列与失败重试 <span aria-hidden="true">›</span></button>
+              <div class="queue-surface">
+                <div class="queue-empty"><i class="dot"></i>队列空闲，没有执行中的任务</div>
+                <div class="queue-meta">
+                  <div><span>下一次自动执行</span><strong>21:10</strong></div>
+                  <div><span>上次执行</span><strong>14:40 · 成功</strong></div>
+                  <div><span>预计用时</span><strong>4–6 分钟</strong></div>
+                </div>
+                <p>执行过程中可以停止；已完成的账号不会回滚。</p>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-activity" aria-labelledby="activity-title">
+          <div class="page-head">
+            <div>
+              <h1 id="activity-title">定时与记录</h1>
+              <p class="page-sub">看任务跑到哪一步，失败时从原处重试。</p>
+            </div>
+          </div>
+          <div class="activity-layout">
+            <div class="activity-main">
+              <div class="section-head"><h2>当前队列</h2><span class="meta"><strong id="queue-count">3</strong> 个账号 · 账号内串行</span></div>
+              <div class="surface queue-table" id="queue-table">
+                <div class="queue-account" data-queue="running">
+                  <div class="queue-account-row"><span class="account-cell"><span class="avatar">主</span><span class="account-who"><strong>主力号</strong><small>成长任务</small></span></span><span class="queue-progress"><span class="queue-track"><span style="--progress:60%"></span></span><small>3 / 5 步 · 上报连续使用 Skill</small></span><span class="queue-state go">执行中</span><button class="text-btn" type="button" data-toast="已请求在当前步骤结束后停止。">停止</button></div>
+                </div>
+                <div class="queue-account" data-queue="waiting">
+                  <div class="queue-account-row"><span class="account-cell"><span class="avatar">备</span><span class="account-who"><strong>备用号</strong><small>成长任务</small></span></span><span class="queue-progress"><span class="queue-track"></span><small>等前一个账号完成</small></span><span class="queue-state">第 2 位</span><button class="text-btn" type="button" data-toast="备用号已移到队列最前。">提前</button></div>
+                </div>
+                <div class="queue-account" data-queue="waiting">
+                  <div class="queue-account-row"><span class="account-cell"><span class="avatar intl">海</span><span class="account-who"><strong>海外号</strong><small>连登 · 签到 · 网页会话</small></span></span><span class="queue-progress"><span class="queue-track"></span><small>账号间并发为 1</small></span><span class="queue-state">第 3 位</span><button class="text-btn" type="button" data-toast="海外号已移到队列最前。">提前</button></div>
+                </div>
+              </div>
+              <div class="queue-demo"><span>样稿状态</span><div class="segmented" aria-label="队列状态"><button class="seg" type="button" data-queue-state="running" aria-pressed="true">执行中</button><button class="seg" type="button" data-queue-state="idle" aria-pressed="false">空闲</button><button class="seg" type="button" data-queue-state="parallel" aria-pressed="false">并发 2</button></div></div>
+              <div class="schedule-summary">
+                <div><span>国内版</span><strong>下一次 21:00</strong><small>活跃 · 旅行 · 福利</small></div>
+                <div><span>国际版</span><strong>明日 10:30</strong><small>网页会话</small></div>
+                <button class="text-btn" type="button" data-view-link="settings">调整定时</button>
+              </div>
+
+              <div class="section-head"><h2>最近执行</h2><span class="meta">展开失败行查看每次尝试</span></div>
+              <div class="surface run-history">
+                <details class="run-item failed" open>
+                  <summary><span class="run-summary-main"><strong>薅毛号 · 成长任务</strong><small>连续 3 次失败 · 自动上报已暂停</small></span><span class="run-state">失败</span><span class="job-chevron" aria-hidden="true"></span></summary>
+                  <div class="retry-chain" aria-label="薅毛号重试记录">
+                    <div class="retry-attempt failed"><time>14:02</time><i></i><div><strong>HTTP 400 · 上报未接受</strong><small>首次尝试 · 等待 5 分钟后重试</small></div></div>
+                    <div class="retry-attempt failed"><time>14:07</time><i></i><div><strong>HTTP 400 · 仍是同一原因</strong><small>第 2 次 · 等待 5 分钟后重试</small></div></div>
+                    <div class="retry-attempt failed"><time>14:12</time><i></i><div><strong>HTTP 400 · 已达自动重试上限</strong><small>不再自动执行；登录续期与看板不受影响。</small></div></div>
+                  </div>
+                  <div class="run-actions"><button class="btn primary" type="button" data-toast="已加入手动重试；将先重新读取任务状态。">重试任务</button><button class="text-btn" type="button" data-toast="已清除连续失败标记；仍保留本次记录。">清除失败标记</button></div>
+                </details>
+                <details class="run-item retrying">
+                  <summary><span class="run-summary-main"><strong>海外号 · 网页会话</strong><small>429 限流 · 退避重试，不占连续失败次数</small></span><span class="run-state">等待重试</span><span class="job-chevron" aria-hidden="true"></span></summary>
+                  <div class="retry-chain">
+                    <div class="retry-attempt failed"><time>10:30</time><i></i><div><strong>HTTP 429 · 上游限流</strong><small>按上游等待时间退避</small></div></div>
+                    <div class="retry-attempt failed"><time>10:34</time><i></i><div><strong>HTTP 429 · 再次限流</strong><small>没有创建重复会话</small></div></div>
+                    <div class="retry-attempt next"><time>10:42</time><i></i><div><strong>等待第 3 次尝试</strong><small>也可以立即重试；由最新响应决定是否继续。</small></div></div>
+                  </div>
+                  <div class="run-actions"><button class="btn quiet" type="button" data-toast="已请求立即重试海外号网页会话。">立即重试</button></div>
+                </details>
+                <details class="run-item recovered">
+                  <summary><span class="run-summary-main"><strong>备用号 · 猫猫旅行</strong><small>首次网络中断，第 2 次成功 · +30 积分</small></span><span class="run-state">已完成</span><span class="job-chevron" aria-hidden="true"></span></summary>
+                  <div class="retry-chain"><div class="retry-attempt failed"><time>09:01</time><i></i><div><strong>连接中断</strong><small>未收到上游响应，自动重试一次</small></div></div><div class="retry-attempt done"><time>09:06</time><i></i><div><strong>旅行奖励已领取 · +30</strong><small>猫猫已重新派出</small></div></div></div>
+                </details>
+                <details class="run-item"><summary><span class="run-summary-main"><strong>主力号 · 成长任务</strong><small>7 个账号动作完成 · 领取 +80 积分</small></span><span class="run-state">已完成</span><span class="job-chevron" aria-hidden="true"></span></summary><div class="run-detail-copy">接取、上报、领奖均已完成；明细可在下方任务频道查看。</div></details>
+              </div>
+            </div>
+            <aside class="activity-aside">
+              <h2>队列规则</h2>
+              <dl class="execution-facts"><div><dt>账号内</dt><dd>串行</dd></div><div><dt>账号间并发</dt><dd>1</dd></div><div><dt>任务快照</dt><dd>20 秒</dd></div><div><dt>进度缓存</dt><dd>6 小时</dd></div></dl>
+              <p>缓存只复用已读数据；重试和手动执行前仍会重新检查状态。</p>
+              <button class="text-btn" type="button" data-view-link="settings">调整执行规则</button>
+            </aside>
+          </div>
+
+          <section class="log-section" aria-labelledby="log-title">
+            <div class="section-head"><h2 id="log-title">日志</h2><span class="meta" id="log-count">9 条</span></div>
+            <div class="log-toolbar">
+              <div class="segmented" role="group" aria-label="日志频道"><button class="seg" type="button" data-log-channel="all" aria-pressed="true">全部</button><button class="seg" type="button" data-log-channel="task" aria-pressed="false">任务</button><button class="seg" type="button" data-log-channel="chat" aria-pressed="false">对话</button><button class="seg" type="button" data-log-channel="system" aria-pressed="false">系统</button></div>
+              <select class="log-account-filter" id="log-account-filter" aria-label="按账号筛选日志"><option value="all">全部账号</option><option value="主力号">主力号</option><option value="备用号">备用号</option><option value="海外号">海外号</option><option value="系统">系统</option></select>
+            </div>
+            <div class="surface log-list" id="log-list">
+              <div class="log-line" data-log-channel="task" data-log-account="主力号"><time>14:40:12</time><span class="log-channel">任务</span><span class="log-account">主力号</span><p>领取「体验专家团队协作」<strong class="log-gain">+80</strong></p></div>
+              <div class="log-line" data-log-channel="system" data-log-account="系统"><time>14:40:05</time><span class="log-channel">系统</span><span class="log-account">系统</span><p>快照已发布到本机与 Magpie 页面。</p></div>
+              <div class="log-line" data-log-channel="chat" data-log-account="公司账号"><time>14:38:51</time><span class="log-channel">对话</span><span class="log-account">公司账号</span><p>活动 App 对话已创建；模型由上游选择，可能扣除积分。</p></div>
+              <div class="log-line error" data-log-channel="task" data-log-account="薅毛号"><time>14:34:20</time><span class="log-channel">任务</span><span class="log-account">薅毛号</span><p>成长任务上报返回 HTTP 400；连续第 3 次，自动上报已暂停。</p></div>
+              <div class="log-line" data-log-channel="chat" data-log-account="海外号"><time>14:31:02</time><span class="log-channel">对话</span><span class="log-account">海外号</span><p>网页会话完成 · 用时 96 秒 · 奖励待入账。</p></div>
+              <div class="log-line" data-log-channel="task" data-log-account="备用号"><time>14:30:58</time><span class="log-channel">任务</span><span class="log-account">备用号</span><p>团子已派出 · 目的地 敦煌。</p></div>
+              <div class="log-line" data-log-channel="system" data-log-account="系统"><time>14:30:00</time><span class="log-channel">系统</span><span class="log-account">系统</span><p>定时开始：活跃 · 旅行 · 福利。</p></div>
+              <div class="log-line error" data-log-channel="system" data-log-account="公司账号"><time>14:12:33</time><span class="log-channel">系统</span><span class="log-account">公司账号</span><p>检测到上游风控；今日自动任务暂停。</p></div>
+              <div class="log-line" data-log-channel="task" data-log-account="主力号"><time>14:10:18</time><span class="log-channel">任务</span><span class="log-account">主力号</span><p>连登福利已领取 <strong class="log-gain">+20</strong></p></div>
+            </div>
+            <p class="log-footnote">对话频道只记动作和结果，不记输入正文；完整日志仅保存在本机。</p>
+          </section>
+        </section>
+
+        <section class="view" id="view-settings" aria-labelledby="settings-title">
+          <div class="page-head"><div><h1 id="settings-title">设置</h1><p class="page-sub">默认定时保持原样；这里只展示本轮新增的设置。</p></div></div>
+          <div class="settings-groups">
+            <section class="settings-group" aria-labelledby="execution-settings-title"><h2 id="execution-settings-title">执行</h2><div class="setting-row"><div><strong>账号间并发</strong><p>账号内始终串行；调高后可能增加上游限流。</p></div><div class="segmented" aria-label="账号间并发"><button class="seg" type="button" data-concurrency="1" aria-pressed="true">1</button><button class="seg" type="button" data-concurrency="2" aria-pressed="false">2</button><button class="seg" type="button" data-concurrency="3" aria-pressed="false">3</button></div></div><p class="settings-footnote">默认 1。企业账号不参与个人成长任务；并发设置不会改变这个边界。</p></section>
+            <section class="settings-group" aria-labelledby="growth-settings-title"><h2 id="growth-settings-title">成长</h2><div class="setting-row"><div><strong>旅行后自动开 Buddy 盲盒</strong><p>默认关闭。领奖后、重新派出前开盒，消耗成长能量。</p></div><button class="switch-control" type="button" role="switch" aria-checked="false" id="buddy-auto"><span></span><span class="sr">旅行后自动开 Buddy 盲盒</span></button></div><p class="settings-footnote" id="buddy-auto-state">当前关闭；手动开盒不受影响。</p></section>
+            <section class="settings-group" aria-labelledby="read-settings-title"><h2 id="read-settings-title">只读校验</h2><div class="setting-row"><div><strong>官方补偿先查后领</strong><p>没有补偿与查询失败分别显示；领取前重新确认。</p></div><span class="read-only-mark">始终开启</span></div><div class="setting-row"><div><strong>国内签到双状态校验</strong><p>比较上游与 Magpie 记录，信更新时间更晚的一方。</p></div><span class="read-only-mark">只读</span></div><p class="settings-footnote">国内每日签到仍由 Magpie 负责；本插件不调用签到接口。</p></section>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <aside class="drawer" id="account-drawer" aria-labelledby="drawer-account-name" aria-hidden="true">
+    <div class="drawer-top">
+      <button class="drawer-back" type="button" data-drawer-close aria-label="返回账号列表">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>
+      </button>
+      <div class="drawer-title">账号 <span aria-hidden="true">/</span> <strong>主力号</strong></div>
+      <button class="drawer-close" type="button" data-drawer-close aria-label="关闭账号详情">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body">
+      <div class="drawer-account">
+        <span class="avatar">主</span>
+        <div class="drawer-account-main">
+          <h2 id="drawer-account-name">主力号</h2>
+          <p id="drawer-account-meta">国内版 · 个人 · 连登 12 天</p>
+        </div>
+        <span class="drawer-state" id="drawer-account-state"><i class="dot"></i>活跃</span>
+      </div>
+
+      <div class="drawer-health">
+        <div><span>最近成功</span><strong id="drawer-last-success">14:40</strong></div>
+        <div><span>连续失败</span><strong id="drawer-failures">0 次</strong></div>
+        <div><span>冷却</span><strong id="drawer-cooldown">—</strong></div>
+        <div><span>下一次定时</span><strong id="drawer-next-slot">21:00</strong></div>
+      </div>
+
+      <div class="drawer-quick-actions" aria-label="账号快捷操作">
+        <button class="btn quiet" type="button" data-toast="正在检查这个账号的登录续期。">续期</button>
+        <button class="btn quiet" type="button" data-toast="该账号任务已加入队列。">任务</button>
+        <button class="btn quiet domestic-only" type="button" data-toast="正在读取猫猫旅行状态。">旅行</button>
+        <button class="btn quiet" type="button" data-toast="正在刷新余额。">刷新余额</button>
+        <button class="text-btn" type="button" id="drawer-pause" data-drawer-pause>暂停任务</button>
+      </div>
+      <p class="drawer-pause-note" id="drawer-pause-note" hidden>自动任务已暂停；登录续期、看板与手动执行照常。<button class="text-btn" type="button" data-drawer-resume>恢复任务</button></p>
+
+      <div class="drawer-tabs" role="tablist" aria-label="账号详情">
+        <button class="drawer-tab" type="button" role="tab" aria-current="page" aria-selected="true" data-drawer-tab="overview">概览</button>
+        <button class="drawer-tab" type="button" role="tab" aria-selected="false" data-drawer-tab="tasks">任务</button>
+        <button class="drawer-tab" type="button" role="tab" aria-selected="false" data-drawer-tab="credits">积分</button>
+        <button class="drawer-tab" type="button" role="tab" aria-selected="false" data-drawer-tab="usage">用量</button>
+      </div>
+
+      <div id="drawer-overview" class="drawer-tab-panel">
+      <section class="drawer-section checkin-section" aria-labelledby="drawer-checkin-title">
+        <h3 id="drawer-checkin-title">签到</h3>
+        <div class="checkin-period"><div><span>Buddy 加油站</span><strong id="checkin-status">已签 +100</strong><small id="checkin-source">上游 09:01 已签；Magpie 记录还没更新</small></div><span class="activity-period">11月1日—30日</span></div>
+        <div class="checkin-period"><div><span>成长计划连登</span><strong>12 天</strong><small>再 2 天到 14 天档 · +50 积分</small></div><span class="activity-period">成长计划</span></div>
+        <p>国内签到仍由 Magpie 负责；上游只读快照较新时采用上游结果。</p>
+        <div class="checkin-demo"><span>样稿状态</span><div class="segmented" aria-label="签到状态"><button class="seg" type="button" data-checkin="upstream" aria-pressed="true">上游较新</button><button class="seg" type="button" data-checkin="agree" aria-pressed="false">两边一致</button><button class="seg" type="button" data-checkin="waiting" aria-pressed="false">未签到</button></div></div>
+      </section>
+
+      <section class="drawer-section buddy-section" aria-labelledby="drawer-buddy-title">
+        <div class="buddy-heading"><h3 id="drawer-buddy-title">成长能量</h3><span><strong id="buddy-energy">20</strong> 能量</span></div>
+        <div class="buddy-content">
+          <div><strong>Buddy 盲盒</strong><p id="buddy-description">可开 2 个 · 每个 10 能量</p></div>
+          <button class="btn primary" type="button" id="buddy-open">开盲盒</button>
+        </div>
+        <p class="buddy-result" id="buddy-result" aria-live="polite"></p>
+        <div class="buddy-demo"><span>样稿状态</span><div class="segmented" aria-label="盲盒状态"><button class="seg" type="button" data-buddy="ready" aria-pressed="true">可开 2 个</button><button class="seg" type="button" data-buddy="empty" aria-pressed="false">能量不足</button><button class="seg" type="button" data-buddy="travel" aria-pressed="false">旅行中</button><button class="seg" type="button" data-buddy="intl" aria-pressed="false">国际版</button></div></div>
+      </section>
+
+      <section class="drawer-section" aria-labelledby="drawer-today-title">
+        <h3 id="drawer-today-title">今天</h3>
+        <div class="drawer-row"><span>活跃</span><div><strong>已亮灯</strong><small>09:00 完成</small></div></div>
+        <div class="drawer-row"><span>猫猫旅行</span><div><strong>团子 · 敦煌</strong><small>约 16:30 归来 · +30 积分</small></div></div>
+        <div class="drawer-row"><span>成长任务</span><div><strong>5 / 9 已领</strong><small>4 项待办 · 3 项可自动</small></div></div>
+        <div class="drawer-row"><span>每日签到</span><div><strong>+100 已签</strong><small>连续 12 天</small></div></div>
+      </section>
+
+      <section class="drawer-section" aria-labelledby="drawer-packages-title">
+        <h3 id="drawer-packages-title">积分包</h3>
+        <div class="package"><div><strong>新人体验积分</strong><small>11月17日作废</small></div><span class="warn">186.5</span></div>
+        <div class="package"><div><strong>成长任务奖励</strong><small>11月24日作废</small></div><span>677</span></div>
+        <div class="package"><div><strong>连登兑换积分</strong><small>长期有效</small></div><span>1,000</span></div>
+      </section>
+
+      <section class="drawer-section" aria-labelledby="drawer-next-title">
+        <h3 id="drawer-next-title">下一次</h3>
+        <div class="drawer-row"><span>21:00</span><div><strong>活跃 · 旅行 · 福利</strong><small>预计持续 40 秒</small></div></div>
+        <div class="drawer-row"><span>21:10</span><div><strong>成长任务</strong><small>自动上报并领取已完成奖励</small></div></div>
+      </section>
+      </div>
+      <div class="drawer-tab-panel" id="drawer-task-panel" hidden>
+        <section class="drawer-section"><h3>成长任务</h3><div class="drawer-detail-task"><div><strong>工作台搭建师</strong><small>WorkspaceBuilder · 从 jump_url 自动识别</small></div><span class="task-status auto">可自动</span></div><div class="drawer-detail-task"><div><strong>体验新专家</strong><small>没有可靠解析到 expertId 时保留为待适配</small></div><span class="task-status manual">待适配</span></div></section>
+        <p class="drawer-footnote">动态解析只复用正常接取、上报与领奖流程；无法识别的任务不会硬报进度。</p>
+      </div>
+      <div class="drawer-tab-panel" id="drawer-credit-panel" hidden><section class="drawer-section"><h3>积分包</h3><div class="package"><div><strong>新人体验积分</strong><small>11月17日作废</small></div><span class="warn">186.5</span></div><div class="package"><div><strong>成长任务奖励</strong><small>11月24日作废</small></div><span>677</span></div><div class="package"><div><strong>连登兑换积分</strong><small>长期有效</small></div><span>1,000</span></div></section></div>
+      <div class="drawer-tab-panel" id="drawer-usage-panel" hidden><section class="drawer-section"><h3>近 7 天用量</h3><div class="drawer-row"><span>合计</span><div><strong>12 积分 · 8 次</strong><small>只读采集 · 按上游实际用量</small></div></div><div class="drawer-row"><span>模型</span><div><strong>DeepSeek-V4.1-Flash</strong><small>8 次 · 其余模型未使用</small></div></div></section></div>
+
+      <p class="drawer-footnote">余额与旅行状态由后台服务约每 3 分钟刷新；手动执行不受定时开关影响。</p>
+    </div>
+  </aside>
+
+  <nav class="tabbar" aria-label="主导航">
+    <button class="tab" type="button" data-view-link="today" aria-current="page">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><path d="M8 1.4v1.5M8 13.1v1.5M1.4 8h1.5M13.1 8h1.5"/></svg>
+      今天
+    </button>
+    <button class="tab" type="button" data-view-link="accounts">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="3" width="11.6" height="10" rx="2.2"/><path d="M5 6.4h6M5 9.2h4"/></svg>
+      账号
+    </button>
+    <button class="tab" type="button" data-view-link="tasks">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="3"/><path d="m5.1 8 1.9 1.9 3.9-4"/></svg>
+      任务<span class="tab-badge">6</span>
+    </button>
+    <button class="tab" type="button" data-view-link="activity">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8.2" r="5.5"/><path d="M8 5.2v3.2l2.1 1.2"/></svg>
+      记录
+    </button>
+  </nav>
+
+  <dialog class="buddy-dialog" id="buddy-dialog" aria-labelledby="buddy-dialog-title">
+    <h2 id="buddy-dialog-title">开启 2 个 Buddy 盲盒？</h2>
+    <p>消耗 <strong id="buddy-dialog-cost">20</strong> 成长能量，开启后不会退回。</p>
+    <dl><div><dt>当前能量</dt><dd id="buddy-dialog-energy">20</dd></div><div><dt>开启后剩余</dt><dd id="buddy-dialog-remaining">0</dd></div></dl>
+    <p class="dialog-note">只消耗成长能量，不扣积分；开出的 Buddy 可参加猫猫旅行。</p>
+    <div class="dialog-actions"><button class="btn quiet" type="button" id="buddy-cancel">取消</button><button class="btn primary" type="button" id="buddy-confirm">开启盲盒</button></div>
+  </dialog>
+  <div class="action-menu" id="action-menu" hidden>
+    <button type="button" data-toast="正在刷新余额。">刷新余额</button>
+    <button type="button" data-toast="该账号任务已加入队列。">执行任务</button>
+    <button type="button" data-toast="正在读取猫猫旅行状态。">猫猫旅行</button>
+    <button type="button" data-toast="已暂停该账号的自动任务；续期与看板照常。">暂停任务</button>
+  </div>
+  <div class="feedback-toast" id="feedback-toast" role="status" hidden></div>
+  <script src="v075-shell.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const labels = { today: "今天", accounts: "账号", tasks: "任务", activity: "定时与记录", settings: "设置" };
+    const wantedView = labels[params.get("view")] ? params.get("view") : "today";
+    const drawer = document.getElementById("account-drawer");
+    drawer.inert = true;
+
+    function setView(view, updateUrl = false) {
+      document.body.dataset.view = view;
+      document.getElementById("crumb").textContent = labels[view];
+      for (const button of document.querySelectorAll(".nav-item[data-view-link], .tab[data-view-link]")) {
+        if (button.dataset.viewLink === view) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      }
+      if (view !== "accounts") closeDrawer();
+      if (updateUrl) {
+        const next = new URL(location.href);
+        next.searchParams.set("view", view);
+        next.searchParams.delete("account");
+        history.replaceState(null, "", next);
+      }
+    }
+
+    function openDrawer(trigger) {
+      const account = trigger?.closest("[data-health-name]");
+      if (account) window.v075SelectAccount?.(account.dataset.healthName);
+      document.body.dataset.detail = "open";
+      drawer.setAttribute("aria-hidden", "false");
+      drawer.inert = false;
+    }
+
+    function closeDrawer() {
+      document.body.dataset.detail = "closed";
+      drawer.setAttribute("aria-hidden", "true");
+      drawer.inert = true;
+    }
+
+    for (const button of document.querySelectorAll("[data-view-link]")) {
+      button.addEventListener("click", () => setView(button.dataset.viewLink, true));
+    }
+    for (const button of document.querySelectorAll("[data-account-open]")) {
+      button.addEventListener("click", () => openDrawer(button));
+    }
+    for (const button of document.querySelectorAll("[data-drawer-close]")) {
+      button.addEventListener("click", closeDrawer);
+    }
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && document.body.dataset.detail === "open") closeDrawer();
+    });
+
+    setView(wantedView);
+    if (wantedView === "accounts" && params.get("account") === "1") openDrawer();
+  </script>
+</body>
+</html>

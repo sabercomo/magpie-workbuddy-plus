@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaults, initialize, readJSON, writeJSON, calendar } from "../storage.mjs";
+import { defaults, initialize, readJSON, calendar } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
 import { perform } from "../engine.mjs";
 import { buildEvents, specs } from "../events.mjs";
@@ -13,8 +13,7 @@ function fixture(t, serve, realm = "cn") {
   const dir = mkdtempSync(join(tmpdir(), "wb-plus-test-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   initialize(dir);
-  const account = { id: `${realm}:u1`, realm, name: "fixture", auth: { uid: "u1", access: "secret-token", refresh: "secret-refresh", expires: Date.now() + 86400_000 }, source: "magpie", file: join(dir, "auth.json"), key: `${realm}:u1` };
-  writeJSON(account.file, { [account.id]: account.auth });
+  const account = { id: `${realm}:u1`, realm, name: "fixture", auth: { uid: "u1", access: "secret-token", expires: Date.now() + 86400_000 }, source: "magpie" };
   const state = readJSON(join(dir, "state.json")), seen = [], logs = [];
   const config = { ...defaults };
   const client = new WorkBuddyClient(account, config, { gap: 0, fetcher: async (url, init = {}) => {
@@ -44,6 +43,7 @@ test("all performs domestic tasks without calling daily check-in", async t => {
     if (path === "/activity/growth/heatmap") return ok({ cells: [] });
     if (path === "/activity/growth/streak") return ok({ streak: { days: 1 } });
     if (path === "/activity/growth/lottery/summary") return ok({ chances: 0 });
+    if (path === "/billing/meter/compensation-status") return ok({ active: false });
     if (["/billing/meter/claim-gift", "/billing/meter/claim-compensation"].includes(path)) return ok({ credit: 0 });
     throw new Error("unexpected endpoint " + path);
   });
@@ -393,22 +393,6 @@ test("a disabled lottery stops drawing without failing WorkBuddy AI's streak ben
   await assert.rejects(p.run("bonus"), /HTTP 400，invalid client token/);
 });
 
-// A WorkBuddy AI login is renewed like China's, on its own site, so the
-// keep-alive slot keeps it alive though nothing chats on it.
-test("keepalive renews a WorkBuddy AI login on www.workbuddy.ai", async t => {
-  const p = fixture(t, path => {
-    if (path === "/v2/plugin/auth/token/refresh") return ok({ accessToken: "renewed-access", refreshToken: "renewed-refresh", expiresIn: 5184000 });
-    throw new Error("unexpected endpoint " + path);
-  }, "intl");
-  p.context.account.auth.expires = Date.now() + 60_000;
-  writeJSON(p.context.account.file, { [p.context.account.key]: p.context.account.auth });
-  const got = await p.run("keepalive");
-  assert.equal(got.renewed, true);
-  assert.equal(p.seen[0].headers.Origin, "https://www.workbuddy.ai");
-  assert.equal(readJSON(p.context.account.file)[p.context.account.key].access, "renewed-access");
-  assert.match(p.logs.at(-1), /国际版登录已续期/);
-});
-
 // The daily reward takes a finished web conversation, run the way the web app does.
 test("a WorkBuddy AI account's web conversation runs once a day through its sandbox, on a free model when there is one", async t => {
   let status = "working";
@@ -685,4 +669,128 @@ test("mini automation and the PC playbook task are accepted, reported and claime
   assert.deepEqual(await p.run("tasks"), { checked: 2 });
   assert.deepEqual(state, { Sequential_Tasks_4: "claimed", Sequential_Tasks_7: "claimed" });
   assert.equal(p.logs.at(-1), "本次领奖 2 项");
+});
+
+test("official compensation is queried first; only an unclaimed active grant is claimed", async t => {
+  let claims = 0;
+  const p = fixture(t, path => {
+    if (path === "/billing/meter/compensation-status") return ok({ active: true, claimed: false, credit_num: 500, end_time: "2026-11-22 23:59:59" });
+    if (path === "/billing/meter/claim-compensation") { claims++; return ok({ credit: 500 }); }
+    throw new Error("unexpected endpoint " + path);
+  });
+  assert.deepEqual(await p.run("compensation"), { active: true, claimed: true, credit: 500 });
+  assert.equal(claims, 1);
+  assert.ok(p.logs.some(line => /官方补偿：已领取 500 积分/.test(line)));
+});
+
+test("no active or already-claimed compensation never calls the claim endpoint", async t => {
+  for (const status of [{ active: false }, { active: true, claimed: true }]) {
+    let claims = 0;
+    const p = fixture(t, path => {
+      if (path === "/billing/meter/compensation-status") return ok(status);
+      if (path === "/billing/meter/claim-compensation") { claims++; return ok({ credit: 500 }); }
+      throw new Error("unexpected endpoint " + path);
+    });
+    const got = await p.run("compensation");
+    assert.equal(claims, 0);
+    assert.equal(got.active, status.active);
+  }
+});
+
+test("a failed compensation status query stays an error, not a claim", async t => {
+  const p = fixture(t, path => {
+    if (path === "/billing/meter/compensation-status") return Response.json({ code: 500, msg: "down" }, { status: 502 });
+    throw new Error("unexpected endpoint " + path);
+  });
+  await assert.rejects(p.run("compensation"), /HTTP 502/);
+});
+
+test("buddy opens at most the single-open cap and uses a fresh client token", async t => {
+  const opened = [];
+  const p = fixture(t, (path, request) => {
+    if (path === "/v2/activity/growth/buddy/quota") return ok({ affordable: 3, max_open_count: 2 });
+    if (path === "/v2/activity/growth/buddy/open") { opened.push(request.body); return ok({ buddy: "薄荷团子" }); }
+    throw new Error("unexpected endpoint " + path);
+  });
+  assert.deepEqual(await p.run("buddy"), { opened: 2, name: "薄荷团子" });
+  assert.equal(opened.length, 1);
+  assert.equal(opened[0].count, 2);
+  assert.equal(typeof opened[0].client_token, "string");
+  assert.ok(opened[0].client_token.length > 10);
+});
+
+test("buddy does not send an open request when energy is short", async t => {
+  let opens = 0;
+  const p = fixture(t, path => {
+    if (path === "/v2/activity/growth/buddy/quota") return ok({ affordable: 0, max_open_count: 5 });
+    if (path === "/v2/activity/growth/buddy/open") { opens++; return ok({}); }
+    throw new Error("unexpected endpoint " + path);
+  });
+  assert.deepEqual(await p.run("buddy"), { opened: 0 });
+  assert.equal(opens, 0);
+  assert.ok(p.logs.some(line => /成长能量不足/.test(line)));
+});
+
+test("buddy skips WorkBuddy AI and enterprise accounts", async t => {
+  const intl = fixture(t, path => { throw new Error("unexpected endpoint " + path); }, "intl");
+  assert.deepEqual(await intl.run("buddy"), { skipped: true, reason: "intl" });
+  const cn = fixture(t, path => { throw new Error("unexpected endpoint " + path); });
+  cn.context.account.enterprise = true;
+  assert.deepEqual(await cn.run("buddy"), { skipped: true, reason: "enterprise" });
+});
+
+test("a new expert task is read from its jump_url and completed", async t => {
+  let report = null, completed = false;
+  const jump = `workbuddy://chat?deeplink=${encodeURIComponent("workbuddy://expert?expertId=ex_Abc123")}`;
+  const p = fixture(t, (path, request) => {
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: [{
+      task_code: "expert_use_new", title: "新专家", accept_status: completed ? "completed" : "accepted",
+      progress: { current: completed ? 1 : 0, target: 1 }, jump_url: jump, reward_credit: 100
+    }] });
+    if (path === "/v2/report") { report = request.body[0]; completed = true; return ok({}); }
+    if (path === "/activity/growth/tasks/expert_use_new/claim") return ok({ credit: 100 });
+    throw new Error("unexpected endpoint " + path);
+  });
+  p.context.task = "expert_use_new";
+  assert.deepEqual(await p.run("task"), { task: "expert_use_new", outcome: "claimed" });
+  assert.equal(report.eventCode, "expert_actual_use");
+  assert.equal(report.id, "ex_Abc123");
+  assert.ok(p.logs.some(line => /已识别为专家任务/.test(line)));
+});
+
+test("the workstation expert task is a static expert task", () => {
+  assert.deepEqual(specs.workstation_expert, { kind: "expert", expert: ["WorkspaceBuilder", "工作台搭建师"] });
+});
+
+test('automatic blind boxes refresh travel state before departing', async t => {
+  let opened = false, statuses = 0;
+  const p = fixture(t, path => {
+    if (path.endsWith('/status')) { statuses++; return ok({ state: opened ? 'traveling' : 'idle' }); }
+    if (path.endsWith('/quota')) return ok({ affordable: 1, max_open_count: 1 });
+    if (path.endsWith('/open')) { opened = true; return ok({ buddy: '团子' }); }
+    throw new Error('unexpected request ' + path);
+  });
+  p.context.config.buddyAuto = true;
+  await p.run('travel');
+  assert.equal(statuses, 2);
+  assert.ok(p.seen.some(r => r.path.endsWith('/open')));
+  assert.ok(!p.seen.some(r => r.path.endsWith('/depart')));
+});
+
+test('opening the first Buddy happens once and logs the returned names before travel', async t => {
+  let opened = 0;
+  const p = fixture(t, path => {
+    if (path.endsWith('/status')) return ok({ state: opened ? 'idle' : '', daily_limit_reached: false });
+    if (path.endsWith('/quota')) return ok({ affordable: 2, max_open_count: 2 });
+    if (path.endsWith('/open')) { opened++; return ok({ buddies: [{ name: '团子' }, { name: '芝麻' }] }); }
+    if (path.endsWith('/config')) return ok({ locations: [{ id: 42, name: '杭州' }] });
+    if (path.endsWith('/tasks')) return ok({ tasks: [] });
+    if (path.endsWith('/depart')) return ok({});
+    throw new Error('unexpected request ' + path);
+  });
+  p.context.config.buddyAuto = true;
+  await p.run('travel');
+  assert.equal(opened, 1);
+  assert.ok(p.logs.some(l => l.includes('团子、芝麻')));
+  assert.ok(p.seen.findIndex(r => r.path.endsWith('/open')) < p.seen.findIndex(r => r.path.endsWith('/depart')));
 });

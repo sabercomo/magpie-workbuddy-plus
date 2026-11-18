@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WorkBuddy Plus · 定时与记录样稿</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f4f6;--fg:#1f1f24;--muted:#6e6e78;--card:#fff;--line:#e3e3e8;--accent:#4f46e5;--soft:#eeedfd;--bad:#b13f32;font:13px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",system-ui,sans-serif}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a1e;--fg:#ececf1;--muted:#9a9aa6;--card:#232327;--line:#34343b;--accent:#aaa4ff;--soft:#2b2850;--bad:#f09a8f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg)}
+main{max-width:1130px;margin:auto;padding:16px clamp(14px,3vw,28px) 32px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+header,.setting,.section-title,.row,.record-head,.filters{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
+header{margin-bottom:10px}
+h1{font-size:20px;font-weight:650;letter-spacing:-.02em;margin:0}
+h2{font-size:15px;font-weight:650;margin:0}
+p{margin:0}
+.chrome{width:32px;height:32px;display:grid;place-items:center;border-radius:7px;color:var(--muted)}
+.chrome svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6}
+.pill,.tag{font-size:11.5px;padding:2px 8px;border-radius:99px;background:var(--soft);color:var(--accent);white-space:nowrap}
+.subtitle,.meta{color:var(--muted);font-size:12px}
+nav{border-bottom:1px solid var(--line);display:flex;gap:0;overflow:auto;scrollbar-width:none;margin-bottom:14px}
+nav span{padding:8px 11px;white-space:nowrap;color:var(--muted)}
+nav .selected{border-bottom:2px solid var(--accent);color:var(--fg);font-weight:600}
+.workbench-tabs{margin:2px 0 12px}
+.workbench{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(245px,1fr);align-items:start;gap:12px}
+.workbench>.card{min-width:0}
+.workbench .section-title{gap:8px}
+@media(max-width:720px){.workbench{grid-template-columns:1fr;gap:0}}
+.segments{display:inline-flex;gap:2px;padding:3px;background:color-mix(in srgb,var(--muted) 10%,transparent);border-radius:9px;max-width:100%}
+.segments button{border:0;padding:4px 9px;border-radius:6px;background:transparent;color:var(--muted);white-space:nowrap}
+.segments button[aria-pressed="true"]{background:var(--card);color:var(--fg);font-weight:600;box-shadow:0 1px 2px #0001}
+section.card{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:12px;padding:12px 14px}
+.setting,.section-title{justify-content:space-between}
+.setting .meta{margin-top:2px}
+.setting-group{display:flex;flex-direction:column;gap:2px}
+.setting-group strong{font-weight:600}
+.settings-card .setting{min-height:52px}
+.setting input[type="checkbox"]{accent-color:var(--accent);margin:0 1px 0 auto}
+.setting-toggle{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;cursor:pointer}
+.queue-heading{display:flex;align-items:center;gap:8px}
+.queue-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:2px 0 12px}
+.account-progress{min-width:0;background:color-mix(in srgb,var(--muted) 3%,var(--card));border:1px solid var(--line);border-radius:8px;padding:9px;display:flex;flex-direction:column;gap:6px}
+.account-progress strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
+.account-progress .meta{min-height:34px;font-size:11.5px;overflow-wrap:anywhere}
+.account-state{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.state-dot{display:inline-block;width:6px;height:6px;border-radius:99px;background:var(--muted);flex:none}
+.account-state[data-state="running"] .state-dot{background:var(--accent)}
+.account-state[data-state="done"] .state-dot{background:#2e8b57}
+.account-state[data-state="retry"] .state-dot{background:#b4691b}
+.queue-summary{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.account-progress progress{width:100%;height:4px;margin-top:auto}
+.queue-records{border-top:1px solid var(--line);padding-top:10px}
+.queue-records h2{font-size:13px}
+.execution-list{margin-top:4px}
+.execution-record{border-top:1px solid var(--line)}
+.execution-record summary{display:grid;grid-template-columns:58px minmax(0,1fr) auto 10px;align-items:center;gap:8px;padding:11px 0;list-style:none;font-size:12px}
+.execution-record summary::-webkit-details-marker{display:none}
+.execution-record summary::after{content:"›";font-size:17px;line-height:1;text-align:center;color:var(--muted);transition:transform 180ms ease}
+.execution-record[open] summary::after{transform:rotate(90deg)}
+.record-body{display:flex;align-items:baseline;gap:5px 8px;min-width:0;flex-wrap:wrap}
+.record-body strong{font-weight:600}
+.record-body .meta{overflow-wrap:anywhere;min-width:0}
+.record-channel{padding:1px 5px;border-radius:4px;background:color-mix(in srgb,var(--muted) 8%,transparent);color:var(--muted);font-size:10.5px;white-space:nowrap}
+.record-time{font-size:11px;font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.execution-record>div{background:color-mix(in srgb,var(--muted) 3%,var(--card));border-radius:7px;padding:10px 12px;margin-bottom:8px}
+.retry-chain{list-style:none;margin:7px 0 0;padding:0 0 0 5px}
+.retry-chain li{position:relative;display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 10px;border-left:1px solid var(--line);padding:5px 0 8px 13px;font-size:12px}
+.retry-chain li::before{content:"";position:absolute;left:-3px;top:11px;width:5px;height:5px;border-radius:50%;background:var(--bad)}
+.retry-chain .meta{flex-basis:100%}
+.retry-chain time{margin-left:auto;color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.record-actions{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:8px}
+.record-filter-label{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer}
+.record-filter-label input{margin:0;accent-color:var(--accent)}
+.records-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:7px 12px;margin-bottom:7px}
+.records-toolbar .record-filter-label{margin-left:auto}
+.records-toolbar .segments button{padding-inline:7px}
+@media(max-width:540px){
+  .execution-record summary{grid-template-columns:50px minmax(0,1fr) 10px;gap:6px}
+  .record-time{grid-column:2;grid-row:2}
+  .execution-record summary::after{grid-column:3;grid-row:1/span 2}
+  .record-body{align-items:flex-start}
+  .queue-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(prefers-reduced-motion:reduce){.execution-record summary::after{transition:none}}
+.cache{padding:8px 0 0;border-top:1px solid var(--line)}
+.cache summary{display:flex;justify-content:space-between;align-items:center;padding:0;gap:6px}
+.cache form{display:grid;gap:5px;margin-top:7px}
+.cache label{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px}
+.cache input{width:5em}
+.setting-check{color:var(--accent);font-weight:650}
+.row,.record-head{min-height:42px;padding:8px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:none}
+.row>strong,.record-head strong{flex:0 0 5em;min-width:0}
+.section-title{padding-bottom:8px}
+.row-main{flex:1;min-width:145px}
+.status{margin-left:auto;color:var(--muted)}
+.status.running{color:var(--accent)}
+.weak{background:color-mix(in srgb,var(--muted) 11%,transparent);color:var(--muted)}
+.bad{color:var(--bad)}
+.tag.bad{background:color-mix(in srgb,var(--bad) 9%,transparent)}
+progress{width:min(18rem,95%);height:5px;vertical-align:middle;accent-color:var(--accent)}
+details > summary{cursor:pointer;padding:6px 0;color:var(--muted)}
+details[open] > summary{color:var(--fg)}
+.chain{list-style:none;margin:2px 0 8px;padding:0}
+.chain li{border-left:1px solid var(--line);margin-left:5px;padding:4px 10px}
+.chain time,.log time{font-variant-numeric:tabular-nums}
+.calendar{display:grid;grid-template-columns:repeat(auto-fill,minmax(131px,1fr));gap:8px}
+.slot{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.slot-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:3px}
+.slot strong{font-size:16px;font-variant-numeric:tabular-nums}
+.realm{padding:8px 0 0}
+.realm+.realm{margin-top:12px;border-top:1px solid var(--line)}
+.realm h3{margin:0;font-size:13px}
+.sched-note{margin-top:9px}
+.switch{padding:0;border:0;background:transparent;color:var(--accent);display:inline-flex;align-items:center;gap:8px}
+.switch::after{content:"";width:29px;height:16px;border-radius:99px;background:radial-gradient(circle at 21px 8px,#fff 5px,transparent 6px),var(--accent)}
+.switch[aria-checked="false"]{color:var(--muted)}
+.switch[aria-checked="false"]::after{background:radial-gradient(circle at 8px 8px,#fff 5px,transparent 6px),var(--muted)}
+.right-actions{margin-inline-start:auto;display:flex;gap:7px}
+.quiet{padding:4px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card);white-space:nowrap}
+.quiet.primary{border-color:transparent;color:#fff;background:var(--accent)}
+.section-link{color:var(--accent)}
+.under-title{margin-left:44px;margin-top:-6px;margin-bottom:12px}
+#logs-panel .filters{gap:6px}
+progress{max-width:100%}
+.log{display:grid;grid-template-columns:5em 5em minmax(0,1fr);align-items:start;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.filters{margin-bottom:8px}
+[hidden]{display:none!important}
+@media(max-width:540px){.row{gap:3px 7px}.row>strong{flex-basis:auto}.row-main{order:3;flex-basis:100%}.log{grid-template-columns:5em minmax(0,1fr);gap:3px 8px}.log span{grid-column:1/-1}.setting{align-items:flex-start}}
+</style>
+<main>
+<header>
+  <span class="chrome" aria-hidden="true"><svg viewBox="0 0 16 16"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="2.2"/><path d="M6.5 2.8v10.4"/></svg></span>
+  <h1>WorkBuddy Plus</h1><span class="pill">定时运行中 · 今日已完成</span>
+  <div class="right-actions"><span class="quiet primary">▶ 立即执行</span><span class="quiet">＋ 添加账号</span><span class="quiet">设置</span></div>
+</header>
+<p class="meta under-title">余额更新于 11/17 22:49 · <span class="section-link">刷新</span></p>
+<nav aria-label="主导航"><span>看板</span><span>账号</span><span>任务</span><span class="selected">定时与记录</span><span>模型</span></nav>
+<section class="card" aria-label="今日定时">
+  <div class="section-title"><h2>今日定时 · 每天 9 次</h2><p class="meta">今天的时段都已过　 <span class="section-link">调整时段与错开</span></p></div>
+  <div class="realm">
+    <div class="section-title"><h3>国内版</h3><button type="button" class="switch" role="switch" aria-label="国内版定时" aria-checked="true">运行中</button></div>
+    <div class="calendar">
+      <div class="slot"><div class="slot-head"><strong>00:58</strong><span class="tag">完成</span></div><span class="meta">夜猫子</span></div>
+      <div class="slot"><div class="slot-head"><strong>08:59</strong><span class="tag bad">失败 3/3</span></div><span class="meta">活跃 · 旅行 · 福利</span></div>
+      <div class="slot"><div class="slot-head"><strong>09:17</strong><span class="tag">完成</span></div><span class="meta">成长任务</span></div>
+      <div class="slot"><div class="slot-head"><strong>09:51</strong><span class="tag">完成</span></div><span class="meta">补领清扫</span></div>
+      <div class="slot"><div class="slot-head"><strong>21:10</strong><span class="tag">完成</span></div><span class="meta">活跃 · 旅行 · 福利</span></div>
+      <div class="slot"><div class="slot-head"><strong>21:15</strong><span class="tag">完成</span></div><span class="meta">成长任务</span></div>
+      <div class="slot"><div class="slot-head"><strong>22:07</strong><span class="tag">完成</span></div><span class="meta">补领清扫</span></div>
+    </div>
+  </div>
+  <div class="realm">
+    <div class="section-title"><h3>国际版</h3><button type="button" class="switch" role="switch" aria-label="国际版定时" aria-checked="true">运行中</button></div>
+    <div class="calendar">
+      <div class="slot"><div class="slot-head"><strong>09:05</strong><span class="tag bad">失败 3/3</span></div><span class="meta">活跃 · 签到 · 福利</span></div>
+      <div class="slot"><div class="slot-head"><strong>21:01</strong><span class="tag">完成</span></div><span class="meta">活跃 · 签到 · 福利</span></div>
+    </div>
+  </div>
+  <p class="meta sched-note">时段在「设置」里调整，每类最多 24 个；每个时段在设定时间前后 10 分钟内随机执行，每天不同；电脑睡眠时不执行，唤醒后补跑当天已到点的时段。</p>
+</section>
+<div class="segments workbench-tabs" role="group" aria-label="查看方式">
+  <button type="button" data-tab="queue" aria-pressed="true">队列</button>
+  <button type="button" data-tab="runs" aria-pressed="false">执行记录</button>
+  <button type="button" data-tab="logs" aria-pressed="false">日志</button>
+</div>
+<div class="workbench">
+  <section class="card" aria-label="任务活动">
+    <div data-panel="queue">
+      <div class="section-title">
+        <div class="queue-heading"><span class="state-dot" aria-hidden="true"></span><h2>任务队列进度</h2></div>
+        <button type="button" class="quiet" id="advance-queue">推进示例</button>
+      </div>
+      <div class="queue-grid" id="queue-cards"></div>
+      <div class="queue-summary"><span class="meta" id="queue-count" role="status"></span><span class="meta">同一账号的任务依次运行</span></div>
+      <div class="queue-records">
+        <div class="section-title"><h2>需要关注的失败</h2></div>
+        <details class="execution-record" open>
+          <summary><span class="bad">待重试</span><span class="record-body"><span class="record-channel">任务</span><strong>成长任务</strong><span class="meta">测试号 · 上游限流</span></span><time class="record-time">11/17 10:52</time></summary>
+          <div>
+            <p class="meta">请求重试明细</p>
+            <ol class="retry-chain">
+              <li><strong>首次请求</strong><span class="bad">HTTP 429</span><time>10:52:01</time><span class="meta">上游拒绝请求，等待 5 秒。</span></li>
+              <li><strong>重试 1/2</strong><span class="bad">HTTP 429</span><time>10:52:06</time><span class="meta">上游仍在限流，等待 20 秒。</span></li>
+              <li><strong>重试 2/2</strong><span class="bad">HTTP 429</span><time>10:52:26</time><span class="meta">本次请求结束，等待下一次定时补跑。</span></li>
+            </ol>
+            <div class="record-actions"><button type="button" class="quiet primary" data-retry>现在重试</button><button type="button" class="quiet" data-pause>暂停此号任务</button><span class="meta" id="retry-note" role="status"></span></div>
+          </div>
+        </details>
+      </div>
+    </div>
+    <div data-panel="runs" hidden>
+      <div class="records-toolbar">
+        <h2>执行记录</h2>
+        <div class="segments" aria-label="记录频道">
+          <button type="button" data-run-channel="all" aria-pressed="true">全部</button>
+          <button type="button" data-run-channel="task" aria-pressed="false">任务</button>
+          <button type="button" data-run-channel="chat" aria-pressed="false">对话</button>
+          <button type="button" data-run-channel="system" aria-pressed="false">系统</button>
+        </div>
+        <label class="record-filter-label"><input type="checkbox" id="run-errors">仅看失败</label>
+      </div>
+      <div class="execution-list">
+        <details class="execution-record" data-run="task" data-failed open>
+          <summary><span class="bad">待重试</span><span class="record-body"><span class="record-channel">任务</span><strong>成长任务</strong><span class="meta">成功 0 / 失败 1 · 测试号</span></span><time class="record-time">11/17 10:52</time></summary>
+          <div><p class="meta">请求重试明细</p><ol class="retry-chain">
+            <li><strong>首次请求</strong><span class="bad">HTTP 429</span><time>10:52:01</time><span class="meta">上游限流，等待 5 秒。</span></li>
+            <li><strong>重试 1/2</strong><span class="bad">HTTP 429</span><time>10:52:06</time><span class="meta">等待 20 秒后再次尝试。</span></li>
+            <li><strong>重试 2/2</strong><span class="bad">HTTP 429</span><time>10:52:26</time><span class="meta">请求重试结束，等待定时补跑。</span></li>
+          </ol></div>
+        </details>
+        <details class="execution-record" data-run="task">
+          <summary><span class="section-link">已完成</span><span class="record-body"><span class="record-channel">任务</span><strong>补领奖励</strong><span class="meta">成功 3 / 失败 0 · 主力号</span></span><time class="record-time">11/17 11:54</time></summary>
+          <div class="meta">已领取 3 项达标奖励，共 80 积分。</div>
+        </details>
+        <details class="execution-record" data-run="system">
+          <summary><span class="section-link">已完成</span><span class="record-body"><span class="record-channel">系统</span><strong>签到校验</strong><span class="meta">备用号 · 今日已签到</span></span><time class="record-time">11/17 11:28</time></summary>
+          <div class="meta">上游状态显示今天已签到，已更新看板。</div>
+        </details>
+        <details class="execution-record" data-run="chat" data-failed>
+          <summary><span class="bad">部分失败</span><span class="record-body"><span class="record-channel">对话</span><strong>网页会话</strong><span class="meta">成功 1 / 失败 1 · 国际号</span></span><time class="record-time">11/17 10:42</time></summary>
+          <div class="meta">原模型额度已用完，改用备用模型后完成网页会话。</div>
+        </details>
+      </div>
+      <p class="meta" id="runs-empty" hidden>此筛选下没有执行记录。</p>
+    </div>
+    <div data-panel="logs" id="logs-panel" hidden>
+    <div class="filters">
+      <div class="segments" aria-label="日志频道"><button type="button" data-channel="all" aria-pressed="true">全部</button><button type="button" data-channel="task" aria-pressed="false">任务 2</button><button type="button" data-channel="chat" aria-pressed="false">对话 1</button><button type="button" data-channel="system" aria-pressed="false">系统 2</button></div>
+      <div class="segments" aria-label="结果筛选"><button type="button" data-result="all" aria-pressed="true">全部结果</button><button type="button" data-result="error" aria-pressed="false">仅失败 2</button></div>
+    </div>
+    <div class="log" data-entry="task"><time>18:24:01</time><strong>主力号</strong><span>开出 2 个 Buddy · 团子、芝麻</span></div>
+    <div class="log" data-entry="task" data-error><time>18:23:12</time><strong>备用号</strong><span class="bad">补偿查询失败 · 连接超时</span></div>
+    <div class="log" data-entry="chat"><time>10:31:23</time><strong>国际号</strong><span>网页会话已完成 · 耗时 12 秒</span></div>
+    <div class="log" data-entry="system"><time>09:40:00</time><strong>后台服务</strong><span>网络已恢复，解除自动任务暂停</span></div>
+    <div class="log" data-entry="system" data-error><time>09:30:00</time><strong>后台服务</strong><span class="bad">网络连接失败，自动任务暂停</span></div>
+    <p class="meta" id="log-empty" hidden>此筛选下没有日志。</p>
+    </div>
+  </section>
+  <section class="card settings-card" aria-label="任务设置">
+    <div class="section-title"><h2>任务设置</h2></div>
+    <div class="setting row">
+      <div class="setting-group"><strong>账号并发</strong><span class="meta">1–3 个账号，默认 1</span></div>
+      <div class="segments" aria-label="同时运行的账号数"><button type="button" data-limit="1" aria-pressed="true">1</button><button type="button" data-limit="2" aria-pressed="false">2</button><button type="button" data-limit="3" aria-pressed="false">3</button></div>
+    </div>
+    <div class="setting row">
+      <label class="setting-toggle"><span class="setting-group"><strong>旅行后自动开盲盒</strong><span class="meta">默认关闭</span></span><input type="checkbox"></label>
+    </div>
+    <div class="setting row">
+      <div class="setting-group"><strong>补偿先查后领</strong><span class="meta">剩 48 小时内标红</span></div><span class="setting-check" aria-label="已启用">✓</span>
+    </div>
+    <details class="cache">
+      <summary><span class="setting-group"><strong>缓存</strong><span class="meta">任务列表 20 秒 · 进度 6 小时</span></span><span class="quiet">调整</span></summary>
+      <form><label>任务列表（秒）<input type="number" min="0" value="20"></label><label>展示进度（小时）<input type="number" min="0" value="6"></label></form>
+    </details>
+  </section>
+</div>
+<p class="meta">交互样稿 · 示例数据</p>
+</main>
+<script>
+function selected(button, selector) {
+  document.querySelectorAll(selector).forEach(item => item.setAttribute("aria-pressed", String(item === button)));
+}
+document.querySelectorAll(".switch").forEach(button => button.onclick = () => {
+  const enabled = button.getAttribute("aria-checked") === "false";
+  button.setAttribute("aria-checked", String(enabled));
+  button.textContent = enabled ? "运行中" : "已暂停";
+});
+document.querySelectorAll("[data-tab]").forEach(button => button.onclick = () => {
+  selected(button, "[data-tab]");
+  document.querySelectorAll("[data-panel]").forEach(panel => panel.hidden = button.dataset.tab !== panel.dataset.panel);
+});
+const view = new URLSearchParams(location.search).get("view");
+if (view === "logs" || view === "runs") document.querySelector('[data-tab="' + view + '"]').click();
+document.querySelector("[data-retry]").onclick = event => {
+  queueItems.at(-1).retry = false;
+  queueItems.at(-1).paused = false;
+  renderQueue();
+  document.querySelector("#retry-note").textContent = "重试已进入示例队列。";
+  event.currentTarget.disabled = true;
+};
+document.querySelectorAll("[data-pause]").forEach(button => button.onclick = () => {
+  const paused = button.textContent.startsWith("暂停");
+  button.textContent = paused ? "恢复任务" : "暂停此号任务";
+  queueItems.at(-1).paused = paused;
+  renderQueue();
+});
+let limit = 1;
+const queueItems = [
+  { name: "主力号", step: "补领奖励已完成", done: true },
+  { name: "备用号", step: "猫猫旅行与盲盒配额" },
+  { name: "国际号", step: "每日网页会话" },
+  { name: "体验号", step: "看板照常刷新", paused: true },
+  { name: "测试号", step: "上游限流，等待补跑", retry: true }
+];
+function renderQueue() {
+  const mount = document.querySelector("#queue-cards");
+  let running = 0, waiting = 0;
+  mount.replaceChildren();
+  for (const item of queueItems) {
+    const active = !item.done && !item.paused && !item.retry && running < limit;
+    const state = item.done ? "done" : item.paused ? "paused" : item.retry ? "retry" : active ? "running" : "queued";
+    if (active) running++;
+    if (state === "queued") waiting++;
+    const card = document.createElement("div");
+    card.className = "account-progress";
+    const title = document.createElement("strong");
+    title.textContent = item.name;
+    const status = document.createElement("span");
+    status.className = "account-state";
+    status.dataset.state = state;
+    const dot = document.createElement("span");
+    dot.className = "state-dot";
+    dot.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.textContent = {done:"已完成",paused:"已暂停",retry:"待重试",running:"执行中",queued:"排队中"}[state];
+    status.append(dot, label);
+    const detail = document.createElement("p");
+    detail.className = "meta";
+    detail.textContent = state === "queued" ? "排队第 " + waiting + " 位" : item.step;
+    card.append(title, status, detail);
+    if (active) {
+      const progress = document.createElement("progress");
+      progress.value = 2;
+      progress.max = 4;
+      progress.setAttribute("aria-label", item.name + "本轮已完成的动作数");
+      card.append(progress);
+    }
+    mount.append(card);
+  }
+  document.querySelector("#queue-count").textContent = "并发上限 " + limit + " · " + running + " 个运行中 · " + waiting + " 个等待";
+}
+renderQueue();
+document.querySelectorAll("[data-limit]").forEach(button => button.onclick = () => {
+  selected(button, "[data-limit]");
+  limit = Number(button.dataset.limit);
+  renderQueue();
+});
+document.querySelector("#advance-queue").onclick = () => {
+  const next = queueItems.find(item => !item.done && !item.paused && !item.retry);
+  if (next) next.done = true;
+  else queueItems.filter(item => !item.paused && !item.retry).forEach(item => item.done = false);
+  renderQueue();
+};
+function filterRuns() {
+  const channel = document.querySelector('[data-run-channel][aria-pressed="true"]').dataset.runChannel;
+  const failuresOnly = document.querySelector("#run-errors").checked;
+  const rows = [...document.querySelectorAll("[data-run]")];
+  rows.forEach(row => row.hidden = (channel !== "all" && row.dataset.run !== channel) || (failuresOnly && !row.hasAttribute("data-failed")));
+  document.querySelector("#runs-empty").hidden = rows.some(row => !row.hidden);
+}
+document.querySelectorAll("[data-run-channel]").forEach(button => button.onclick = () => {
+  selected(button, "[data-run-channel]");
+  filterRuns();
+});
+document.querySelector("#run-errors").onchange = filterRuns;
+document.querySelectorAll("[data-channel], [data-result]").forEach(button => button.onclick = () => {
+  selected(button, button.dataset.channel ? "[data-channel]" : "[data-result]");
+  const channel = document.querySelector('[data-channel][aria-pressed="true"]').dataset.channel;
+  const onlyFailed = document.querySelector('[data-result][aria-pressed="true"]').dataset.result === "error";
+  const logs = [...document.querySelectorAll("[data-entry]")];
+  logs.forEach(row => row.hidden = (channel !== "all" && channel !== row.dataset.entry) || (onlyFailed && !row.hasAttribute("data-error")));
+  document.querySelector("#log-empty").hidden = logs.some(row => !row.hidden);
+});
+</script>
+</html>

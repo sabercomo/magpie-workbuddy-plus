@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>WorkBuddy Plus · 账号与健康响应式样稿</title>
+  <style>
+    /* Hallmark · pre-emit critique: P5 H4 E5 S5 R5 V4
+     * macrostructure: Data workbench · genre: modern-minimal · design-system: DESIGN.md · designed-as-app
+     * spacing: 4pt semantic scale · contrast: pass (40–41) · mobile: pass (34,49,50–57)
+     */
+    :root {
+      color-scheme: light dark;
+      --color-paper: oklch(96.4% 0.003 286);
+      --color-surface: oklch(100% 0 0);
+      --color-inset: oklch(98.4% 0.002 286);
+      --color-ink: oklch(25.5% 0.011 285);
+      --color-muted: oklch(53.5% 0.018 285);
+      --color-rule: oklch(91.2% 0.006 286);
+      --color-accent: oklch(54.5% 0.23 285);
+      --color-accent-ink: oklch(100% 0 0);
+      --color-accent-soft: oklch(94.5% 0.035 285);
+      --color-ok: oklch(53.5% 0.12 150);
+      --color-warn: oklch(55% 0.12 65);
+      --color-bad: oklch(50% 0.15 30);
+      --color-track: oklch(53.5% 0.018 285 / 0.12);
+      --shadow-control: 0 1px 2px oklch(20% 0.01 285 / 0.16);
+      --shadow-menu: 0 10px 28px oklch(20% 0.01 285 / 0.15);
+      --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", system-ui, sans-serif;
+      --font-display: var(--font-body);
+      --space-3xs: 0.125rem;
+      --space-2xs: 0.25rem;
+      --space-xs: 0.5rem;
+      --space-sm: 0.75rem;
+      --space-md: 1rem;
+      --space-lg: 1.5rem;
+      --space-xl: 2.5rem;
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --dur-short: 160ms;
+      --dur-medium: 220ms;
+      --radius-control: 7px;
+      --radius-card: 12px;
+      --radius-pill: 999px;
+      font: 13px/1.5 var(--font-body);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-paper: oklch(23.5% 0.009 285);
+        --color-surface: oklch(28.5% 0.009 285);
+        --color-inset: oklch(26.5% 0.009 285);
+        --color-ink: oklch(93.5% 0.007 285);
+        --color-muted: oklch(68% 0.015 285);
+        --color-rule: oklch(34% 0.012 285);
+        --color-accent: oklch(73% 0.14 285);
+        --color-accent-ink: oklch(18% 0.01 285);
+        --color-accent-soft: oklch(30% 0.07 285);
+        --color-ok: oklch(78% 0.10 150);
+        --color-warn: oklch(80% 0.09 65);
+        --color-bad: oklch(77% 0.10 30);
+        --color-track: oklch(93.5% 0.007 285 / 0.10);
+        --shadow-control: 0 1px 2px oklch(5% 0 0 / 0.3);
+        --shadow-menu: 0 10px 28px oklch(5% 0 0 / 0.3);
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { overflow-x: clip; }
+    body {
+      margin: 0;
+      background: var(--color-paper);
+      color: var(--color-ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; white-space: nowrap; }
+    button:active:not(:disabled) { transform: scale(.98); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button:focus-visible, summary:focus-visible, input:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: var(--space-3xs);
+    }
+    h1, h2, strong, .account-name { min-width: 0; overflow-wrap: anywhere; }
+    .shell { width: min(1190px, 100%); margin: 0 auto; padding: var(--space-md) var(--space-lg) 112px; }
+    .topbar, .brandline, .header-actions, .nav, .toolbar, .summary, .filters,
+    .account-label, .row-actions, .status, .details-head {
+      display: flex;
+      align-items: center;
+    }
+    .topbar {
+      justify-content: space-between;
+      gap: var(--space-md);
+      flex-wrap: wrap;
+      padding-bottom: var(--space-md);
+    }
+    .brandline { gap: var(--space-xs); flex-wrap: wrap; }
+    .nav-toggle {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: var(--radius-control);
+      background: transparent;
+      color: var(--color-muted);
+    }
+    .nav-toggle:hover { background: var(--color-track); color: var(--color-ink); }
+    h1 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: -.02em; font-weight: 650; }
+    h2 { margin: 0; font-size: 16px; font-weight: 650; }
+    .pill {
+      padding: var(--space-3xs) var(--space-xs);
+      border-radius: var(--radius-pill);
+      background: var(--color-accent-soft);
+      color: var(--color-accent);
+      font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .header-sub { margin: var(--space-2xs) 0 0 40px; color: var(--color-muted); font-size: 11.5px; }
+    .header-actions { margin-left: auto; gap: var(--space-xs); flex-wrap: wrap; }
+    .button {
+      padding: var(--space-xs) var(--space-sm);
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-control);
+      background: var(--color-surface);
+      font-size: 12px;
+      transition: background-color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
+    }
+    .button:hover { background: var(--color-accent-soft); }
+    .primary { border-color: var(--color-accent); background: var(--color-accent); color: var(--color-accent-ink); font-weight: 600; }
+    .primary:hover { background: var(--color-accent); filter: brightness(1.07); }
+    .nav {
+      gap: var(--space-2xs);
+      padding: var(--space-xs) 0;
+      border-top: 1px solid var(--color-rule);
+      border-bottom: 1px solid var(--color-rule);
+      overflow-x: auto;
+      scrollbar-width: none;
+      color: var(--color-muted);
+      white-space: nowrap;
+    }
+    .nav span, .nav a {
+      padding: var(--space-2xs) var(--space-xs);
+      color: inherit;
+      text-decoration: none;
+    }
+    .nav .selected { position: relative; color: var(--color-ink); font-weight: 600; }
+    .nav .selected::after {
+      content: "";
+      position: absolute;
+      left: var(--space-xs);
+      right: var(--space-xs);
+      bottom: calc(var(--space-2xs) * -2);
+      height: 2px;
+      border-radius: 2px;
+      background: var(--color-accent);
+    }
+    main { width: 100%; padding-top: var(--space-md); }
+    .intro { margin-bottom: var(--space-md); }
+    .intro p { margin: var(--space-2xs) 0 0; color: var(--color-muted); font-size: 11.5px; }
+    .toolbar { justify-content: space-between; gap: var(--space-md); flex-wrap: wrap; margin-bottom: var(--space-sm); }
+    .summary { gap: var(--space-md); flex-wrap: wrap; color: var(--color-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    .summary span, .status { gap: var(--space-xs); }
+    .summary strong { color: var(--color-ink); font-weight: 650; }
+    .dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+    .ok { color: var(--color-ok); }
+    .warn { color: var(--color-warn); }
+    .bad { color: var(--color-bad); }
+    .neutral { color: var(--color-muted); }
+    .segments {
+      display: flex;
+      gap: var(--space-2xs);
+      padding: var(--space-2xs);
+      border-radius: var(--radius-control);
+      background: color-mix(in srgb, var(--color-muted) 10%, transparent);
+    }
+    .segments button {
+      padding: var(--space-2xs) var(--space-sm);
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--color-muted);
+      font-size: 11.5px;
+    }
+    .segments button[aria-pressed="true"] {
+      background: var(--color-surface);
+      color: var(--color-ink);
+      box-shadow: var(--shadow-control);
+      font-weight: 600;
+    }
+    .selection-note { min-height: 1lh; margin: 0 0 var(--space-xs); color: var(--color-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    .matrix {
+      width: 100%;
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-card);
+      background: var(--color-surface);
+      overflow: visible;
+    }
+    .matrix-head, .account-row {
+      display: grid;
+      grid-template-columns: 32px repeat(3, minmax(0, 1fr));
+      gap: var(--space-md);
+    }
+    .matrix-head {
+      align-items: center;
+      padding: var(--space-xs) var(--space-md);
+      border-bottom: 1px solid var(--color-rule);
+      border-radius: var(--radius-card) var(--radius-card) 0 0;
+      background: var(--color-inset);
+      color: var(--color-muted);
+      font-size: 10.5px;
+      font-weight: 500;
+    }
+    .matrix-head span:last-child { text-align: left; }
+    .account-list { display: flex; flex-direction: column; }
+    .account-row {
+      position: relative;
+      align-items: center;
+      min-height: 88px;
+      padding: var(--space-md);
+      border-top: 1px solid var(--color-rule);
+    }
+    .account-row:first-child { border-top: 0; }
+    .account-row:hover { background: color-mix(in srgb, var(--color-muted) 3%, transparent); }
+    .account-row.selected { background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface)); }
+    .select-cell { display: flex; align-items: center; }
+    input[type="checkbox"] { margin: 0; accent-color: var(--color-accent); cursor: pointer; }
+    .account { gap: var(--space-xs); min-width: 0; }
+    .avatar {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      flex: none;
+      border-radius: 50%;
+      background: var(--color-accent-soft);
+      color: var(--color-accent);
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .row-toggle {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+      padding: 0;
+      border: 0;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 650;
+      text-align: start;
+    }
+    .row-toggle i { color: var(--color-muted); font-style: normal; font-size: 16px; line-height: 1; transition: transform var(--dur-short) var(--ease-out); }
+    .row-toggle[aria-expanded="true"] i { transform: rotate(90deg); }
+    .account-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cell-meta { margin-top: var(--space-2xs); color: var(--color-muted); font-size: 10.5px; line-height: 1.5; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .health-cell { min-width: 0; }
+    .row-actions { justify-content: flex-start; gap: var(--space-2xs); opacity: .68; }
+    .account-row:hover .row-actions, .account-row:focus-within .row-actions { opacity: 1; }
+    .text-button {
+      padding: var(--space-2xs) var(--space-xs);
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: inherit;
+      font-size: 11.5px;
+    }
+    .text-button:hover { background: var(--color-accent-soft); color: var(--color-accent); }
+    .pause-action {
+      min-height: 30px;
+      padding: var(--space-2xs) var(--space-xs);
+      border: 1px solid var(--color-rule);
+      border-radius: 6px;
+      background: var(--color-surface);
+      color: var(--color-ink);
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+    .pause-action:hover { background: var(--color-accent-soft); color: var(--color-accent); }
+    .pause-action.paused { border-color: transparent; background: var(--color-accent-soft); color: var(--color-accent); }
+    .menu { position: relative; }
+    .menu summary {
+      list-style: none;
+      padding: var(--space-2xs) var(--space-xs);
+      border-radius: 5px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .menu summary::-webkit-details-marker { display: none; }
+    .menu summary:hover { background: var(--color-accent-soft); color: var(--color-accent); }
+    .menu-list {
+      position: absolute;
+      top: calc(100% + var(--space-2xs));
+      right: 0;
+      z-index: 100;
+      min-width: 136px;
+      padding: var(--space-2xs);
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-control);
+      background: var(--color-surface);
+      box-shadow: var(--shadow-menu);
+    }
+    .menu-list button { display: block; width: 100%; text-align: start; }
+    .drawer {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transition: grid-template-rows var(--dur-medium) var(--ease-out), opacity var(--dur-short) var(--ease-out);
+    }
+    .drawer.open { grid-template-rows: 1fr; opacity: 1; }
+    .drawer-inner { min-height: 0; overflow: hidden; }
+    .diagnostics {
+      padding: 0;
+    }
+    .details-head { justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; }
+    .details-head p { margin: var(--space-2xs) 0 0; }
+    .retry-chain {
+      list-style: none;
+      margin: var(--space-sm) 0 0;
+      padding: var(--space-sm) 0 0;
+      border-top: 1px solid var(--color-rule);
+    }
+    .retry-chain li {
+      position: relative;
+      margin-inline-start: var(--space-2xs);
+      padding: var(--space-2xs) 0 var(--space-xs) var(--space-sm);
+      border-inline-start: 1px solid var(--color-rule);
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-2xs) var(--space-sm);
+      flex-wrap: wrap;
+      font-size: 11.5px;
+    }
+    .retry-chain li::before {
+      content: "";
+      position: absolute;
+      inset-inline-start: -2px;
+      top: var(--space-sm);
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--color-bad);
+    }
+    .retry-chain time { margin-inline-start: auto; color: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .retry-chain .meta { flex-basis: 100%; }
+    .hint { margin: var(--space-sm) var(--space-3xs) 0; color: var(--color-muted); font-size: 11.5px; }
+    .feedback { min-height: 1lh; margin: var(--space-xs) var(--space-3xs) 0; color: var(--color-accent); font-size: 12px; }
+    .footer { margin-top: var(--space-md); color: var(--color-muted); font-size: 10.5px; }
+    .batchbar {
+      position: fixed;
+      z-index: 200;
+      left: 50%;
+      bottom: var(--space-lg);
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      width: 480px;
+      max-width: calc(100vw - 28px);
+      padding: var(--space-2xs);
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-control);
+      background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+      box-shadow: var(--shadow-menu);
+      backdrop-filter: blur(18px);
+      transform: translate(-50%, var(--space-sm));
+      opacity: 0;
+      pointer-events: none;
+      transition: transform var(--dur-medium) var(--ease-out), opacity var(--dur-short) var(--ease-out);
+    }
+    .batchbar.visible { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+    .batchbar .text-button { width: 100%; min-height: 40px; padding: var(--space-xs) var(--space-2xs); text-align: center; }
+    @media (max-width: 900px) {
+      .matrix { border: 0; background: transparent; overflow: visible; }
+      .matrix-head { display: none; }
+      .account-list { gap: var(--space-sm); }
+      .account-row {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: var(--space-sm);
+        padding: var(--space-md);
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+        background: var(--color-surface);
+      }
+      .account-row:first-child { border-top: 1px solid var(--color-rule); }
+      .account-row + .account-row { border-top: 1px solid var(--color-rule); }
+      .select-cell { grid-column: 1; grid-row: 1; }
+      .account-primary { grid-column: 2; grid-row: 1; }
+      .row-actions { grid-column: 3; grid-row: 1; align-self: start; }
+      .health-cell {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 104px minmax(0, 1fr);
+        gap: var(--space-sm);
+        padding-top: var(--space-sm);
+        border-top: 1px solid var(--color-rule);
+      }
+      .health-cell::before {
+        content: attr(data-label);
+        color: var(--color-muted);
+        font-size: 10.5px;
+        font-weight: 500;
+      }
+      .health-content { min-width: 0; }
+      .drawer { grid-column: 1 / -1; }
+      .menu-list { right: auto; left: 0; }
+    }
+    @media (max-width: 600px) {
+      .shell { padding: var(--space-md) var(--space-sm) 128px; }
+      .header-sub { margin-inline-start: 0; }
+      .header-actions { gap: var(--space-xs); }
+      .header-actions .button { font-size: 11.5px; }
+      .nav { gap: 0; }
+      .summary { gap: var(--space-xs) var(--space-md); }
+      .filters, .segments { width: 100%; }
+      .segments button { flex: 1; padding-inline: var(--space-2xs); }
+      .batchbar { bottom: var(--space-sm); }
+      .row-actions { opacity: 1; }
+    }
+    @media (max-width: 460px) {
+      .header-actions { width: 100%; }
+      .header-actions .button { flex: 1; text-align: center; }
+      .health-cell { grid-column: 1 / -1; grid-template-columns: 88px minmax(0, 1fr); }
+      .details-head { align-items: flex-start; flex-direction: column; }
+    }
+    @media (pointer: coarse) {
+      .button, .nav-toggle, .text-button, .segments button, summary { min-height: 44px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .drawer, .batchbar, .row-toggle i { transition: none; }
+      .button:active, .text-button:active { transform: none; }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      .batchbar { background: var(--color-surface); backdrop-filter: none; }
+    }
+    @media (prefers-contrast: more) {
+      .matrix, .account-row, .batchbar, .button { border-color: var(--color-ink); }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="topbar">
+        <div class="brandline">
+          <button class="nav-toggle" type="button" aria-label="切换导航样式">◫</button>
+          <h1>WorkBuddy Plus</h1>
+          <span class="pill">● 定时运行中 · 下次 21:10</span>
+        </div>
+        <div class="header-actions">
+          <button class="button primary" type="button">▶ 立即执行</button>
+          <button class="button" type="button">＋ 添加账号</button>
+          <button class="button" type="button">设置</button>
+        </div>
+      </div>
+      <p class="header-sub">余额更新于 11/18 20:43 · 刷新</p>
+      <nav class="nav" aria-label="主导航">
+        <span>看板 <small>6 账号</small></span>
+        <span class="selected">账号与健康</span>
+        <span>任务 <small>2 待办</small></span>
+        <a href="schedule-queue-review.html">定时与记录</a>
+        <span>模型</span>
+      </nav>
+    </header>
+
+    <section class="intro">
+      <h2>账号与健康</h2>
+      <p>查看各号的任务、签到和健康状态。暂停任务后，看板继续更新。</p>
+    </section>
+    <div class="toolbar">
+      <div class="summary" id="health-summary"></div>
+      <div class="filters"><div class="segments" aria-label="账号范围" id="filters"></div></div>
+    </div>
+    <p id="selected-count" class="selection-note" role="status"></p>
+    <div class="matrix">
+      <div class="matrix-head" aria-hidden="true"><span></span><span>账号</span><span>健康状态 · 下次定时</span><span>停用账号</span></div>
+      <div class="account-list" id="accounts" aria-label="账号健康与任务列表"></div>
+    </div>
+    <p class="hint">点击账号名称展开诊断与最近失败重试链；勾选后批量操作。</p>
+    <p class="feedback" role="status" id="feedback"></p>
+    <p class="footer">独立交互样稿 · 全部为虚构数据 · 宽屏为矩阵，窄屏为完整账号卡片</p>
+  </main>
+  <div class="batchbar" id="batchbar" aria-label="批量操作" inert>
+    <button class="text-button" type="button" data-batch="balance">刷新余额</button>
+    <button class="text-button" type="button" data-batch="pause">暂停账号任务</button>
+    <button class="text-button" type="button" id="clear">取消选择</button>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const el = (tag, className, text) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const accounts = [
+      { id: "a", name: "主力号", kind: "cn", state: "normal", status: "正常", tone: "ok", success: "20:43 余额刷新", failures: 0, next: "21:10 活跃 · 旅行", points: "107 / 8,840 积分", expiry: "最近一笔积分 11/22 作废" },
+      { id: "b", name: "备用号", kind: "cn", state: "limited", status: "请求退避 · 20 秒", tone: "warn", success: "20:30 猫猫派出", failures: 1, next: "21:10 活跃 · 旅行", points: "437 / 7,025 积分", expiry: "最近一笔积分 11/25 作废", retries: [["首次请求", "20:41:02", "HTTP 429", "等待 5 秒后重试"], ["重试 1/2", "20:41:07", "HTTP 429", "等待 20 秒后重试"]] },
+      { id: "c", name: "工作号", kind: "cn", state: "paused", status: "任务已暂停", tone: "neutral", success: "20:42 余额刷新", failures: 0, next: "暂停期间不执行", points: "1,191 / 3,364 积分", expiry: "最近一笔积分 11/28 作废" },
+      { id: "d", name: "企业账号", kind: "enterprise", state: "normal", status: "正常 · 只读看板", tone: "ok", success: "20:43 余额同步", failures: 0, next: "仅刷新看板", points: "43 / 2,000 积分", expiry: "12/01 月度额度重置" },
+      { id: "e", name: "海外号", kind: "intl", state: "failed", status: "连续失败 · 3 次", tone: "bad", success: "11/17 21:01", failures: 3, next: "21:01 活跃 · 福利", points: "55 / 460 积分", expiry: "最近一笔积分 12/01 作废", retries: [["首次请求", "20:01:04", "HTTP 429", "等待 5 秒后重试"], ["重试 1/2", "20:01:09", "HTTP 429", "等待 20 秒后重试"], ["重试 2/2", "20:01:29", "HTTP 429", "本轮请求停止重试，等待定时补跑"]] },
+      { id: "f", name: "测试号", kind: "cn", state: "quota", status: "模型额度用完", tone: "warn", success: "19:10 余额刷新", failures: 0, next: "21:10 活跃 · 旅行", points: "0 / 1,500 积分", expiry: "模型额度 22:56 恢复" }
+    ];
+    const selected = new Set();
+    const expanded = new Set();
+    let scope = "all";
+
+    const visible = () => accounts.filter(account =>
+      scope === "all" ||
+      scope === "cn" && account.kind === "cn" ||
+      scope === "abnormal" && account.state !== "normal"
+    );
+    const status = (text, tone) => {
+      const node = el("span", `status ${tone}`);
+      node.append(el("i", "dot"), text);
+      return node;
+    };
+    const actionButton = (text, run) => {
+      const button = el("button", "text-button", text);
+      button.type = "button";
+      button.onclick = run;
+      return button;
+    };
+    function feedback(text) {
+      $("feedback").textContent = text;
+    }
+    function perform(account, action) {
+      const names = { retry: "重试失败操作" };
+      feedback(`样稿演示：已提交 ${account.name} 的${names[action]}，执行结果以后台回传为准。`);
+    }
+    function pause(account) {
+      account.state = account.state === "paused" ? "normal" : "paused";
+      account.status = account.state === "paused" ? "任务已暂停" : "正常";
+      account.tone = account.state === "paused" ? "neutral" : "ok";
+      account.next = account.state === "paused" ? "暂停期间不执行" : "21:10 活跃 · 旅行";
+      feedback(`样稿演示：${account.name} ${account.state === "paused" ? "任务已暂停，看板继续更新" : "已恢复任务"}`);
+      render();
+    }
+    function renderSummary() {
+      const summary = $("health-summary");
+      summary.replaceChildren();
+      for (const [text, states, tone] of [
+        ["正常", ["normal"], "ok"],
+        ["需留意", ["limited", "quota"], "warn"],
+        ["连续失败", ["failed"], "bad"],
+        ["已暂停", ["paused"], "neutral"]
+      ]) {
+        const item = status(text, tone);
+        item.append(el("strong", "", String(accounts.filter(account => states.includes(account.state)).length)));
+        summary.append(item);
+      }
+    }
+    function renderFilters() {
+      const filters = $("filters");
+      filters.replaceChildren();
+      const options = [
+        ["all", "全部账号", accounts.length],
+        ["cn", "国内个人", accounts.filter(account => account.kind === "cn").length],
+        ["abnormal", "仅看异常", accounts.filter(account => account.state !== "normal").length]
+      ];
+      for (const [key, label, count] of options) {
+        const button = el("button", "", `${label} ${count}`);
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(scope === key));
+        button.onclick = () => { scope = key; render(); };
+        filters.append(button);
+      }
+    }
+    function renderRow(account) {
+      const row = el("div", `account-row${selected.has(account.id) ? " selected" : ""}`);
+      row.dataset.id = account.id;
+
+      const pick = el("div", "select-cell");
+      const checkbox = el("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = selected.has(account.id);
+      checkbox.setAttribute("aria-label", `选择 ${account.name}`);
+      checkbox.onchange = () => {
+        checkbox.checked ? selected.add(account.id) : selected.delete(account.id);
+        render();
+      };
+      pick.append(checkbox);
+
+      const who = el("div", "account-cell account-primary");
+      const identity = el("div", "account");
+      const info = el("div");
+      const toggle = el("button", "row-toggle");
+      toggle.type = "button";
+      toggle.setAttribute("aria-expanded", String(expanded.has(account.id)));
+      toggle.setAttribute("aria-controls", `detail-${account.id}`);
+      toggle.append(el("span", "account-name", account.name), el("i", "", "›"));
+      toggle.onclick = () => {
+        const open = !expanded.has(account.id);
+        open ? expanded.add(account.id) : expanded.delete(account.id);
+        toggle.setAttribute("aria-expanded", String(open));
+        const drawer = $(`detail-${account.id}`);
+        drawer.classList.toggle("open", open);
+        drawer.inert = !open;
+        drawer.setAttribute("aria-hidden", String(!open));
+      };
+      info.append(toggle);
+      identity.append(el("span", "avatar", account.name[0]), info);
+      who.append(identity);
+
+      const health = el("div", "account-cell health-cell");
+      health.dataset.label = "健康状态 · 下次定时";
+      const healthContent = el("div", "health-content");
+      healthContent.append(
+        status(account.status, account.tone),
+        el("div", "cell-meta", `最近成功 ${account.success} · 下次 ${account.next}`)
+      );
+      health.append(healthContent);
+
+      const actions = el("div", "account-cell row-actions");
+      if (account.kind === "enterprise") {
+        actions.append(el("span", "cell-meta", "只读"));
+      } else {
+        const pauseAction = el("button", `pause-action${account.state === "paused" ? " paused" : ""}`, account.state === "paused" ? "恢复账号" : "停用账号");
+        pauseAction.type = "button";
+        pauseAction.onclick = () => pause(account);
+        actions.append(pauseAction);
+      }
+
+      const drawer = el("div", expanded.has(account.id) ? "drawer open" : "drawer");
+      drawer.id = `detail-${account.id}`;
+      drawer.inert = !expanded.has(account.id);
+      drawer.setAttribute("aria-hidden", String(!expanded.has(account.id)));
+      const inner = el("div", "drawer-inner");
+      const diagnostics = el("div", "diagnostics");
+      const head = el("div", "details-head");
+      const heading = el("div");
+      heading.append(
+        el("strong", "", `${account.name} · 诊断与积分`),
+        el("p", "cell-meta", `${account.points} · 连续失败 ${account.failures} 次 · ${account.expiry}`)
+      );
+      head.append(heading);
+      if (account.retries) head.append(actionButton("重试失败操作", () => perform(account, "retry")));
+      diagnostics.append(head);
+      if (account.retries) {
+        const chain = el("ol", "retry-chain");
+        for (const [stepName, time, code, note] of account.retries) {
+          const line = el("li");
+          line.append(
+            el("strong", "", stepName),
+            el("span", "bad", code),
+            el("time", "", time),
+            el("span", "cell-meta meta", note)
+          );
+          chain.append(line);
+        }
+        diagnostics.append(chain);
+      } else {
+        diagnostics.append(el("p", "cell-meta", "近期没有记录到失败重试。"));
+      }
+      inner.append(diagnostics);
+      drawer.append(inner);
+
+      row.append(pick, who, health, actions, drawer);
+      return row;
+    }
+    function syncBatch() {
+      const shown = selected.size > 0;
+      $("batchbar").classList.toggle("visible", shown);
+      $("batchbar").inert = !shown;
+      $("selected-count").textContent = shown ? `已选 ${selected.size} 个账号` : "";
+    }
+    function render() {
+      renderSummary();
+      renderFilters();
+      const list = visible();
+      $("accounts").replaceChildren(...list.map(renderRow));
+      syncBatch();
+    }
+
+    $("clear").onclick = () => { selected.clear(); render(); };
+    for (const button of document.querySelectorAll("[data-batch]")) {
+      button.onclick = () => {
+        const action = button.dataset.batch;
+        const applicable = accounts.filter(account =>
+          selected.has(account.id) && (action === "balance" || action === "pause" && account.kind !== "enterprise")
+        );
+        if (action === "pause") {
+          for (const account of applicable) {
+            account.state = "paused";
+            account.status = "任务已暂停";
+            account.tone = "neutral";
+            account.next = "暂停期间不执行";
+          }
+        }
+        feedback(`样稿演示：已向 ${applicable.length} 个适用账号提交${button.textContent}。`);
+        selected.clear();
+        render();
+      };
+    }
+    document.addEventListener("click", event => {
+      for (const menu of document.querySelectorAll("details.menu[open]")) {
+        if (!menu.contains(event.target)) menu.open = false;
+      }
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      for (const menu of document.querySelectorAll("details.menu[open]")) {
+        menu.open = false;
+        menu.querySelector("summary").focus();
+      }
+    });
+    render();
+  </script>
+</body>
+</html>

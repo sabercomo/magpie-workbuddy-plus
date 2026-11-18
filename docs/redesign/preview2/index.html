@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WorkBuddy Plus</title>
+  <link rel="stylesheet" href="a2-shell.css"><link rel="stylesheet" href="board.css"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="preview2.css">
+  <script src="_magpie/bridge.js"></script><script src="data.js"></script><script src="board.js"></script><script src="app.js" defer></script>
+</head>
+<body class="wb-board">
+  <header class="topbar">
+    <div class="breadcrumb"><span class="desktop-context">工作台 <span aria-hidden="true">/</span></span><strong id="crumb">看板</strong></div>
+    <div class="topbar-actions">
+      <button type="button" class="sched-pill" id="sched-pill" title="查看今日定时与执行记录" hidden></button>
+      <span class="sync"><i class="dot"></i><span id="state">读取中…</span></span>
+      <button type="button" class="icon-btn" data-action="refresh" aria-label="刷新"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg></button>
+      <details class="run-menu" id="run-menu"><summary><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7-4.5z"/></svg>立即执行<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg></summary>
+        <div class="menu" role="menu">
+          <button type="button" role="menuitem" data-action="all">执行所有任务<small>连登活跃、成长任务、猫猫旅行、连登福利；国际版另含签到和网页会话</small></button>
+          <hr>
+          <button type="button" role="menuitem" data-action="travel">猫猫旅行<small>领回归来的猫猫，再出发</small></button>
+          <button type="button" role="menuitem" data-action="tasks">成长任务<small>上报能模拟的任务，领已完成的奖励</small></button>
+          <button type="button" role="menuitem" data-action="sweep">补领奖励<small>只接取待接受任务，领取已达标奖励；不发行为事件</small></button>
+        </div>
+      </details>
+      <details class="run-menu add-menu"><summary><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>添加账号<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg></summary>
+        <div class="menu" role="menu">
+          <button type="button" role="menuitem" data-action="login">国内版<small>WorkBuddy · 在浏览器里登录</small></button>
+          <button type="button" role="menuitem" data-action="login-intl">国际版<small>WorkBuddy AI · 在浏览器里登录</small></button>
+          <hr>
+          <p class="menu-note">登录由 Magpie 的 WorkBuddy 插件完成并保存，本插件只是打开它的登录页。</p>
+        </div>
+      </details>
+      <button type="button" class="icon-btn" id="open-settings" aria-label="设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37 1 .608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </div>
+  </header>
+  <p id="note" class="note" role="status" hidden></p>
+  <div id="main-view">
+    <section id="board"></section>
+    <section id="jobs-section">
+      <div class="section-head"><h2>执行记录</h2><span class="muted">点击任意一行展开各账号明细</span></div>
+      <div id="jobs"></div>
+    </section>
+  </div>
+  <section id="settings" hidden aria-labelledby="settings-title">
+    <div class="settings-head"><button type="button" class="back" id="close-settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>返回</button><h2 id="settings-title">设置</h2></div>
+    <form id="settings-form">
+      <div class="group">
+        <h3>定时</h3>
+        <p class="hint">同类多个时段用逗号分隔，清空可关闭该类定时。国内版和国际版各自的开关在「定时与记录」页面里，暂停只停定时，手动执行照样能用。</p>
+        <div class="realms">
+          <fieldset><legend>国内版 <span class="muted" id="cn-state"></span></legend>
+            <label>活跃 / 旅行 / 连登福利<input name="daily" placeholder="09:00, 21:00"></label>
+            <label>成长任务<input name="tasks" placeholder="09:10, 21:10"></label>
+            <label>补领清扫<input name="sweep" placeholder="10:00, 22:10"></label>
+            <label>夜猫子任务<input name="night" placeholder="01:00"></label>
+            <label>登录续期检查<input name="keepalive" placeholder="22:00"></label>
+          </fieldset>
+          <fieldset class="intl-only"><legend>国际版 <span class="muted" id="intl-state"></span></legend>
+            <label>连登活跃 / 签到 / 连登福利<input name="intl-daily" placeholder="09:00, 21:00"></label>
+            <label>网页会话<input name="intl-web" placeholder="10:30"></label>
+            <label>登录续期检查<input name="intl-keepalive" placeholder="22:00"></label>
+          </fieldset>
+        </div>
+        <label class="short">随机错开（分钟，0 关闭）<input name="spread" type="number" min="0" max="60" step="1"></label>
+      </div>
+      <div class="group intl-only">
+        <h3>国际版</h3>
+        <label class="toggle"><input type="checkbox" name="intl-web-on"><span class="knob" aria-hidden="true"></span><span>每天跑一次网页会话<small>WorkBuddy AI 的每日活跃奖励（30/50 积分）只认网页端跑完的会话。关掉后只上报本地活跃，连登照常，但拿不到这份奖励。</small></span></label>
+        <div class="field"><span>网页会话用的模型</span><input type="hidden" name="intl-model" value="auto"><div id="intl-model-pick"></div><small>自动时用当前免费的模型，没有免费的或它跑不了时用 DeepSeek-V4.1-Flash。</small></div>
+      </div>
+      <div class="group">
+        <h3>任务</h3>
+        <label class="toggle"><input type="checkbox" name="skill-share"><span class="knob" aria-hidden="true"></span><span>自动分享技能给好友<small>开启后会在 WorkBuddy 创建真实分享链接并上报复制动作。关掉后定时和「执行所有任务」会跳过这一项；需要时可在「任务」页单独执行。</small></span></label>
+      </div>
+      <div class="group">
+        <h3>网络与时区</h3>
+        <div class="fields">
+          <label>时区<input name="timezone" placeholder="Asia/Shanghai"></label>
+          <label class="wide">HTTP 代理（可留空）<input name="proxy" placeholder="http://127.0.0.1:7890"></label>
+        </div>
+      </div>
+      <div class="save"><button type="submit">保存设置</button><span class="muted">保存后由 Magpie 重载插件交给后台服务。</span></div>
+    </form>
+  </section>
+  <footer class="muted">余额与旅行状态由后台服务约每 3 分钟刷新；按钮会让 Magpie 重载插件后交给后台服务执行。完整日志在本机面板 <span id="panel">http://127.0.0.1:3439</span>（与 Magpie 在同一台电脑上时可打开）。</footer>
+</body>
+</html>

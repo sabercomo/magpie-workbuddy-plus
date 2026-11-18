@@ -1,11 +1,9 @@
 const $ = id => document.getElementById(id);
-const names = { all: "执行所有任务", checkin: "签到（旧版记录）", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "执行单任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", keepalive: "登录续期", web: "国际版网页会话", inspect: "查询状态" };
-const scheduleNames = { daily: "活跃 / 旅行 / 连登福利", tasks: "成长任务", sweep: "补领清扫", night: "夜猫子任务", keepalive: "登录续期检查" };
-const intlNames = { daily: "连登活跃 / 签到 / 连登福利", web: "网页会话（每日活跃奖励）", keepalive: "登录续期检查" };
+const scheduleNames = { daily: "活跃 / 旅行 / 连登福利", tasks: "成长任务", sweep: "补领清扫", night: "夜猫子任务" };
+const intlNames = { daily: "连登活跃 / 签到 / 连登福利", web: "网页会话（每日活跃奖励）" };
 
-const statuses = { running: "执行中", queued: "排队中", succeeded: "已完成", partial: "部分失败", failed: "失败", deferred: "稍后重试", interrupted: "重启中断", cancelled: "已停止" };
 let current, filled = false, modelField = null;
-const selected = new Set(), opened = new Set();
+const selected = new Set();
 function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 async function api(path, body) {
   const response = await fetch(path, { method: body === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json", "X-WorkBuddy-Plus": "1" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -69,26 +67,6 @@ async function refresh() {
   }
   updateScopeNote();
 
-  $("jobs").replaceChildren();
-  for (const job of current.jobs) {
-    const details = element("details", undefined, "job");
-    details.open = opened.has(job.id) || job.status === "running";
-    details.ontoggle = () => details.open ? opened.add(job.id) : opened.delete(job.id);
-    const summary = element("summary"), status = element("span", statuses[job.status] || job.status, `status ${job.status}`);
-    const counts = job.counts?.total ? ` · 成功 ${job.counts.succeeded} / 失败 ${job.counts.failed}${job.counts.limited ? ` / 限流 ${job.counts.limited}` : ""}` : "";
-    summary.append(status, element("span", `${job.actions.map(a => names[a]).join(" / ")}${job.task ? ` · ${job.task}` : ""} · ${job.accounts.length} 个账号${counts}`, "job-name"), element("span", new Date(job.created).toLocaleString(), "muted"));
-    const logs = element("div", job.logs.map(log => `${new Date(log.at).toLocaleTimeString()}  ${current.accounts.find(a => a.id === log.account)?.name || ""}  ${log.message}`).join("\n") || "等待执行…", "log");
-    details.append(summary, logs);
-    if (job.actions.includes("inspect") && job.results.length) details.append(element("pre", JSON.stringify(job.results, null, 2), "log"));
-    if (job.status === "running") {
-      const cancel = element("button", "停止当前执行", "cancel");
-      cancel.type = "button";
-      cancel.onclick = () => api("/api/cancel", { id: job.id }).then(refresh).catch(failure);
-      details.append(cancel);
-    }
-    $("jobs").append(details);
-  }
-  if (!current.jobs.length) $("jobs").append(element("p", "还没有执行记录。可以先选择一个账号试运行。", "empty"));
   if (!filled) {
     for (const [key, times] of Object.keys(scheduleNames).map(k => [k, current.config.schedules[k] || []])) {
       const label = element("label", scheduleNames[key]), input = element("input");
@@ -115,17 +93,26 @@ async function refresh() {
     modelField.count = (current.intlModels || []).length; modelField.host.lastChild.remove();
     modelField.host.append(WBBoard.picker(modelField.pick, WBBoard.modelChoices(current.intlModels, modelField.pick.value)));
   }
-  $("updated").textContent = `更新于 ${new Date().toLocaleTimeString()}`;
 }
 
 async function board(view) {
   view = view || await api("/api/board");
+  view = { ...view, jobs: current.jobs };
   updateSchedPill(view);
   WBBoard.render($("board"), view, Date.now(), {
     onSchedule: (intl, on) => save({ ...current.config, [intl ? "intlEnabled" : "enabled"]: on }).then(() => board()).catch(failure),
     onTask: (account, task) => api("/api/run", { actions: ["task"], accounts: [account], task }).then(() => refresh()).catch(e => { failure(e); throw e; }),
     onQueue: accounts => api("/api/run", { actions: ["tasks"], accounts }).then(() => refresh()).catch(e => { failure(e); throw e; }),
-    onRunAction: (action, accounts) => api("/api/run", { action, accounts: accounts || [...selected] }).then(() => refresh()).catch(e => { failure(e); throw e; }),
+    onRunAction: (action, accounts) => action === "refresh" ? api("/api/board", { accounts: accounts || [...selected] }).then(() => refresh()) : api("/api/run", { action, accounts: accounts || [...selected] }).then(() => refresh()).catch(e => { failure(e); throw e; }),
+    onPauseAccount: (account, paused) => {
+      const list = current.config.pausedAccounts || [];
+      const config = { ...current.config, pausedAccounts: paused ? [...list, account] : list.filter(id => id !== account) };
+      return save(config).then(() => refresh()).catch(e => { failure(e); throw e; });
+    },
+    onPauseAccounts: (accounts, paused) => save({ ...current.config, pausedAccounts: paused ? [...new Set([...current.config.pausedAccounts, ...accounts])] : current.config.pausedAccounts.filter(id => !accounts.includes(id)) }),
+    onConfig: config => save({ ...current.config, ...config }),
+    onRetry: id => api("/api/retry", { id }).then(refresh),
+    onCancel: id => api("/api/cancel", { id }).then(refresh),
     onOpenSettings: () => toggleSettings(true)
   });
   $("board-state").textContent = view.refreshing ? "正在读取…" : view.at ? `更新于 ${new Date(view.at).toLocaleTimeString()}` : "";

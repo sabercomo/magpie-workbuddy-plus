@@ -2,10 +2,8 @@
 // background service rewrites, and asks for work by saving a request into
 // the plugin's options (see index.mjs).
 const $ = id => document.getElementById(id);
-const names = { all: "执行所有任务", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "执行单任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", keepalive: "登录续期", inspect: "查询状态", web: "国际版网页会话", refresh: "刷新余额", login: "添加国内版账号", "login-intl": "添加国际版账号", pause: "暂停国内版定时", resume: "开启国内版定时", "intl-on": "开启国际版定时", "intl-off": "暂停国际版定时", config: "保存设置" };
-const statuses = { running: "执行中", queued: "排队中", succeeded: "已完成", partial: "部分失败", failed: "失败", deferred: "稍后重试", interrupted: "中断", cancelled: "已停止" };
+const names = { all: "执行所有任务", "pause-tasks": "暂停任务", "resume-tasks": "恢复任务", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "执行单任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", inspect: "查询状态", web: "国际版网页会话", refresh: "刷新余额", login: "添加国内版账号", "login-intl": "添加国际版账号", pause: "暂停国内版定时", resume: "开启国内版定时", "intl-on": "开启国际版定时", "intl-off": "暂停国际版定时", retry: "重试失败任务", cancel: "停止执行", config: "保存设置" };
 let pending = null;
-const opened = new Set();
 const build = globalThis.WBPLUS?.build;
 
 function note(text, bad) { $("note").textContent = text; $("note").className = bad ? "note bad" : "note"; $("note").hidden = !text; }
@@ -33,7 +31,6 @@ function paint() {
   const offline = !view || Date.now() - Date.parse(view.generated) > 25 * 60_000;
   $("state").textContent = !view ? "后台服务还没有写出数据：Magpie 加载本插件时会启动它。一直这样的话，看 ~/.config/workbuddy-plus/service.log；Windows 上常见原因是端口被系统保留，见 README 的「端口」一节。"
     : `${view.refreshing ? "正在刷新…" : `余额更新于 ${WBBoard.when(view.at)}`}${offline ? " · 后台服务可能未运行" : ""}`;
-  if (view?.panel) $("panel").textContent = view.panel;
   updateSchedPill(view);
   for (const node of document.querySelectorAll(".intl-only")) node.hidden = !view?.intl?.accounts;
   $("cn-state").textContent = view ? `· 定时${view.enabled ? "已开启" : "已暂停"}` : "";
@@ -44,40 +41,15 @@ function paint() {
     onTask: (account, task) => ask("task", { task, accounts: [account] }),
     onQueue: accounts => ask("tasks", { accounts }),
     onRunAction: (action, accounts) => ask(action, accounts ? { accounts } : {}),
+    onPauseAccount: (account, paused) => ask(paused ? "pause-tasks" : "resume-tasks", { accounts: [account] }),
+    onPauseAccounts: (accounts, paused) => ask(paused ? "pause-tasks" : "resume-tasks", { accounts }),
+    onConfig: config => ask("config", { config }).then(() => "已提交，等待后台保存"),
+    onRetry: job => ask("retry", { job }),
+    onCancel: job => ask("cancel", { job }),
     onOpenSettings: () => settings(true)
   });
 
   fill(view);
-  $("jobs").replaceChildren();
-  if (view && !view.jobs?.length) $("jobs").append(Object.assign(document.createElement("p"), { className: "muted", textContent: "今天还没有执行记录" }));
-  for (const job of view?.jobs || []) {
-    const row = document.createElement("details"), head = document.createElement("summary"), log = document.createElement("div");
-    const add = (parent, text, className) => { const span = document.createElement("span"); span.textContent = text; if (className) span.className = className; parent.append(span); return span; };
-    row.className = "job";
-    row.open = opened.has(job.id) || job.status === "running";
-    row.ontoggle = () => row.open ? opened.add(job.id) : opened.delete(job.id);
-    head.className = "job-head";
-    add(head, statuses[job.status] || job.status, job.status);
-    const name = add(head, job.actions.map(a => names[a] || a).join(" / ") + (job.task ? ` · ${job.task}` : ""), "job-name");
-    if (job.counts?.total) {
-      const counts = add(name, `成功 ${job.counts.succeeded} / 失败 ${job.counts.failed}`, "job-counts");
-      if (job.counts.limited) counts.textContent += ` / 限流 ${job.counts.limited}`;
-    }
-    add(head, WBBoard.when(Date.parse(job.finished || job.created)), "job-when");
-    add(head, "", "job-chevron");
-    log.className = "job-log";
-    if (!job.logs?.length) add(log, job.status === "queued" ? "等待执行…" : "暂无执行明细", "job-empty");
-    for (const entry of job.logs || []) {
-      const line = document.createElement("div"), at = new Date(entry.at), account = view.accounts.find(a => a.id === entry.account);
-      line.className = "job-line";
-      add(line, at.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }), "job-time");
-      add(line, account?.name || "系统", "job-account");
-      add(line, entry.message, "job-message");
-      log.append(line);
-    }
-    row.append(head, log);
-    $("jobs").append(row);
-  }
   const done = view?.request;
   if (pending && done?.id === pending) {
     pending = null;
@@ -85,7 +57,7 @@ function paint() {
   }
 }
 
-const kinds = ["daily", "tasks", "sweep", "night", "keepalive"], intlKinds = ["daily", "web", "keepalive"];
+const kinds = ["daily", "tasks", "sweep", "night"], intlKinds = ["daily", "web"];
 let edited = false;
 function fill(view) {
   const form = $("settings-form");
@@ -100,6 +72,7 @@ function fill(view) {
   form.elements["intl-web-on"].checked = view.settings.intlWeb !== false;
   form.elements["campaign-app"].checked = view.settings.campaignApp === true;
   form.elements["skill-share"].checked = view.settings.skillShare !== false;
+  form.elements["buddy-auto"].checked = view.settings.buddyAuto === true;
   form.elements.spread.value = view.settings.spread;
   form.elements.timezone.value = view.settings.timezone || "";
   form.elements.proxy.value = view.settings.proxy || "";
@@ -133,7 +106,7 @@ $("save-settings").onclick = async event => {
   const form = $("settings-form"), button = event.currentTarget;
   if (!form.reportValidity()) return;
   const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
-  const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), intlSchedules: Object.fromEntries(intlKinds.map(k => [k, times(form.elements[`intl-${k}`].value)])), intlWebModel: form.elements["intl-model"].value || "auto", intlWeb: form.elements["intl-web-on"].checked, campaignApp: form.elements["campaign-app"].checked, skillShare: form.elements["skill-share"].checked, spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
+  const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), intlSchedules: Object.fromEntries(intlKinds.map(k => [k, times(form.elements[`intl-${k}`].value)])), intlWebModel: form.elements["intl-model"].value || "auto", intlWeb: form.elements["intl-web-on"].checked, campaignApp: form.elements["campaign-app"].checked, skillShare: form.elements["skill-share"].checked, buddyAuto: form.elements["buddy-auto"].checked, spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
   const bad = [...Object.values(config.schedules), ...Object.values(config.intlSchedules)].flat().find(t => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t));
   if (bad) return saveNote(`时间「${bad}」不对，应为 HH:MM，例如 09:00`, true);
   button.disabled = true;

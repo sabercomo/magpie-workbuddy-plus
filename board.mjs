@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { calendar } from "./storage.mjs";
-import { specs, growthTasks, miniProgram, unreachable } from "./events.mjs";
+import { specs, specFor, growthTasks, miniProgram, unreachable } from "./events.mjs";
 import { campaignStatus } from "./campaign.mjs";
 
 // Read-only account board: credit packages, official request usage, the
@@ -195,9 +195,13 @@ export function taskBoard(list, now = Date.now()) {
   const live = list.filter(t => (!t.valid_end || Date.parse(t.valid_end) > now) && (t.accept_status === "claimed" || done(t) || (!t.intl && !unreachable.has(t.task_code))));
   const order = { claimable: 0, auto: 1, manual: 2, locked: 3 };
   const open = live.filter(t => t.accept_status !== "claimed").map(t => {
-    const state = done(t) ? "claimable" : t.locked === true ? "locked" : specs[t.task_code] ? "auto" : "manual";
+    const spec = specFor(t), dynamic = !specs[t.task_code] && !!spec;
+    const state = done(t) ? "claimable" : t.locked === true ? "locked" : spec ? "auto" : "manual";
     return {
       code: t.task_code, title: t.title || t.task_code, ...(t.intl ? { intl: true } : {}), ...(t.mp ? { mp: true } : {}), state,
+      ...(dynamic ? { dynamic: true } : {}),
+      ...(state === "manual" ? { unknown: true } : {}),
+      ...(t.jump_url ? { jump_url: String(t.jump_url) } : {}),
       ...(state === "locked" && t.unlock_at ? { unlockAt: Date.parse(t.unlock_at) } : {}),
       note: t.note || t.task_desc?.trim() || (state === "manual" ? "尚未适配此任务，欢迎到 GitHub 提 issue" : ""),
       current: t.progress?.current ?? 0, target: t.progress?.target ?? 0,
@@ -229,12 +233,44 @@ async function growth(client) {
   };
 }
 
-// Today's check-in for one login as Magpie recorded it. Another day's record
-// says nothing about today: Magpie hasn't run yet, or its switch is off.
-export function checkin(found, key, day) {
+// Today's check-in for one login. Magpie's record and the upstream snapshot
+// are separate evidence: if the upstream says today is checked, it wins even
+// when Magpie's file has not caught up; otherwise a record Magpie made today
+// is still valid. Another day's record says nothing about today.
+export function checkin(found, key, day, upstream, timezone = "Asia/Shanghai") {
   const r = found.records[`workbuddy|${key}`];
-  if (r?.day !== day) return { outcome: found.on ? "waiting" : "off" };
-  return { outcome: String(r.outcome || "failed"), credit: Number(r.credit) || 0, streak: Number(r.streak) || 0, at: Date.parse(r.claimed || r.at) || 0, ...(r.msg ? { message: String(r.msg).slice(0, 160) } : {}) };
+  const local = r?.day === day ? { outcome: String(r.outcome || "failed"), credit: Number(r.credit) || 0, streak: Number(r.streak) || 0, at: Date.parse(r.claimed || r.at) || 0, ...(r.msg ? { message: String(r.msg).slice(0, 160) } : {}) } : null;
+  const fresh = upstream?.at && calendar(new Date(upstream.at), timezone).day === day;
+  if (local && (!fresh || local.at > upstream.at)) return { ...local, source: "magpie" };
+  if (fresh) {
+    if (upstream.checked === true) return { outcome: "claimed", credit: Number(upstream.credit) || 0, streak: Number(upstream.streak) || 0, at: upstream.at, source: "upstream" };
+    return { outcome: upstream.active === false ? "closed" : "waiting", at: upstream.at, streak: Number(upstream.streak) || 0, source: "upstream" };
+  }
+  return { outcome: found.on ? "waiting" : "off", source: "magpie" };
+}
+
+// The limited-time compensation banner. active=false is a normal "no campaign";
+// claimed=true is "already took it"; both differ from a failed query.
+async function compensationStatus(client) {
+  const s = await client.request("/billing/meter/compensation-status", { billing: true, body: {} });
+  return {
+    active: s?.active === true,
+    claimed: s?.claimed === true,
+    credit: Number(s?.credit_num) || 0,
+    end: String(s?.end_time || ""),
+    ...(s?.validity_period ? { validity: Number(s.validity_period) } : {})
+  };
+}
+
+async function buddyQuota(client) {
+  const q = await client.request("/v2/activity/growth/buddy/quota");
+  return { affordable: Math.max(0, Number(q?.affordable) || 0), maxOpen: Math.max(1, Number(q?.max_open_count) || 1) };
+}
+
+// China's check-in activity snapshot, read-only. The claim stays with Magpie.
+async function cnCheckinStatus(client) {
+  const s = await client.request("/v2/billing/meter/checkin-activity-status", { billing: true, body: {} });
+  return { active: s?.active === true, checked: s?.today_checked_in === true, credit: Number(s?.today_credit) || 0, streak: Number(s?.streak_days) || 0, at: Date.now() };
 }
 
 // WorkBuddy AI's check-in, which this plugin claims itself: "closed" while
@@ -253,7 +289,16 @@ export async function collect(account, client, config, memory, pause = ms => new
   const row = { id: account.id, name: account.name, realm: account.realm, enterprise: account.enterprise, expires: account.auth.expires, errors: {} };
   const parts = { balance: () => balance(client, account), usage: () => usage(client, config.timezone, 7, new Date(), 50, account.enterprise) };
   if (!account.enterprise && account.realm === "intl") Object.assign(parts, { streak: () => streak(client), checkin: () => intlCheckin(client) });
-  else if (!account.enterprise) Object.assign(parts, { travel: () => travel(client), campaigns: () => campaignStatus(client, { appEnabled: config.campaignApp === true }), streak: () => streak(client), tasks: () => tasks(client), growth: () => growth(client) });
+  else if (!account.enterprise) Object.assign(parts, {
+    travel: () => travel(client),
+    campaigns: () => campaignStatus(client, { appEnabled: config.campaignApp === true }),
+    streak: () => streak(client),
+    tasks: () => tasks(client),
+    growth: () => growth(client),
+    compensation: () => compensationStatus(client),
+    buddy: () => buddyQuota(client),
+    checkinUpstream: () => cnCheckinStatus(client)
+  });
   for (const [name, run] of Object.entries(parts)) {
     try { row[name] = await run(); }
     catch (e) {

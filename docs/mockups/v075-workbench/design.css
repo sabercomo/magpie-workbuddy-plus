@@ -1,0 +1,111 @@
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4
+ * Existing Magpie surface. The preview adds only the rows and controls below.
+ */
+html,body{overflow-x:clip}
+.demo-title{font-size:13px;font-weight:600;margin:0}
+.demo-section{margin-top:14px}
+.demo-panel{border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card)}
+.demo-panel>summary{list-style:none}
+.demo-panel>summary::-webkit-details-marker{display:none}
+.demo-line{padding:8px 14px}
+.demo-line+.demo-line{border-top:1px solid var(--wb-line)}
+.demo-flex{display:flex;align-items:center;gap:6px 9px;flex-wrap:wrap;min-width:0}
+.demo-flex.split{justify-content:space-between}
+.demo-flex .grow{flex:1;min-width:0}
+.demo-btn{white-space:nowrap;cursor:pointer}
+.demo-btn:disabled{cursor:default;opacity:.52}
+.demo-btn:focus-visible,summary:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+.demo-btn:hover:not(:disabled){background:var(--wb-soft)}
+.demo-btn.primary{background:var(--wb-accent);border-color:var(--wb-accent);color:var(--demo-button-text)}
+.demo-btn.primary:hover:not(:disabled){filter:brightness(1.08)}
+.demo-num{font-variant-numeric:tabular-nums}
+.demo-danger{color:var(--demo-danger)}
+.demo-comp{margin-bottom:12px}
+.demo-comp .trip-time{white-space:nowrap;font-size:11.5px}
+.demo-comp .row-title{flex:1;min-width:100px}
+.demo-comp .demo-head{padding-block:9px}
+.demo-comp .wb-sub{overflow-wrap:anywhere}
+.demo-comp ul{padding:0;list-style:none;margin:0}
+.demo-comp li{padding:8px 14px;border-top:1px solid var(--wb-line)}
+.demo-sub{display:block;font-size:11.5px;color:var(--wb-muted)}
+.demo-health{margin-bottom:12px}
+.demo-batch{background:var(--wb-soft)}
+.demo-table{width:100%;text-align:left;border-collapse:collapse;table-layout:fixed}
+.demo-table th,.demo-table td{padding:8px 5px;font-size:12px;min-width:0}
+.demo-table th{font-size:11.5px;color:var(--wb-muted);font-weight:500;white-space:nowrap}
+.demo-table tr{border-top:1px solid var(--wb-line)}
+.demo-table :is(th,td):first-child{padding-left:13px}
+.demo-table :is(th,td):last-child{padding-right:13px;text-align:right}
+.demo-table .select{width:36px}.demo-table .ops{width:54px}.demo-table .who{width:20%}.demo-table .status{width:26%}
+.demo-table .fail{width:9%}.demo-table .cool{width:12%}.demo-table .next{width:14%}
+.demo-table input{accent-color:var(--wb-accent);width:14px;height:14px;display:block;margin:0}
+.demo-table .selected{background:var(--wb-hover)}
+.demo-table .row-name{display:flex;align-items:center;gap:7px;min-width:0}
+.demo-table .wb-who{min-width:0}
+.demo-table .name{all:unset;cursor:pointer;font-weight:600;font-size:13px;white-space:nowrap}
+.demo-table .name:hover{text-decoration:underline}
+.demo-table .name:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px}
+.demo-table .row-detail td{text-align:left;padding:8px 14px;background:var(--wb-hover)}
+.demo-table .right{justify-content:flex-end}
+.demo-pill-quiet{background:var(--wb-hover);color:var(--wb-muted)}
+.demo-pill-issue{background:color-mix(in srgb,var(--wb-warn) 12%,var(--wb-card));color:var(--demo-warn)}
+.demo-pill-urgent{color:var(--demo-danger)!important}
+.demo-mobile,.demo-select-mobile{display:none}
+.demo-health-menu{min-height:26px}
+.demo-detail .demo-flex+.demo-flex{margin-top:7px}
+.demo-detail .wb-fold{margin-top:8px}
+.demo-alert-inline{width:100%;border-bottom:1px solid var(--wb-line);padding-bottom:8px;margin-bottom:2px}
+.demo-brief-meta{margin-top:5px}
+.demo-brief-activity{margin-top:15px}
+.demo-brief-activity summary{list-style:none}
+.demo-brief-activity summary::-webkit-details-marker{display:none}
+.demo-runs{margin-top:14px}
+.demo-runs .job-summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 7px;cursor:pointer;list-style:none}
+.demo-runs .job-summary::-webkit-details-marker{display:none}
+.demo-runs .job-chevron{display:inline-block;vertical-align:middle;margin-inline:3px}
+.demo-progress{width:60px;min-width:30px;max-width:20vw;height:5px;appearance:none;border:0;border-radius:3px;background:var(--wb-soft);overflow:hidden}
+.demo-progress::-webkit-progress-bar{background:var(--wb-soft)}
+.demo-progress::-webkit-progress-value{background:var(--wb-accent)}
+.demo-progress::-moz-progress-bar{background:var(--wb-accent)}
+.demo-timeline{margin:7px 0;padding-left:22px}
+.demo-timeline li{padding:3px 0}
+.demo-runs .demo-channel{flex-shrink:0}
+.demo-runs .demo-log{display:grid;grid-template-columns:62px 72px minmax(0,1fr);gap:7px;padding:7px 14px;border-top:1px solid var(--wb-line);font-size:12px}
+.demo-runs .demo-log span:last-child{overflow-wrap:anywhere}
+#confirm{width:min(400px,calc(100% - 26px));border:1px solid var(--wb-line);background:var(--wb-card);color:var(--magpie-fg);border-radius:12px;padding:14px;box-sizing:border-box}
+#confirm h2{margin:0}
+#confirm::backdrop{background:var(--demo-backdrop)}
+#confirm .demo-flex{justify-content:flex-end;margin-top:12px}
+:root{--demo-button-text:#fff;--demo-backdrop:#16142b40;--demo-danger:#a43126;--demo-warn:#89521a}
+:root[data-dark]{--demo-backdrop:#0b0b13aa;--demo-danger:#ff9c91;--demo-warn:#efbb78}
+@media(max-width:750px){
+  .demo-table{table-layout:auto}
+  .demo-table colgroup{display:none}
+  .demo-board .demo-table th:nth-child(4),.demo-board .demo-table th:nth-child(5),.demo-board .demo-table th:nth-child(6),
+  .demo-table .recent,.demo-table .count,.demo-table .countdown{display:none}
+  .demo-mobile{display:block;font-size:11px;color:var(--wb-muted)}
+  .demo-table .who{width:25%}.demo-table .status{width:37%}.demo-table .next{width:auto}
+}
+@media(max-width:500px){
+  .wb-board .wb-view-switch .wb-seg-btn{padding-inline:8px}
+  .demo-table .next-col,.demo-table .next-cell{display:none}
+  .demo-table .demo-mobile{white-space:normal;overflow-wrap:normal}
+  .demo-table .demo-sub{line-height:1.3}
+  .demo-table th:first-child,.demo-table td:first-child{width:27px}
+  .demo-table th:last-child,.demo-table td:last-child{min-width:43px}
+  .demo-table .who{width:38%}.demo-table .status{width:auto}.demo-table .ops{width:45px}.demo-table .select{width:27px}
+  .demo-table :is(th,td):first-child{padding-left:8px}
+  .demo-table :is(th,td):last-child{padding-right:8px}
+  .demo-table .wb-avatar{width:23px;height:23px;font-size:11px}
+  .demo-table .row-name{gap:5px}
+  .demo-table .row-name .demo-sub{font-size:10px}
+  .demo-table .status-hint{display:none}
+  .demo-table .row-detail td{padding:8px}
+  .demo-line,.demo-comp li{padding-inline:9px}
+  .demo-comp .demo-head .wb-sub{flex-basis:100%}
+  .demo-health .wb-seg-btn,.demo-channel .wb-seg-btn{padding-inline:7px}
+  .demo-runs .demo-log{grid-template-columns:58px minmax(0,1fr)}
+  .demo-runs .demo-log span:last-child{grid-column:2}
+  .demo-progress{display:none}
+  .wb-board .group .settings-schedule h4{margin-block:3px}
+}

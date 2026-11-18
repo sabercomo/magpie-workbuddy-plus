@@ -40,7 +40,6 @@ export function pickModel(list, wanted = "auto") {
 }
 
 export async function webActivity(client, { model = fallback, prompt = "只回复一个字：好", wait = 120_000, poll = 3000, sleep = delay } = {}) {
-  await client.refresh();
   const a = client.account.auth, started = Date.now();
   const headers = body => ({
     Authorization: `Bearer ${a.access}`, "X-User-Id": a.uid, Accept: "application/json, text/plain, */*",

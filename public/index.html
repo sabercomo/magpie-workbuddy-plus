@@ -8,11 +8,9 @@
 <body class="wb-board">
 <main>
   <header>
-    <div class="brand">
-      <div class="brand-mark" aria-hidden="true">
-        <img src="icon.svg" alt="">
-      </div>
-      <div class="brand-text">
+    <div class="wb-header-brand">
+      <button type="button" class="wb-nav-toggle" id="wb-nav-toggle" aria-label="显示侧边栏" aria-pressed="false" title="显示侧边栏" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="2.2"/><path d="M6.5 2.8v10.4"/></svg></button>
+      <div>
         <div class="brand-title">
           <h1>WorkBuddy Plus</h1>
           <button type="button" class="sched-pill" id="sched-pill" title="查看今日定时与执行记录" hidden></button>
@@ -51,7 +49,8 @@
     <section id="board" aria-label="账号看板"></section>
 
     <div id="schedule-extras">
-      <section class="panel-card" aria-labelledby="accounts-title">
+      <details class="panel-card" aria-labelledby="accounts-title">
+        <summary>选择账号执行</summary>
         <div class="section-head"><h2 id="accounts-title">账号作用域与单项操作</h2><span class="muted">勾选账号后执行；空选使用全部已启用账号</span></div>
         <div id="accounts" class="accounts"></div>
         <div class="actions" aria-label="手动操作">
@@ -62,16 +61,11 @@
           <button type="button" data-action="travel">猫猫旅行</button>
           <button type="button" data-action="bonus">连登福利</button>
           <button type="button" data-action="night">夜猫子任务</button>
-          <button type="button" data-action="keepalive">检查登录续期</button>
           <button type="button" data-action="web">国际版网页会话</button>
           <button type="button" data-action="inspect">查询上游状态</button>
         </div>
-      </section>
+      </details>
 
-      <section aria-label="执行记录">
-        <div class="section-head"><h2>执行记录</h2><span id="updated" class="muted"></span></div>
-        <div id="jobs"></div>
-      </section>
     </div>
   </div>
 
@@ -112,8 +106,6 @@
       <div class="save"><button type="submit" class="primary">保存设置</button><span id="saved" role="status"></span></div>
     </form>
   </section>
-
-  <footer>仅本机访问 · 独立定时服务 · Magpie 关闭后仍可执行 · 日志时间按本机显示</footer>
 </main>
 </body>
 </html>

@@ -44,12 +44,15 @@ export function createService({ dir = dataDir, runner = new Runner(dir), stop = 
       if (url.pathname === "/api/config") {
         const config = validateConfig(value);
         writeJSON(join(dir, "config.json"), config);
+        runner.wake();
+        runner.publish();
         return send(200, config);
       }
+      if (url.pathname === "/api/retry") return send(202, runner.retry(value.id));
       if (url.pathname === "/api/cancel") { runner.cancel(value.id); return send(200, { cancelled: true }); }
       if (url.pathname === "/api/board") {
         runner.boardStale = true;
-        runner.refreshBoard().catch(e => console.error(e));
+        runner.refreshBoard(0, value.accounts).catch(e => console.error(e));
         return send(202, runner.boardView());
       }
       if (url.pathname === "/api/page") return send(200, runner.pageRequest(value));

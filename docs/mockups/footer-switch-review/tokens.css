@@ -1,0 +1,48 @@
+:root {
+  color-scheme: light;
+  --magpie-bg: #f4f4f6;
+  --magpie-card: #ffffff;
+  --magpie-fg: #1f1f24;
+  --magpie-muted: #6e6e78;
+  --magpie-line: #e3e3e8;
+  --magpie-accent: #4f46e5;
+  --magpie-accent-soft: #eeedfd;
+  --wb-accent-ink: #ffffff;
+  --wb-review-error: #b5382b;
+  --wb-review-warn: #965316;
+  --wb-review-progress: #2d61a0;
+  --wb-control-bg: #eaeaec;
+  --wb-switch-track: #8d8d96;
+  --wb-switch-thumb: #ffffff;
+  --wb-toggle-ease: cubic-bezier(.16,1,.3,1);
+  --wb-control-shadow: 0 1px 3px #00000012;
+  --wb-font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", system-ui, sans-serif;
+  --wb-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --wb-space-tight: 4px;
+  --wb-space-small: 8px;
+  --wb-space-control: 12px;
+  --wb-space-card: 16px;
+  --wb-space-section: 24px;
+  --wb-space-chapter: 32px;
+  font: 13px/1.5 var(--wb-font);
+  color: var(--magpie-fg);
+  background: var(--magpie-bg);
+  -webkit-font-smoothing: antialiased;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --magpie-bg: #1a1a1e;
+  --magpie-card: #232327;
+  --magpie-fg: #ececf1;
+  --magpie-muted: #aaaab6;
+  --magpie-line: #3c3c44;
+  --magpie-accent: #aaa4ff;
+  --magpie-accent-soft: #302d4e;
+  --wb-accent-ink: #201c40;
+  --wb-review-error: #ff9e91;
+  --wb-review-warn: #e4b17d;
+  --wb-review-progress: #9fc4f6;
+  --wb-control-bg: #303036;
+  --wb-switch-track: #72727c;
+  --wb-control-shadow: none;
+}

@@ -15,6 +15,9 @@ import { chinaModels, enterpriseModels, intlModels } from "./models.mjs";
 import { dropped } from "./network.mjs";
 
 const NETWORK_FAILURES = 3, NETWORK_PAUSE_MS = 10 * 60_000;
+const actionNames = { all: "全部任务", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "单项任务", travel: "猫猫旅行", buddy: "Buddy 盲盒", compensation: "官方补偿", bonus: "连登福利", night: "夜猫子", web: "网页会话", inspect: "状态查询" };
+const logChannel = action => action === "web" ? "chat" : action === "inspect" ? "system" : "task";
+const visibleJob = job => !(job.actions?.length === 1 && job.actions[0] === "keepalive");
 
 // A LaunchAgent's PATH is only the system's, so the usual install places
 // (Magpie's own ~/.local/bin link, Homebrew, the app) are looked in too. On
@@ -124,9 +127,13 @@ export class Runner {
     this.boardStale = true;
     this.state = readJSON(join(dir, "state.json"));
     this.controllers = new Map();
+    this.active = 0;
+    this.waiters = [];
+    this.taskCache = new Map();
     for (const job of this.state.jobs) if (["running", "queued"].includes(job.status)) {
       job.status = "interrupted";
       job.finished = new Date().toISOString();
+      for (const row of job.queue || []) if (["queued", "running"].includes(row.status)) row.status = "interrupted";
       job.logs.push({ at: job.finished, message: "服务重启中断了执行；定时任务会在重试窗口补跑" });
     }
     this.save();
@@ -144,7 +151,7 @@ export class Runner {
   list() { return accounts(this.config(), this.dir); }
   status() {
     const config = this.config();
-    return { version, config, intlSchedules: intlSchedules(config), intlModels: (this.board.models?.intl?.models || []).map(({ id, name, rate, promo, tier }) => ({ id, name, rate, promo, tier })), accounts: this.list().map(publicAccount), jobs: this.state.jobs, daily: this.state.daily, slots: this.state.slots };
+    return { version, config, intlSchedules: intlSchedules(config), intlModels: (this.board.models?.intl?.models || []).map(({ id, name, rate, promo, tier }) => ({ id, name, rate, promo, tier })), accounts: this.list().map(publicAccount), jobs: this.state.jobs.filter(visibleJob), daily: this.state.daily, slots: this.state.slots };
   }
   // A job queued or running: the service must not be swapped out under it.
   working() { return this.controllers.size > 0 || this.state.jobs.some(j => ["running", "queued"].includes(j.status)); }
@@ -155,20 +162,23 @@ export class Runner {
     const onDay = value => value && calendar(new Date(value), config.timezone).day === day;
     const network = this.state.network;
     const jobs = this.state.jobs
-      .filter(job => onDay(job.created) || onDay(job.started) || onDay(job.finished))
+      .filter(job => visibleJob(job) && (onDay(job.created) || onDay(job.started) || onDay(job.finished)))
       .map(job => {
         const outcome = job.results?.length ? jobOutcome(job.results, job.status === "cancelled") : { status: job.status, counts: job.counts };
-        return { id: job.id, actions: job.actions, ...(job.task ? { task: job.task } : {}), status: outcome.status, counts: outcome.counts, trigger: job.trigger, created: job.created, started: job.started, finished: job.finished, logs: job.logs };
+        return { id: job.id, actions: job.actions, ...(job.task ? { task: job.task } : {}), status: ["queued", "running", "interrupted"].includes(job.status) ? job.status : outcome.status, accounts: job.accounts, queue: job.queue, retries: job.retries, retryOf: job.retryOf, attempt: job.attempt, counts: outcome.counts, trigger: job.trigger, created: job.created, started: job.started, finished: job.finished, logs: job.logs };
       });
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
-      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false, campaignApp: config.campaignApp === true, skillShare: config.skillShare },
+      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false, campaignApp: config.campaignApp === true, skillShare: config.skillShare, buddyAuto: config.buddyAuto === true, concurrency: config.concurrency, tasksCacheTtl: config.tasksCacheTtl, progressCacheHours: config.progressCacheHours },
       accounts: this.board.accounts.map(({ key, ...a }) => {
         const row = this.withLedger(a, key, found, day);
         const restricted = this.state.restricted?.[a.id], webPaused = this.state.webPaused?.[a.id];
         return {
           ...row,
+          enabled: !config.disabledAccounts.includes(a.id),
+          health: this.accountHealth(a, config, day),
+          paused: (config.pausedAccounts || []).includes(a.id),
           ...(restricted?.day === day ? { restricted: { at: restricted.at, message: restricted.message } } : {}),
           ...(webPaused?.day === day ? { webPaused: { at: webPaused.at, message: webPaused.message } } : {})
         };
@@ -177,6 +187,20 @@ export class Runner {
       networkPaused: network?.pausedUntil > Date.now() ? { until: network.pausedUntil, at: network.last?.at, message: network.last?.message } : null,
       jobs
     };
+  }
+  accountHealth(account, config, day) {
+    const rounds = this.state.jobs.filter(job => job.results?.some(r => r.account === account.id)).map(job => ({ job, results: job.results.filter(r => r.account === account.id) }));
+    const successful = rounds.find(r => r.results.some(result => result.ok));
+    let failures = 0;
+    for (const round of rounds) { if (round.results.every(r => r.ok)) break; failures++; }
+    const latest = rounds[0], limited = latest?.results.some(r => r.limited), limits = this.state.limits?.[account.id] || {};
+    const expires = account.expires, now = Date.now();
+    const state = config.disabledAccounts.includes(account.id) ? "disabled" : config.pausedAccounts.includes(account.id) ? "paused"
+      : expires && expires <= now ? "expired" : this.state.restricted?.[account.id]?.day === day ? "restricted"
+      : limited ? "limited" : Object.values(limits).some(l => l.resets > now) ? "quota" : failures >= 3 ? "failed" : failures ? "attention" : "normal";
+    const active = this.state.jobs.flatMap(j => j.queue || []).find(r => r.account === account.id && r.status === "running");
+    const next = this.today(config).slots.find(s => s.kind.startsWith("intl-") === (account.realm === "intl") && s.status === "upcoming" && !s.paused);
+    return { state, failures, lastSuccess: successful?.results.find(r => r.ok)?.at || successful?.job.finished || successful?.job.started || null, cooldownUntil: Math.max(active?.retryAt || 0, this.state.network?.pausedUntil || 0), next: !account.enterprise && !["disabled", "paused", "restricted"].includes(state) && next ? next.runAt : null };
   }
   // Magpie may load the plugin from a folder other than the one this service
   // runs from (a GitHub install beside the LaunchAgent copy); its page reads
@@ -246,7 +270,8 @@ export class Runner {
     for (const f of live) if (f !== this.pageFile) writePage(f, view);
     if (live.length !== targets.length) { this.state.pageTargets = live; this.save(); }
   }
-  refreshBoard(maxAge = 0) {
+  refreshBoard(maxAge = 0, ids) {
+    if (ids !== undefined && (!Array.isArray(ids) || ids.some(id => typeof id !== "string" || !this.list().some(a => a.id === id)))) throw new Error("账号列表无效");
     if (this.boarding) return this.boarding;
     // A login added or removed in Magpie itself, not through the page, shows
     // at the next beat instead of when the board is next due.
@@ -257,7 +282,7 @@ export class Runner {
     this.boardStale = false;
     const config = this.config();
     this.boarding = (async () => {
-      const rows = [], list = this.list();
+      const list = this.list(), rows = ids?.length ? this.board.accounts.filter(row => !ids.includes(row.id) && list.some(a => a.id === row.id)) : [];
       // What each account's model limits were found to be, kept across refreshes and restarts.
       const memory = this.state.limits ||= {};
       for (const k of Object.keys(memory)) if (!list.some(a => a.id === k)) delete memory[k];
@@ -270,7 +295,18 @@ export class Runner {
           } else if (!mine[model] || entry.checked >= (mine[model].checked || 0)) mine[model] = entry;
         }
       }
-      for (const account of list) rows.push({ ...await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions }), config, memory[account.id] ||= {}), key: account.key });
+      for (const account of list.filter(a => !ids?.length || ids.includes(a.id))) {
+        const row = await collect(account, new WorkBuddyClient(account, config, { gap: 300, ...this.clientOptions, taskCache: this.taskCache }), config, memory[account.id] ||= {});
+        // The long cache is display-only, used on a failed read. Execution never
+        // trusts it for accepting or claiming tasks.
+        const snapshots = this.state.taskSnapshots ||= {};
+        if (row.tasks) snapshots[account.id] = { at: Date.now(), tasks: row.tasks };
+        else if (row.errors.tasks && snapshots[account.id] && Date.now() - snapshots[account.id].at < config.progressCacheHours * 3600_000) {
+          row.tasks = { ...snapshots[account.id].tasks, cachedAt: snapshots[account.id].at };
+        }
+        rows.push({ ...row, key: account.key });
+      }
+      for (const id of Object.keys(this.state.taskSnapshots || {})) if (!list.some(a => a.id === id)) delete this.state.taskSnapshots[id];
       this.save();
       // One personal login reads China's list; an enterprise login reads its enterprise's own.
       const models = { at: Date.now() }, china = list.filter(a => a.realm !== "intl"), mine = china.find(a => !a.enterprise), firm = china.find(a => a.enterprise), abroad = intlAccount(config);
@@ -357,11 +393,11 @@ export class Runner {
   // An account as the board shows it: its check-in (Magpie's for China, its
   // own for WorkBuddy AI) and its credit history, the grants named from this
   // plugin's run logs and Magpie's check-in time. The raw grants stay here.
-  withLedger({ balance, ...a }, key, found, day) {
+  withLedger({ balance, checkinUpstream, ...a }, key, found, day) {
     const signed = found.records[`workbuddy|${key}`], at = signed?.outcome === "claimed" ? Date.parse(signed.claimed || signed.at) : 0;
     const logs = this.state.jobs.flatMap(job => job.accounts.includes(a.id) ? job.logs.filter(l => l.account === a.id) : []);
     const shown = balance ? (({ grants, ...rest }) => rest)(balance) : balance;
-    return { ...a, balance: shown, checkin: a.realm === "intl" ? a.checkin : checkin(found, key, day), ...(balance?.grants ? { ledger: ledger(balance, a.usage, logs, at, Date.now(), 7, a.realm) } : {}) };
+    return { ...a, balance: shown, checkin: a.realm === "intl" ? a.checkin : checkin(found, key, day, checkinUpstream, this.config().timezone), ...(balance?.grants ? { ledger: ledger(balance, a.usage, logs, at, Date.now(), 7, a.realm) } : {}) };
   }
   // Magpie hands the page's last request back on every plugin restart, so
   // each request id runs once and an old one is only acknowledged.
@@ -370,7 +406,7 @@ export class Runner {
     const note = { id: String(request.id), action: request.action, at: new Date().toISOString(), ok: false };
     try {
       if (!(Date.now() - Number(request.at) < 10 * 60_000)) throw new Error("页面请求已过期，请重新点击");
-      if (request.action === "refresh") { this.boardStale = true; this.refreshBoard().catch(e => console.error(e)); }
+      if (request.action === "refresh") { this.boardStale = true; this.refreshBoard(0, request.accounts).catch(e => console.error(e)); }
       else if (["login", "login-intl"].includes(request.action)) this.login(request.action === "login-intl" ? "intl" : "cn");
       else if (["pause", "resume"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), enabled: request.action === "resume" });
       else if (request.action === "config") {
@@ -379,9 +415,19 @@ export class Runner {
         // switches. A proxy shown masked and sent back unchanged keeps the
         // saved one.
         const current = this.config(), given = request.config || {};
-        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(typeof given.intlWeb === "boolean" ? { intlWeb: given.intlWeb } : {}), ...(typeof given.campaignApp === "boolean" ? { campaignApp: given.campaignApp } : {}), ...(typeof given.skillShare === "boolean" ? { skillShare: given.skillShare } : {}), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
+        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(typeof given.intlWeb === "boolean" ? { intlWeb: given.intlWeb } : {}), ...(typeof given.campaignApp === "boolean" ? { campaignApp: given.campaignApp } : {}), ...(typeof given.skillShare === "boolean" ? { skillShare: given.skillShare } : {}), ...(typeof given.buddyAuto === "boolean" ? { buddyAuto: given.buddyAuto } : {}), ...Object.fromEntries(["concurrency", "tasksCacheTtl", "progressCacheHours"].filter(k => given[k] !== undefined).map(k => [k, given[k]])), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
           ...(given.proxy !== undefined && given.proxy !== maskProxy(current.proxy) ? { proxy: given.proxy } : {}) };
         writeJSON(join(this.dir, "config.json"), validateConfig(next));
+        this.wake();
+      }
+      else if (request.action === "retry") note.job = this.retry(request.job).id;
+      else if (request.action === "cancel") this.cancel(request.job);
+      else if (["pause-tasks", "resume-tasks"].includes(request.action)) {
+        const ids = request.accounts;
+        if (!Array.isArray(ids) || !ids.length || ids.some(id => !this.list().some(a => a.id === id))) throw new Error("账号不存在");
+        const config = this.config(), list = new Set(config.pausedAccounts || []);
+        for (const id of ids) { if (request.action === "pause-tasks") list.add(id); else list.delete(id); }
+        writeJSON(join(this.dir, "config.json"), validateConfig({ ...config, pausedAccounts: [...list] }));
       }
       else if (["intl-on", "intl-off"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), intlEnabled: request.action === "intl-on" });
       else note.job = this.submit([request.action], request.accounts, "page", { task: request.task }).id;
@@ -395,7 +441,7 @@ export class Runner {
   busy(ids) {
     return this.state.jobs.some(job => ["queued", "running"].includes(job.status) && job.accounts.some(a => ids.includes(a)));
   }
-  submit(requestedActions, ids, trigger = "manual", { task } = {}) {
+  submit(requestedActions, ids, trigger = "manual", { task, retryOf, accountActions } = {}) {
     if (!Array.isArray(requestedActions) || !requestedActions.length || requestedActions.some(a => !actions.includes(a))) throw new Error("无效的操作");
     if (requestedActions.includes("task") && (typeof task !== "string" || !/^[A-Za-z0-9_.-]{1,80}$/.test(task))) throw new Error("无效的任务");
     const single = requestedActions.includes("task") ? task : undefined;
@@ -403,9 +449,9 @@ export class Runner {
     const selected = ids?.length ? list.filter(a => ids.includes(a.id)) : list;
     if (!selected.length || (ids?.length && selected.length !== new Set(ids).size)) throw new Error("所选账号不存在或已停用");
     if (this.busy(selected.map(a => a.id))) throw new Error("所选账号已有任务正在执行或排队");
-    const job = { id: randomUUID(), actions: requestedActions, ...(single ? { task: single } : {}), accounts: selected.map(a => a.id), trigger, status: "queued", created: new Date().toISOString(), logs: [], results: [] };
+    const job = { id: randomUUID(), actions: requestedActions, ...(single ? { task: single } : {}), accounts: selected.map(a => a.id), trigger, status: "queued", created: new Date().toISOString(), logs: [], results: [], retries: [], ...(retryOf ? { retryOf } : {}), queue: selected.map(a => ({ account: a.id, actions: accountActions?.[a.id] || requestedActions, status: "queued", completed: 0, total: (accountActions?.[a.id] || requestedActions).length })) };
     this.state.jobs.unshift(job);
-    this.state.jobs = this.state.jobs.slice(0, 100);
+    this.state.jobs = this.state.jobs.filter((j, i) => i < 100 || ["queued", "running"].includes(j.status));
     this.save();
     this.run(job, selected).catch(e => {
       // A persistence/programming failure must remain visible to the process
@@ -415,33 +461,102 @@ export class Runner {
     });
     return job;
   }
+  // One FIFO controls all jobs. Changing the limit affects free slots without
+  // interrupting accounts already running; each account's actions stay serial.
+  wake() {
+    const limit = this.config().concurrency;
+    while (this.active < limit && this.waiters.length) {
+      const next = this.waiters.shift();
+      next.signal.removeEventListener("abort", next.abort);
+      this.active++;
+      next.resolve(true);
+    }
+  }
+  acquire(signal) {
+    if (signal.aborted) return Promise.resolve(false);
+    return new Promise(resolve => {
+      const entry = { signal, resolve, abort: () => {
+        this.waiters.splice(this.waiters.indexOf(entry), 1);
+        resolve(false);
+      } };
+      signal.addEventListener("abort", entry.abort, { once: true });
+      this.waiters.push(entry);
+      this.wake();
+    });
+  }
+  retry(id) {
+    const previous = this.state.jobs.find(j => j.id === id);
+    if (!previous || !["failed", "partial", "deferred", "interrupted"].includes(previous.status)) throw new Error("没有需要重试的操作");
+    const accountActions = {};
+    for (const account of previous.accounts) {
+      const failures = previous.results.filter(r => r.account === account && !r.ok).map(r => r.action);
+      const pending = previous.queue?.find(r => r.account === account);
+      if (pending && ["interrupted", "queued"].includes(pending.status)) failures.push(...pending.actions.filter(action => !previous.results.some(r => r.account === account && r.action === action && r.ok)));
+      if (failures.length || previous.status === "interrupted") accountActions[account] = [...new Set(failures.length ? failures : previous.actions)];
+    }
+    const ids = Object.keys(accountActions);
+    if (!ids.length) throw new Error("没有需要重试的操作");
+    return this.submit([...new Set(Object.values(accountActions).flat())], ids, "manual", { task: previous.task, retryOf: previous.id, accountActions });
+  }
   async run(job, list) {
-    const controller = new AbortController();
+    const controller = new AbortController(), round = { stop: false };
     this.controllers.set(job.id, controller);
-    job.status = "running";
-    job.started = new Date().toISOString();
+    const pending = [];
+    for (const [index, snapshot] of list.entries()) {
+      if (index && job.trigger.startsWith("schedule:") && this.spread() > 0) {
+        try { await delay(this.pace(), undefined, { signal: controller.signal }); }
+        catch (e) { if (!controller.signal.aborted) throw e; break; }
+      }
+      if (round.stop || controller.signal.aborted) break;
+      pending.push(this.runAccount(job, snapshot, controller, round));
+    }
+    await Promise.all(pending);
+    for (const row of job.queue) if (row.status === "queued") row.status = controller.signal.aborted ? "cancelled" : "interrupted";
+    const outcome = jobOutcome(job.results, controller.signal.aborted);
+    job.status = outcome.status;
+    job.counts = outcome.counts;
+    job.finished = new Date().toISOString();
+    this.controllers.delete(job.id);
+    this.boardStale = true;
     this.save();
     this.publish();
-    let stopAll = false;
-    for (const [index, snapshot] of list.entries()) {
-      // A scheduled run doesn't reach WorkBuddy for every account in the same second.
-      if (index && job.trigger.startsWith("schedule:") && this.spread() > 0) {
-        try { await delay(this.pace(), undefined, { signal: controller.signal }); } catch { break; }
-      }
+  }
+  async runAccount(job, snapshot, controller, round) {
+    const row = job.queue.find(r => r.account === snapshot.id);
+    const acquired = await this.acquire(controller.signal);
+    if (!acquired) { row.status = "cancelled"; return; }
+    try {
+      if (controller.signal.aborted || round.stop) { row.status = controller.signal.aborted ? "cancelled" : "interrupted"; return; }
       const config = this.config();
       const account = this.list().find(a => a.id === snapshot.id);
+      if (!account || !account.enabled || account.paused) { row.status = account?.paused ? "paused" : "skipped"; return; }
+      if (this.state.taskSnapshots) delete this.state.taskSnapshots[account.id];
+      row.status = "running";
+      row.started = new Date().toISOString();
+      job.status = "running";
+      job.started ||= row.started;
+      this.save(); this.publish();
       // Real refusals during this run are remembered for the board.
       const remembered = (this.state.limits ||= {})[account.id] ||= {};
-      const client = new WorkBuddyClient(account, config, { ...this.clientOptions, signal: controller.signal, limits: remembered });
-      const log = message => {
-        job.logs.push({ at: new Date().toISOString(), account: account.id, message });
+      const client = new WorkBuddyClient(account, config, { ...this.clientOptions, signal: controller.signal, limits: remembered, taskCache: this.taskCache, onRetry: event => {
+        job.retries.push({ ...event, account: account.id, action: row.action });
+        job.retries = job.retries.slice(-500);
+        row.retryAt = event.waitMs ? Date.parse(event.at) + event.waitMs : 0;
+        this.save(); this.publish();
+      } });
+      const log = (message, level = "info") => {
+        row.message = message;
+        job.logs.push({ at: new Date().toISOString(), account: account.id, message, channel: logChannel(row.action), level, action: row.action });
         job.logs = job.logs.slice(-500);
-        this.save();
+        this.save(); this.publish();
       };
       // WorkBuddy AI's model list picks the web conversation's model.
       const context = { account, config, state: this.state, trigger: job.trigger, task: job.task, log, checkpoint: () => this.save(), signal: controller.signal, ...(account.realm === "intl" ? { models: this.board.models?.intl } : {}) };
-      for (const action of job.actions) {
+      for (const action of row.actions) {
         if (controller.signal.aborted) break;
+        if (this.list().find(a => a.id === account.id)?.paused) { row.status = "paused"; log("任务已暂停，跳过后续操作"); break; }
+        row.action = action; row.retryAt = 0;
+        log(`开始${actionNames[action]}`);
         const result = { account: account.id, action, ok: false };
         let stop = false;
         try {
@@ -461,6 +576,7 @@ export class Runner {
             }
           }
         } catch (e) {
+          if (controller.signal.aborted) break;
           result.error = e.message;
           result.limited = !!e.limited;
           if (e.partial) { result.partial = true; result.counts = e.counts; }
@@ -472,36 +588,37 @@ export class Runner {
             if (network.failures >= NETWORK_FAILURES) {
               network.pausedUntil = Date.now() + NETWORK_PAUSE_MS;
               network.failures = 0;
-              log(`网络/代理连续失败 ${NETWORK_FAILURES} 次，自动任务暂停到 ${calendar(new Date(network.pausedUntil), config.timezone).time}；手动执行仍可`);
+              log(`网络/代理连续失败 ${NETWORK_FAILURES} 次，自动任务暂停到 ${calendar(new Date(network.pausedUntil), config.timezone).time}；手动执行仍可`, "error");
             } else {
-              log(`${action} 网络/代理失败（${network.failures}/${NETWORK_FAILURES}）：${e.message}`);
+              log(`${actionNames[action]}网络/代理失败（${network.failures}/${NETWORK_FAILURES}）：${e.message}`, "error");
             }
             this.save();
             stop = true;
-            stopAll = true;
+            round.stop = true;
           } else if (e.restricted) {
             result.restricted = true;
             this.state.restricted ||= {};
             this.state.restricted[account.id] = { day: job.day || calendar(new Date(job.started), config.timezone).day, at: new Date().toISOString(), message: e.message.slice(0, 240) };
             this.save();
-            log(`${action} 被上游限制：${e.message}；今天暂停这个账号的自动任务`);
+            log(`${actionNames[action]}被上游限制：${e.message}；今天暂停这个账号的自动任务`, "error");
             stop = true;
-          } else log(`${action} ${e.partial ? "部分失败" : e.limited ? "被限流" : "失败"}：${e.message}`);
+          } else log(`${action} ${e.partial ? "部分失败" : e.limited ? "被限流" : "失败"}：${e.message}`, "error");
         }
+        result.at = new Date().toISOString();
         job.results.push(result);
-        this.save();
+        row.completed++;
+        if (result.ok) log(`${actionNames[action]}已完成`);
+        this.save(); this.publish();
         if (stop) break;
       }
-      if (stopAll || controller.signal.aborted) break;
+      if (row.status !== "paused") row.status = controller.signal.aborted ? "cancelled" : row.completed < row.total ? "interrupted" : jobOutcome(job.results.filter(r => r.account === account.id)).status;
+      row.finished = new Date().toISOString();
+      row.retryAt = 0;
+    } finally {
+      this.active--;
+      this.save(); this.publish();
+      this.wake();
     }
-    const outcome = jobOutcome(job.results, controller.signal.aborted);
-    job.status = outcome.status;
-    job.counts = outcome.counts;
-    job.finished = new Date().toISOString();
-    this.controllers.delete(job.id);
-    this.boardStale = true;
-    this.save();
-    this.publish();
   }
   cancel(id) {
     const controller = this.controllers.get(id);
@@ -516,10 +633,10 @@ export class Runner {
       delete this.state.network.pausedUntil;
       this.save();
     }
-    // Each build keeps its own slots; enterprise logins only renew theirs.
+    // Each build keeps its own slots for personal accounts.
     for (const { kind, times, realm, actions: group, on } of plan(config)) {
       if (!on) continue;
-      const ids = this.list().filter(a => a.enabled && a.realm === realm && (group.includes("keepalive") || !a.enterprise) && this.state.restricted?.[a.id]?.day !== day).map(a => a.id);
+      const ids = this.list().filter(a => a.enabled && !a.paused && !a.enterprise && a.realm === realm && this.state.restricted?.[a.id]?.day !== day).map(a => a.id);
       if (!ids.length || this.busy(ids)) continue;
       for (const slot of times) {
         if (shifted(day, kind, slot, this.spread(config), this.salt()) > time) continue;
@@ -534,6 +651,8 @@ export class Runner {
         }
         const job = this.submit(group, ids, `schedule:${kind}:${slot}`);
         job.day = day;
+        job.attempt = (previous?.attempts || 0) + 1;
+        if (previous) job.retryOf = previous.job;
         this.state.slots[key] = { job: job.id, attempts: (previous?.attempts || 0) + 1 };
         // Retain a week of slot/event deduplication, rather than an unbounded ledger.
         const cutoff = calendar(new Date(now - 7 * 86400_000), config.timezone).day;

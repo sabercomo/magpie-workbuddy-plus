@@ -35,11 +35,13 @@ const accounts = [
     tasks: { total: 9, claimed: 5, credit: 260, open: [
       task("Expert_team_use_3", "体验专家团队协作", "claimable", 1, 1, 80, 20),
       task("skill_1", "连续 3 天使用 Skill", "auto", 2, 3, 100, 30),
-      task("wb_wechat_oa_subscribe_task", "关注官方公众号", "manual", 0, 1, 50, 0, "需要关注官方公众号满 24 小时"),
+      task("expert_use_new", "新专家任务", "manual", 0, 1, 100, 0, "暂时还不能自动做"),
       task("Sequential_Tasks_4", "邀请好友体验", "locked", 0, 1, 30)
     ] },
     growth: { energy: 340, earned: 1280, spent: 940, draws: 2, buddies: 7, rarity: { R: 4, SR: 2, UR: 1 }, current: ["团子"] },
-    checkin: { outcome: "claimed", credit: 100, streak: 12, at: at(0, 0, 0) },
+    compensation: { active: true, claimed: false, credit: 500, end: "2026-11-22 23:59:59" },
+    buddy: { affordable: 2, maxOpen: 5 },
+    checkin: { outcome: "claimed", credit: 100, streak: 12, at: at(0, 0, 0), source: "upstream" },
     // Its own 24-hour allowance on one model spent, back late tonight.
     limits: [{ model: "kimi-k3-1", resets: at(0, 23, 40) }],
     ledger: { gained: 430, used: 788, sources: [["每日签到", 300], ["成长任务", 100], ["猫猫旅行", 30]], entries: [
@@ -59,7 +61,7 @@ const accounts = [
     streak: { days: 5, makeupCards: 0, active: true, nextTier: { days: 7, remaining: 2, credit: 100, energy: 20 } },
     tasks: { total: 9, claimed: 7, credit: 80, open: [
       task("skill_1", "连续 3 天使用 Skill", "auto", 1, 3, 50, 10),
-      task("RichMeow_Chat", "在桌面端发起对话", "manual", 0, 1, 30, 0, "需要在桌面端发起对话")
+      task("chat_5", "聊天 5 次", "auto", 2, 5, 100)
     ] },
     growth: { energy: 85, earned: 420, spent: 335, draws: 0, buddies: 3, rarity: { R: 2, SR: 1 }, current: ["芝麻"] },
     checkin: { outcome: "claimed", credit: 100, streak: 5, at: at(0, 0, 0) }
@@ -110,6 +112,20 @@ const reasoningOf = id => {
 const model = ([id, name, rate, context, desc, extra = {}]) => ({ id, name, desc, rate, context, isDefault: !!extra.def, reasoning: reasoningOf(id), ...extra.tier ? { tier: extra.tier } : {}, ...extra.promo ? { promo: extra.promo } : {} });
 const proOnly = { label: "Pro Only", note: "模型仅面向 Pro 用户开放。", exclusive: true };
 const queued = { label: "订阅优先", note: "资源紧张，旗舰版及高级版会员享优先调度。", exclusive: false };
+accounts.push({ ...structuredClone(accounts[1]), id: "demo-5", name: "测试号" });
+
+for (const a of accounts) {
+  const state = a.id === "demo-5" ? "limited" : a.id === "intl:demo-4" ? "failed" : a.id === "demo-2" ? "attention" : "normal";
+  a.enabled = true;
+  a.health = {
+    state,
+    failures: state === "failed" ? 3 : state === "normal" ? 0 : 1,
+    lastSuccess: new Date(now - 3600_000).toISOString(),
+    cooldownUntil: state === "limited" ? now + 20_000 : 0,
+    next: a.enterprise ? null : "09:01"
+  };
+}
+
 const models = {
   at: now - 4 * 60_000,
   cn: { account: "主力号", plan: { name: "体验版", paid: false }, models: [
@@ -166,21 +182,26 @@ const models = {
 };
 
 const hhmm = t => `${String(new Date(t).getHours()).padStart(2, "0")}:${String(new Date(t).getMinutes()).padStart(2, "0")}`;
-const slots = [["night", "01:00"], ["daily", "09:00"], ["tasks", "09:10"], ["daily", "21:00"], ["tasks", "21:10"], ["keepalive", "22:00"],
-  ["intl-daily", "09:00"], ["intl-web", "10:30"], ["intl-daily", "21:00"], ["intl-keepalive", "22:00"]].map(([kind, time]) => {
+const slots = [["night", "01:00"], ["daily", "09:00"], ["tasks", "09:10"], ["daily", "21:00"], ["tasks", "21:10"],
+  ["intl-daily", "09:00"], ["intl-web", "10:30"], ["intl-daily", "21:00"]].map(([kind, time]) => {
   const [h, m] = time.split(":").map(Number), due = at(0, h, m) <= now;
   return { kind, at: time, status: due ? "succeeded" : "upcoming", attempts: due ? 1 : 0 };
 });
-const job = (actions, minutes, last) => ({ id: `demo-${minutes}`, actions, status: "succeeded", trigger: "manual", created: new Date(now - minutes * 60_000).toISOString(), finished: new Date(now - minutes * 60_000 + 40_000).toISOString(), last });
+const job = (actions, minutes, last) => ({ accounts: [actions.includes("web") ? "intl:demo-4" : "demo-1"], logs: [{ at: new Date(now - minutes * 60_000).toISOString(), account: actions.includes("web") ? "intl:demo-4" : "demo-1", message: last, channel: actions.includes("web") ? "chat" : "task", level: "info" }], id: `demo-${minutes}`, actions, status: "succeeded", trigger: "manual", created: new Date(now - minutes * 60_000).toISOString(), finished: new Date(now - minutes * 60_000 + 40_000).toISOString(), last });
 
 writePage(join(process.argv[2], "data.js"), {
   generated: new Date(now).toISOString(), at: now - 4 * 60_000, refreshing: false, enabled: true, intlEnabled: true,
-  schedules: { daily: ["09:00", "21:00"], tasks: ["09:10", "21:10"], night: ["01:00"], keepalive: ["22:00"] },
-  intlSchedules: { daily: ["09:00", "21:00"], web: ["10:30"], keepalive: ["22:00"] },
+  schedules: { daily: ["09:00", "21:00"], tasks: ["09:10", "21:10"], night: ["01:00"] },
+  intlSchedules: { daily: ["09:00", "21:00"], web: ["10:30"] },
   intl: { enabled: true, web: true, accounts: 1 },
-  settings: { timezone: "Asia/Shanghai", spread: 0, proxy: "", intlWebModel: "auto", intlWeb: true },
+  settings: { timezone: "Asia/Shanghai", spread: 0, proxy: "", intlWebModel: "auto", intlWeb: true, buddyAuto: false, concurrency: 1, tasksCacheTtl: 20, progressCacheHours: 6 },
   accounts, models, today: { timezone: "Asia/Shanghai", slots, next: slots.find(s => s.status === "upcoming") || null },
   jobs: [
+    { id: "demo-running", actions: ["travel", "tasks"], accounts: ["demo-1", "demo-2"], status: "running", created: new Date(now - 25_000).toISOString(), started: new Date(now - 20_000).toISOString(), counts: { succeeded: 1, failed: 0, total: 1 }, queue: [
+      { account: "demo-1", status: "running", completed: 1, total: 2, action: "tasks", message: "成长任务：接取工作台搭建师" },
+      { account: "demo-2", status: "queued", completed: 0, total: 2 }
+    ], logs: [{ at: new Date(now - 3000).toISOString(), account: "demo-1", channel: "task", message: "识别专家任务「工作台搭建师」，已接取" }] },
+    { id: "demo-failed", actions: ["tasks"], accounts: ["demo-5"], status: "deferred", created: new Date(now - 15 * 60_000).toISOString(), finished: new Date(now - 14 * 60_000).toISOString(), counts: { succeeded: 0, failed: 1, limited: 1, total: 1 }, queue: [{ account: "demo-5", status: "deferred", completed: 1, total: 1, message: "上游限流，本轮请求已停止重试" }], retries: [0,5,25].map((sec,i) => ({ request: "demo-request", account: "demo-5", action: "tasks", path: "/v2/activity/growth/tasks", at: new Date(now - 15 * 60_000 + sec * 1000).toISOString(), attempt: i + 1, status: 429, waitMs: [5000,20000,0][i], error: true })), logs: [{ at: new Date(now - 14 * 60_000).toISOString(), account: "demo-5", channel: "task", level: "error", message: "成长任务被限流：HTTP 429，本次请求已停止重试，等待下一次定时补跑" }] },
     job(["web"], 70, "海外号：国际版网页会话已跑完（hy3，当前免费，11 秒），每日活跃奖励通常次日凌晨到账"),
     job(["tasks"], 95, "主力号：成长任务完成 2 项，领取 80 积分"),
     job(["travel"], 130, "备用号：芝麻出发去大理"),

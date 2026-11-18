@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaults, initialize, readJSON, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
-import { summarize, usage, usageSince, collect, taskBoard, pageBuild, allowance, dropped } from "../board.mjs";
+import { summarize, usage, usageSince, collect, taskBoard, pageBuild, allowance, dropped, checkin } from "../board.mjs";
 import { note } from "../limits.mjs";
 import { Runner } from "../runner.mjs";
 
@@ -198,18 +198,19 @@ test("page snapshot carries no credentials and each page request runs once", asy
   const dir = mkdtempSync(join(tmpdir(), "wb-plus-board-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   initialize(dir); mkdirSync(join(dir, "magpie"));
-  writeJSON(join(dir, "magpie", "plugin-auth.json"), { "workbuddy#u1": { type: "oauth", uid: "u1", accountId: "fixture", access: "private-access", refresh: "private-refresh", expires: Date.now() + 86400_000 } });
+  const magpieExpiry = Date.now() - 60_000;
+  writeJSON(join(dir, "magpie", "plugin-auth.json"), { "workbuddy#u1": { type: "oauth", uid: "u1", accountId: "fixture", access: "private-access", refresh: "private-refresh", expires: magpieExpiry } });
   writeJSON(join(dir, "config.json"), { ...defaults, magpieDir: join(dir, "magpie") });
   const pageFile = join(dir, "page", "data.js");
   const runner = new Runner(dir, { gap: 0, fetcher: async url => ({
     "/billing/meter/get-user-resource": ok({ Accounts: [] }), "/billing/meter/get-user-request-usage": ok({ data: [] }),
-    "/activity/growth/buddy/info": ok({ buddy: {} }), "/activity/growth/streak": ok({ streak: { days: 1 } }),
-    "/v2/plugin/auth/token/refresh": Response.json({ code: 1 })
+    "/activity/growth/buddy/info": ok({ buddy: {} }), "/activity/growth/streak": ok({ streak: { days: 1 } })
   })[new URL(url).pathname] ?? Response.json({ code: 0, data: {} }) }, { pageFile });
   await runner.refreshBoard();
   const page = readFileSync(pageFile, "utf8");
   assert.match(page, /globalThis\.WBPLUS = /);
   assert.ok(!/private-access|private-refresh/.test(page));
+  assert.equal(runner.boardView().accounts[0].expires, magpieExpiry, "the snapshot reports the expiry Magpie saved");
   const build = page.match(/"build":"([0-9a-f]{12})"/)?.[1];
   assert.ok(build, "snapshot carries the page fingerprint");
   writeFileSync(join(dir, "page", "board.js"), "// updated");
@@ -241,9 +242,9 @@ test("page snapshot carries no credentials and each page request runs once", asy
 
   // Settings saved from Magpie's page, for installs whose local panel can't be reached.
   writeJSON(join(dir, "config.json"), { ...runner.config(), proxy: "http://user:secret@proxy.example:8080" });
-  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlWebModel: "auto", intlWeb: true, campaignApp: false, skillShare: true });
+  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlWebModel: "auto", intlWeb: true, campaignApp: false, skillShare: true, buddyAuto: false, concurrency: 1, tasksCacheTtl: 20, progressCacheHours: 6 });
   assert.ok(!JSON.stringify(runner.boardView()).includes("secret"));
-  const schedules = { daily: ["08:30"], tasks: ["08:40", "20:40"], sweep: ["10:20", "22:20"], night: [], keepalive: ["22:00"] };
+  const schedules = { daily: ["08:30"], tasks: ["08:40", "20:40"], sweep: ["10:20", "22:20"], night: [] };
   assert.equal(runner.pageRequest({ id: "c1", action: "config", at: Date.now(), config: { schedules, spread: 5, timezone: "Asia/Shanghai", proxy: "http://***@proxy.example:8080" } }).ok, true);
   const saved = readJSON(join(dir, "config.json"));
   assert.deepEqual(saved.schedules, schedules);
@@ -254,7 +255,7 @@ test("page snapshot carries no credentials and each page request runs once", asy
   assert.match(runner.pageRequest({ id: "c3", action: "config", at: Date.now(), config: { schedules: { ...schedules, daily: ["25:00"] } } }).error, /HH:MM/);
   assert.deepEqual(readJSON(join(dir, "config.json")).schedules, schedules, "a refused change saves nothing");
   // WorkBuddy AI's own times and its web conversation's model.
-  const intlSchedules = { daily: ["09:30"], web: ["11:00"], keepalive: ["22:00"] };
+  const intlSchedules = { daily: ["09:30"], web: ["11:00"] };
   assert.equal(runner.pageRequest({ id: "c4", action: "config", at: Date.now(), config: { schedules, intlSchedules, intlWebModel: "hy3" } }).ok, true);
   assert.deepEqual([readJSON(join(dir, "config.json")).intlSchedules, readJSON(join(dir, "config.json")).intlWebModel], [intlSchedules, "hy3"]);
   assert.deepEqual(runner.boardView().intlSchedules, intlSchedules);
@@ -377,4 +378,76 @@ test("the board shows limits learned from a real refusal, never by probing", asy
   assert.ok(row.usage, "usage was read");
   assert.equal(probes, 0, "collect never asks a model");
   assert.deepEqual(row.limits, [{ model: "glm-5.2", resets: now + 86400_000 }]);
+});
+
+test("a board row reads compensation, blind-box quota and the upstream check-in snapshot for personal China accounts", async t => {
+  const { account, client } = clientFor(url => {
+    const path = url.pathname;
+    if (path === "/billing/meter/get-user-resource") return ok({ Accounts: [] });
+    if (path === "/billing/meter/get-user-request-usage") return ok({ data: [] });
+    if (path === "/activity/growth/buddy/info") return ok({ buddy: {} });
+    if (path === "/activity/growth/buddy/travel/status") return ok({ state: "none" });
+    if (path === "/activity/growth/streak") return ok({ streak: { days: 0 } });
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: [] });
+    if (path === "/v2/activity/growth/energy") return ok({ balance: 20 });
+    if (path === "/activity/growth/lottery/summary") return ok({ chances: 0 });
+    if (path === "/activity/growth/buddy/list") return ok({ buddies: [] });
+    if (path === "/billing/meter/compensation-status") return ok({ active: true, claimed: false, credit_num: 500, end_time: "2026-11-22 23:59:59" });
+    if (path === "/v2/activity/growth/buddy/quota") return ok({ affordable: 2, max_open_count: 5 });
+    if (path === "/v2/billing/meter/checkin-activity-status") return ok({ active: true, today_checked_in: true, today_credit: 100, streak_days: 12 });
+    if (path === "/portal/activity/config") return ok({ config: { in_period: false } });
+    return ok({});
+  });
+  const who = { ...account, id: "cn:u1", realm: "cn" };
+  const row = await collect(who, client, defaults, undefined, async () => {});
+  assert.deepEqual(row.compensation, { active: true, claimed: false, credit: 500, end: "2026-11-22 23:59:59" });
+  assert.deepEqual(row.buddy, { affordable: 2, maxOpen: 5 });
+  assert.deepEqual({ active: row.checkinUpstream.active, checked: row.checkinUpstream.checked, credit: row.checkinUpstream.credit, streak: row.checkinUpstream.streak }, { active: true, checked: true, credit: 100, streak: 12 });
+});
+
+test("an enterprise account skips personal compensation and blind-box reads", async t => {
+  const { account, client } = clientFor(url => {
+    const path = url.pathname;
+    if (path === "/billing/meter/get-user-resource") return ok({ Accounts: [] });
+    if (path === "/billing/meter/get-user-request-usage") return ok({ data: [] });
+    return ok({});
+  });
+  const row = await collect({ ...account, id: "cn:e", realm: "cn", enterprise: true }, client, defaults, undefined, async () => {});
+  assert.equal(row.compensation, undefined);
+  assert.equal(row.buddy, undefined);
+  assert.equal(row.checkinUpstream, undefined);
+});
+
+test("the upstream check-in wins when it says checked; Magpie's same-day record still counts", () => {
+  const day = "2026-11-17", at = Date.parse(`${day}T00:10:00+08:00`);
+  const found = { on: true, records: { "workbuddy|workbuddy#u1": { day, at: `${day}T00:00:18+08:00`, outcome: "claimed", credit: 100, streak: 11 } } };
+  const upstream = checkin(found, "workbuddy#u1", day, { active: true, checked: true, credit: 100, streak: 12, at });
+  assert.deepEqual([upstream.outcome, upstream.streak, upstream.source], ["claimed", 12, "upstream"]);
+  const local = checkin(found, "workbuddy#u1", day, { active: true, checked: false, at: at - 600_000 });
+  assert.deepEqual([local.outcome, local.credit, local.source], ["claimed", 100, "magpie"]);
+  const waiting = checkin({ on: true, records: {} }, "workbuddy#u1", day, { active: true, checked: false, at: at - 600_000 });
+  assert.deepEqual([waiting.outcome, waiting.source], ["waiting", "upstream"]);
+});
+
+test("task board recognizes a new expert task from jump_url and marks unsupported tasks unknown", () => {
+  const jump = `workbuddy://chat?deeplink=${encodeURIComponent("workbuddy://expert?expertId=ex_Abc123")}`;
+  const got = taskBoard([
+    { task_code: "expert_use_new", title: "新专家", accept_status: "accepted", progress: { current: 0, target: 1 }, jump_url: jump, reward_credit: 100 },
+    { task_code: "New_Task_X", title: "新任务", accept_status: "not_accepted", progress: null, reward_credit: 80 }
+  ]);
+  const expert = got.open.find(t => t.code === "expert_use_new");
+  const unknown = got.open.find(t => t.code === "New_Task_X");
+  assert.deepEqual([expert.state, expert.dynamic, expert.jump_url], ["auto", true, jump]);
+  assert.deepEqual([unknown.state, unknown.unknown], ["manual", true]);
+});
+
+test('check-in uses the newer same-day observation and rejects yesterday snapshots', () => {
+  const day = '2026-11-18', found = { on: true, records: { 'workbuddy|workbuddy#u1': { day, at: `${day}T09:00:00+08:00`, outcome: 'claimed', credit: 100 } } };
+  const early = { active: true, checked: false, at: Date.parse(`${day}T00:44:00+08:00`) };
+  assert.equal(checkin(found, 'workbuddy#u1', day, early).source, 'magpie');
+  const later = { ...early, at: Date.parse(`${day}T10:00:00+08:00`) };
+  assert.equal(checkin(found, 'workbuddy#u1', day, later).outcome, 'waiting');
+  const yesterday = { active: true, checked: true, at: Date.parse('2026-11-17T23:59:00+08:00') };
+  assert.equal(checkin({ on: true, records: {} }, 'workbuddy#u1', day, yesterday).outcome, 'waiting');
+  assert.equal(checkin({ on: true, records: {} }, 'workbuddy#u1', day, { checked: true }).outcome, 'waiting');
 });
