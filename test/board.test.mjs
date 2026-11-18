@@ -188,7 +188,7 @@ test("the WorkBuddy AI board only reads the supported parts and explains a rejec
   } });
   const row = await collect(account, client, config);
   assert.deepEqual(Object.keys(row.errors), ["balance"]);
-  assert.match(row.errors.balance, /^HTTP 代理无法连接 .*503 Service Unavailable.*清空 HTTP 代理/);
+  assert.match(row.errors.balance, /^HTTP 代理无法连接 .*503 Service Unavailable.*清空对应代理/);
   assert.equal(row.streak.days, 6);
   assert.equal(row.checkin.outcome, "waiting");
   assert.equal(paths.length, 5);
@@ -242,7 +242,7 @@ test("page snapshot carries no credentials and each page request runs once", asy
 
   // Settings saved from Magpie's page, for installs whose local panel can't be reached.
   writeJSON(join(dir, "config.json"), { ...runner.config(), proxy: "http://user:secret@proxy.example:8080" });
-  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlWebModel: "auto", intlWeb: true, campaignApp: false, skillShare: true, buddyAuto: false, concurrency: 1, tasksCacheTtl: 20, progressCacheHours: 6 });
+  assert.deepEqual(runner.boardView().settings, { timezone: "Asia/Shanghai", spread: 10, proxy: "http://***@proxy.example:8080", intlProxy: "", intlWebModel: "auto", intlWeb: true, campaignApp: false, skillShare: true, buddyAuto: false, concurrency: 1, tasksCacheTtl: 20, progressCacheHours: 6 });
   assert.ok(!JSON.stringify(runner.boardView()).includes("secret"));
   const schedules = { daily: ["08:30"], tasks: ["08:40", "20:40"], sweep: ["10:20", "22:20"], night: [] };
   assert.equal(runner.pageRequest({ id: "c1", action: "config", at: Date.now(), config: { schedules, spread: 5, timezone: "Asia/Shanghai", proxy: "http://***@proxy.example:8080" } }).ok, true);
@@ -254,6 +254,16 @@ test("page snapshot carries no credentials and each page request runs once", asy
   assert.equal(readJSON(join(dir, "config.json")).proxy, "");
   assert.match(runner.pageRequest({ id: "c3", action: "config", at: Date.now(), config: { schedules: { ...schedules, daily: ["25:00"] } } }).error, /HH:MM/);
   assert.deepEqual(readJSON(join(dir, "config.json")).schedules, schedules, "a refused change saves nothing");
+  // WorkBuddy AI's own proxy: masked round-trip, direct, and clearing.
+  writeJSON(join(dir, "config.json"), { ...runner.config(), intlProxy: "http://alice:secret@intl.example:8080" });
+  assert.equal(runner.boardView().settings.intlProxy, "http://***@intl.example:8080");
+  assert.ok(!JSON.stringify(runner.boardView()).includes("secret"));
+  assert.equal(runner.pageRequest({ id: "d1", action: "config", at: Date.now(), config: { intlProxy: "http://***@intl.example:8080" } }).ok, true);
+  assert.equal(readJSON(join(dir, "config.json")).intlProxy, "http://alice:secret@intl.example:8080", "a masked intl proxy sent back keeps the saved one");
+  assert.equal(runner.pageRequest({ id: "d2", action: "config", at: Date.now(), config: { intlProxy: "direct" } }).ok, true);
+  assert.equal(readJSON(join(dir, "config.json")).intlProxy, "direct");
+  assert.equal(runner.pageRequest({ id: "d3", action: "config", at: Date.now(), config: { intlProxy: "" } }).ok, true);
+  assert.equal(readJSON(join(dir, "config.json")).intlProxy, "");
   // WorkBuddy AI's own times and its web conversation's model.
   const intlSchedules = { daily: ["09:30"], web: ["11:00"] };
   assert.equal(runner.pageRequest({ id: "c4", action: "config", at: Date.now(), config: { schedules, intlSchedules, intlWebModel: "hy3" } }).ok, true);

@@ -38,6 +38,15 @@ const accounts = [
       task("expert_use_new", "新专家任务", "manual", 0, 1, 100, 0, "暂时还不能自动做"),
       task("Sequential_Tasks_4", "邀请好友体验", "locked", 0, 1, 30)
     ] },
+    campaigns: [
+      { code: "campaign_starbucks_2026", label: "星巴克协作", tasks: [
+        { code: "invite", label: "邀请好友", progress: 0, target: 1, credit: 0, done: false, claimed: false, manual: true },
+        { code: "ai_chat", label: "与 AI 对话 3 次", progress: 3, target: 3, credit: 100, done: true, claimed: true, manual: false }
+      ] },
+      { code: "campaign_reporter_2026", label: "记者节福利活动", tasks: [
+        { code: "read", label: "阅读 3 篇文章", progress: 3, target: 3, credit: 50, done: true, claimed: true, manual: false }
+      ] }
+    ],
     growth: { energy: 340, earned: 1280, spent: 940, draws: 2, buddies: 7, rarity: { R: 4, SR: 2, UR: 1 }, current: ["团子"] },
     compensation: { active: true, claimed: false, credit: 500, end: "2026-11-22 23:59:59" },
     buddy: { affordable: 2, maxOpen: 5 },
@@ -63,6 +72,15 @@ const accounts = [
       task("skill_1", "连续 3 天使用 Skill", "auto", 1, 3, 50, 10),
       task("chat_5", "聊天 5 次", "auto", 2, 5, 100)
     ] },
+    campaigns: [
+      { code: "campaign_starbucks_2026", label: "星巴克协作", tasks: [
+        { code: "invite", label: "邀请好友", progress: 0, target: 1, credit: 0, done: false, claimed: false, manual: true },
+        { code: "ai_chat", label: "与 AI 对话 3 次", progress: 3, target: 3, credit: 100, done: true, claimed: true, manual: false }
+      ] },
+      { code: "campaign_reporter_2026", label: "记者节福利活动", tasks: [
+        { code: "read", label: "阅读 3 篇文章", progress: 3, target: 3, credit: 50, done: true, claimed: true, manual: false }
+      ] }
+    ],
     growth: { energy: 85, earned: 420, spent: 335, draws: 0, buddies: 3, rarity: { R: 2, SR: 1 }, current: ["芝麻"] },
     checkin: { outcome: "claimed", credit: 100, streak: 5, at: at(0, 0, 0) }
   },
@@ -113,6 +131,7 @@ const model = ([id, name, rate, context, desc, extra = {}]) => ({ id, name, desc
 const proOnly = { label: "Pro Only", note: "模型仅面向 Pro 用户开放。", exclusive: true };
 const queued = { label: "订阅优先", note: "资源紧张，旗舰版及高级版会员享优先调度。", exclusive: false };
 accounts.push({ ...structuredClone(accounts[1]), id: "demo-5", name: "测试号" });
+accounts.at(-1).campaigns = [];
 
 for (const a of accounts) {
   const state = a.id === "demo-5" ? "limited" : a.id === "intl:demo-4" ? "failed" : a.id === "demo-2" ? "attention" : "normal";

@@ -5,7 +5,7 @@ import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { accounts, calendar, checkins, initialize, intlAccount, intlSchedules, magpieDir, maskProxy, plan, publicAccount, readJSON, settle, validateConfig, version, writeJSON } from "./storage.mjs";
+import { accounts, calendar, checkins, initialize, intlAccount, intlSchedules, magpieDir, maskProxy, plan, proxyFor, publicAccount, readJSON, settle, validateConfig, version, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
 import { checkin, collect, usageSince, writePage } from "./board.mjs";
@@ -170,7 +170,7 @@ export class Runner {
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
-      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false, campaignApp: config.campaignApp === true, skillShare: config.skillShare, buddyAuto: config.buddyAuto === true, concurrency: config.concurrency, tasksCacheTtl: config.tasksCacheTtl, progressCacheHours: config.progressCacheHours },
+      settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlProxy: maskProxy(config.intlProxy || ""), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false, campaignApp: config.campaignApp === true, skillShare: config.skillShare, buddyAuto: config.buddyAuto === true, concurrency: config.concurrency, tasksCacheTtl: config.tasksCacheTtl, progressCacheHours: config.progressCacheHours },
       accounts: this.board.accounts.map(({ key, ...a }) => {
         const row = this.withLedger(a, key, found, day);
         const restricted = this.state.restricted?.[a.id], webPaused = this.state.webPaused?.[a.id];
@@ -319,7 +319,7 @@ export class Runner {
         catch (e) { models.cn = { error: e.message.slice(0, 160) }; }
       }
       if (abroad) {
-        try { models.intl = await intlModels(abroad, { proxy: config.proxy, ...(this.clientOptions.fetcher ? { fetcher: this.clientOptions.fetcher } : {}) }); }
+        try { models.intl = await intlModels(abroad, { proxy: proxyFor(config, "intl"), ...(this.clientOptions.fetcher ? { fetcher: this.clientOptions.fetcher } : {}) }); }
         catch (e) { models.intl = { error: e.message.slice(0, 160) }; }
       }
       this.board = { at: Date.now(), accounts: rows, models };
@@ -416,7 +416,8 @@ export class Runner {
         // saved one.
         const current = this.config(), given = request.config || {};
         const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(typeof given.intlWeb === "boolean" ? { intlWeb: given.intlWeb } : {}), ...(typeof given.campaignApp === "boolean" ? { campaignApp: given.campaignApp } : {}), ...(typeof given.skillShare === "boolean" ? { skillShare: given.skillShare } : {}), ...(typeof given.buddyAuto === "boolean" ? { buddyAuto: given.buddyAuto } : {}), ...Object.fromEntries(["concurrency", "tasksCacheTtl", "progressCacheHours"].filter(k => given[k] !== undefined).map(k => [k, given[k]])), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
-          ...(given.proxy !== undefined && given.proxy !== maskProxy(current.proxy) ? { proxy: given.proxy } : {}) };
+          ...(given.proxy !== undefined && given.proxy !== maskProxy(current.proxy) ? { proxy: given.proxy } : {}),
+          ...(given.intlProxy !== undefined && given.intlProxy !== maskProxy(current.intlProxy || "") ? { intlProxy: given.intlProxy } : {}) };
         writeJSON(join(this.dir, "config.json"), validateConfig(next));
         this.wake();
       }
@@ -584,13 +585,13 @@ export class Runner {
             result.network = true;
             const network = this.state.network ||= { failures: 0 };
             network.failures = (network.failures || 0) + 1;
-            network.last = { at: new Date().toISOString(), message: e.message.slice(0, 240) };
+            network.last = { at: new Date().toISOString(), message: e.message.slice(0, 240), ...(e.diagnostic ? { diagnostic: String(e.diagnostic).slice(0, 240) } : {}) };
             if (network.failures >= NETWORK_FAILURES) {
               network.pausedUntil = Date.now() + NETWORK_PAUSE_MS;
               network.failures = 0;
               log(`网络/代理连续失败 ${NETWORK_FAILURES} 次，自动任务暂停到 ${calendar(new Date(network.pausedUntil), config.timezone).time}；手动执行仍可`, "error");
             } else {
-              log(`${actionNames[action]}网络/代理失败（${network.failures}/${NETWORK_FAILURES}）：${e.message}`, "error");
+              log(`${actionNames[action]}网络/代理失败（${network.failures}/${NETWORK_FAILURES}）：${e.message}${e.diagnostic ? `（${e.diagnostic}）` : ""}`, "error");
             }
             this.save();
             stop = true;

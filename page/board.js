@@ -24,6 +24,7 @@
 
   const store = key => ({ get() { try { return localStorage.getItem(key); } catch { return null; } }, set(v) { try { localStorage.setItem(key, v); } catch {} } });
   const savedTab = store("wb-tab"), savedView = store("wb-view"), orderSaved = store("wb-order"), remembered = store("wb-realm"), navSaved = store("wb-nav");
+  const taskCardsSaved = store("wb-task-cards"), taskAccountsSaved = store("wb-task-accounts");
   let navSide = navSaved.get() === "side", layout;
 
   const tabs = [["board", "看板"], ["accounts", "账号与健康"], ["tasks", "任务"], ["schedule", "定时与记录"], ["models", "模型"]];
@@ -1152,18 +1153,100 @@
     const hours = Math.ceil((end - now) / 3600_000);
     return hours <= 0 ? "已截止" : hours <= 48 ? `剩余 ${hours} 小时` : `剩余 ${Math.ceil(hours / 24)} 天`;
   };
-  function taskPanels(rows, compRows, unknown, openDetails, now) {
-    const mine = rows.filter(a => !a.enterprise && !abroad(a) && !a.paused), group = el("div", "wb-task-panels");
+  const readTaskOrder = storage => {
+    try {
+      const value = JSON.parse(storage.get() || "[]");
+      return Array.isArray(value) ? value.filter(key => typeof key === "string") : [];
+    } catch { return []; }
+  };
+  const orderTaskNodes = (nodes, saved) => {
+    const rank = key => { const i = saved.indexOf(key); return i < 0 ? saved.length : i; };
+    return nodes.map((node, i) => [node, i])
+      .sort(([a, i], [b, j]) => rank(a.dataset.orderKey || a.dataset.card) - rank(b.dataset.orderKey || b.dataset.card) || i - j)
+      .map(([node]) => node);
+  };
+  const taskHandle = label => {
+    const b = el("button", "wb-card-handle");
+    b.type = "button";
+    b.setAttribute("draggable", "true");
+    b.setAttribute("aria-label", `拖动排序：${label}`);
+    b.title = "拖动排序 · Alt+方向键移动";
+    b.append(icon('<g fill="currentColor" stroke="none"><circle cx="5.5" cy="4" r="1.2"/><circle cx="10.5" cy="4" r="1.2"/><circle cx="5.5" cy="8" r="1.2"/><circle cx="10.5" cy="8" r="1.2"/><circle cx="5.5" cy="12" r="1.2"/><circle cx="10.5" cy="12" r="1.2"/></g>', 14));
+    return b;
+  };
+  const taskHeading = (label, title) => {
+    const group = el("div", "wb-card-heading");
+    group.append(taskHandle(label), el("strong", undefined, title));
+    return group;
+  };
+  const taskReorder = (container, storage) => {
+    const keyOf = node => node.dataset?.orderKey || node.dataset?.card || "";
+    const cardList = () => [...container.children].filter(node => keyOf(node));
+    const save = () => {
+      const list = cardList(), seen = new Set(list.map(keyOf));
+      storage.set(JSON.stringify([...list.map(keyOf), ...readTaskOrder(storage).filter(key => !seen.has(key))]));
+    };
+    let drag = null;
+    container.ondragstart = event => {
+      const handle = event.target.closest?.(".wb-card-handle");
+      const card = handle?.closest(".wb-task-card, .wb-extra-card");
+      if (!card || !cardList().includes(card)) return;
+      drag = card;
+      card.classList.add("dragging");
+      container.classList.add("sorting");
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", keyOf(card));
+        try { event.dataTransfer.setDragImage(card, 24, 24); } catch {}
+      }
+    };
+    container.ondragover = event => {
+      if (!drag) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      const over = event.target.closest?.(".wb-task-card, .wb-extra-card");
+      if (!over || over === drag || !cardList().includes(over)) return;
+      const rect = over.getBoundingClientRect();
+      container.insertBefore(drag, event.clientY > rect.top + rect.height / 2 ? over.nextSibling : over);
+    };
+    container.ondrop = event => { if (drag) event.preventDefault(); };
+    container.ondragend = () => {
+      if (!drag) return;
+      drag.classList.remove("dragging");
+      container.classList.remove("sorting");
+      drag = null;
+      save();
+    };
+    container.onkeydown = event => {
+      if (!event.altKey) return;
+      const handle = event.target.closest?.(".wb-card-handle");
+      const card = handle?.closest(".wb-task-card, .wb-extra-card");
+      if (!card || !cardList().includes(card)) return;
+      const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key];
+      if (!step) return;
+      event.preventDefault();
+      const list = cardList(), i = list.indexOf(card), to = i + step;
+      if (to < 0 || to >= list.length) return;
+      container.insertBefore(card, step < 0 ? list[to] : list[to].nextSibling);
+      handle.focus();
+      save();
+    };
+  };
+
+  function taskPanels(rows, compRows, now) {
+    const mine = rows.filter(a => !a.enterprise && !abroad(a) && !a.paused);
     if (!mine.length) return null;
 
-    const need = el("section", "wb-work-card wb-task-panel"), needHead = el("div", "wb-task-panel-head"), needFeedback = workStatus();
+    const need = el("section", "wb-extra-card wb-work-card wb-task-panel"), needHead = el("div", "wb-task-panel-head"), needFeedback = workStatus();
+    need.dataset.card = "compensation";
     const needTitle = el("div", "wb-task-panel-title");
-    needTitle.append(el("h2", "wb-work-title", unknown.length ? "需要你处理" : "官方补偿"), el("span", "wb-task-count", !compRows.length && !unknown.length ? "暂无待领取" : String(compRows.length + unknown.length)));
+    needTitle.append(taskHandle("官方补偿"), el("h2", "wb-work-title", "官方补偿"), el("span", "wb-task-count", compRows.length ? String(compRows.length) : "暂无待领取"));
     const claimable = compRows.filter(({ c }) => c && !c.claimed && c.credit > 0);
     needHead.append(needTitle);
-    if (claimable.length && hooks.onRunAction) {
+    if (hooks.onRunAction) {
       const all = workButton("全部领取", () => hooks.onRunAction("compensation", claimable.map(({ a }) => a.id)), needFeedback);
-      all.className = "wb-task-head-action";
+      all.className = "wb-task-row-action";
+      all.disabled = !claimable.length;
       needHead.append(all);
     }
     need.append(needHead);
@@ -1188,31 +1271,27 @@
           }
         } else message = c.claimed ? "官方补偿已领取" : "当前没有补偿";
       }
+      if (!action) {
+        action = el("button", "wb-task-row-action primary", "领取");
+        action.type = "button";
+        action.disabled = true;
+      }
       copy.append(el("strong", "wb-task-row-name", a.name), el("span", `wb-task-row-note${urgent ? " urgent" : ""}`, message));
-      row.append(copy);
-      if (action) row.append(action);
-      need.append(row);
-    }
-    for (const { account, task } of unknown) {
-      const row = el("div", "wb-task-panel-row"), copy = el("div", "wb-task-row-copy");
-      copy.append(el("strong", "wb-task-row-name", account.name), el("span", "wb-task-row-note", `${task.title} · 需要你处理`));
-      const view = el("button", "wb-task-row-action", "查看");
-      view.type = "button";
-      view.onclick = () => openDetails();
-      row.append(copy, view);
+      row.append(copy, action);
       need.append(row);
     }
     need.append(needFeedback);
-    group.append(need);
 
-    const buddy = el("section", "wb-work-card wb-task-panel"), buddyHead = el("div", "wb-task-panel-head"), buddyFeedback = workStatus();
+    const buddy = el("section", "wb-extra-card wb-work-card wb-task-panel"), buddyHead = el("div", "wb-task-panel-head"), buddyFeedback = workStatus();
+    buddy.dataset.card = "buddy";
     const buddyTitle = el("div", "wb-task-panel-title");
-    buddyTitle.append(el("h2", "wb-work-title", "Buddy 盲盒"));
+    buddyTitle.append(taskHandle("Buddy 盲盒"), el("h2", "wb-work-title", "Buddy 盲盒"));
     const available = mine.filter(a => a.buddy?.affordable > 0), total = available.reduce((sum, a) => sum + Math.min(a.buddy.affordable, a.buddy.maxOpen || a.buddy.affordable), 0);
     buddyHead.append(buddyTitle);
-    if (available.length && hooks.onRunAction) {
-      const all = workButton(`打开全部 · ${total} 个`, () => hooks.onRunAction("buddy", available.map(a => a.id)), buddyFeedback);
-      all.className = "wb-task-head-action primary";
+    if (hooks.onRunAction) {
+      const all = workButton(total ? `打开全部 · ${total} 个` : "打开全部", () => hooks.onRunAction("buddy", available.map(a => a.id)), buddyFeedback);
+      all.className = "wb-task-row-action primary";
+      all.disabled = !total;
       buddyHead.append(all);
     }
     buddy.append(buddyHead);
@@ -1220,17 +1299,33 @@
     for (const a of mine) {
       const row = el("div", "wb-task-panel-row"), copy = el("div", "wb-task-row-copy"), b = a.buddy, error = a.errors?.buddy;
       let message = "盲盒配额尚未读取", action = null;
-      if (error) message = `配额查询失败 · ${error}`;
-      else if (b) {
-        message = `能量 ${num(a.growth?.energy)} · 可开 ${num(b.affordable)} 个`;
+      if (error) {
+        message = `配额查询失败 · ${error}`;
+        if (hooks.onRefresh) {
+          action = workButton("重新查询", () => hooks.onRefresh(), buddyFeedback);
+          action.className = "wb-task-row-action";
+        }
+      } else if (b) {
+        message = b.affordable > 0 ? `能量 ${num(a.growth?.energy)} · 可开 ${num(b.affordable)} 个` : `能量 ${num(a.growth?.energy)} · 没有可开盲盒`;
         if (b.affordable > 0 && hooks.onRunAction) {
           action = workButton(`开 ${Math.min(b.affordable, b.maxOpen || b.affordable)} 个`, () => hooks.onRunAction("buddy", [a.id]), buddyFeedback);
           action.className = "wb-task-row-action";
+        } else if (b.affordable <= 0) {
+          action = el("button", "wb-task-row-action", "开盲盒");
+          action.type = "button";
+          action.disabled = true;
         }
+      } else if (hooks.onRefresh) {
+        action = workButton("重新查询", () => hooks.onRefresh(), buddyFeedback);
+        action.className = "wb-task-row-action";
+      }
+      if (!action) {
+        action = el("button", "wb-task-row-action", "开盲盒");
+        action.type = "button";
+        action.disabled = true;
       }
       copy.append(el("strong", "wb-task-row-name", a.name), el("span", "wb-task-row-note", message));
-      row.append(copy);
-      if (action) row.append(action);
+      row.append(copy, action);
       buddy.append(row);
     }
 
@@ -1250,8 +1345,7 @@
     if (!hooks.onConfig) input.disabled = true;
     auto.append(autoCopy, input);
     buddy.append(auto, buddyFeedback);
-    group.append(buddy);
-    return group;
+    return { comp: need, buddy };
   }
 
   function boardTab(rows, view, now) {
@@ -1447,123 +1541,245 @@
       (a.errors?.compensation || a.compensation?.active && !a.compensation.claimed && a.compensation.credit > 0 ? 1 : 0), 0);
   }
 
-  // The task center is a daily briefing, not a task database. It answers
-  // three questions: what will run, what needs the user, and are the domestic
-  // personal accounts okay. Everything else lives in the details below.
-  const briefCheckin = a => {
-    const c = a.checkin;
-    if (!c) return "签到读取失败";
-    if (["claimed", "done"].includes(c.outcome)) return "已签到";
-    if (["waiting", "pending"].includes(c.outcome)) return "未签到";
-    if (c.outcome === "off") return "签到未开启";
-    if (c.outcome === "ineligible") return "需在客户端签到";
-    if (c.outcome === "inactive") return "今天没签上";
-    return "签到读取失败";
-  };
+  // Restored task center: the old per-account task matrix, with the 0.7.4
+  // compensation and Buddy panels reused unchanged below it.
+  function taskLine(account, task, now, showAccount) {
+    const state = { claimable: ["可领奖", "ok"], auto: ["定时会完成", "go"], manual: ["需手动", "warn"], locked: ["未解锁", ""] }[task.state] || [task.state, ""];
+    const row = el("div", "wb-task"), main = el("div", "wb-task-main");
+    const titleWrap = el("div", "wb-task-title");
+    titleWrap.append(el("span", "wb-name", task.title));
+    if (showAccount) titleWrap.append(el("span", "wb-pill outline", account.name));
+    titleWrap.append(el("span", `wb-pill ${state[1]}`, task.state === "locked" && task.unlockAt > now ? `${when(task.unlockAt)} 解锁` : state[0]));
+    const meta = el("div", "wb-task-meta");
+    const facts = [
+      task.target ? `${task.current}/${task.target}` : "",
+      task.credit ? `+${num(task.credit)} 积分` : "",
+      task.energy ? `+${num(task.energy)} 能量` : "",
+      task.ends ? `${date(task.ends)} 截止` : "",
+      task.state === "manual" || task.state === "locked" ? task.note : ""
+    ].filter(Boolean);
+    if (task.target > 0) {
+      const pct = Math.min(100, Math.round((task.current || 0) / task.target * 100));
+      const track = el("span", "wb-mini-bar"), fill = el("span", task.state === "claimable" ? "ok" : "");
+      fill.style.width = `${pct}%`;
+      track.append(fill);
+      meta.append(track);
+    }
+    meta.append(el("span", "wb-sub", facts.join(" · ")));
+    main.append(titleWrap, meta);
+    row.append(main);
+    if (task.code && hooks.onTask && (task.state === "auto" || task.state === "claimable")) {
+      const run = el("button", `wb-task-run${task.state === "claimable" ? " claim" : ""}`, task.state === "claimable" ? "领奖" : "执行");
+      run.type = "button";
+      run.onclick = async () => {
+        run.disabled = true;
+        run.textContent = "已提交";
+        try { await hooks.onTask(account.id, task.code, task.title); }
+        catch (e) { run.disabled = false; run.textContent = "重试"; run.title = e.message; }
+      };
+      row.append(run);
+    } else if (task.state === "manual") {
+      row.append(el("span", "wb-sub wb-task-why", "官方客户端"));
+    }
+    row.title = [task.note, task.ends ? `${when(task.ends)} 截止` : ""].filter(Boolean).join(" · ");
+    return row;
+  }
+
+  function travelCard(mine, now) {
+    const cats = mine.map(a => ({ a, tr: trip(a.travel, now, a) })).filter(x => x.tr && x.tr.state !== "none");
+    if (!cats.length) return null;
+    const card = el("section", "wb-extra-card wb-task-card");
+    card.dataset.card = "travel";
+    const head = line(taskHeading("猫猫旅行快捷处理", "猫猫旅行快捷处理"));
+    if (hooks.onRunAction) {
+      const all = el("button", "wb-task-run", "一键收派");
+      all.type = "button";
+      all.onclick = async () => {
+        all.disabled = true;
+        all.textContent = "已提交";
+        try { await hooks.onRunAction("travel"); }
+        catch (e) { all.disabled = false; all.textContent = "重试"; all.title = e.message; }
+      };
+      head.append(all);
+    }
+    card.append(head);
+    for (const { a, tr } of cats) {
+      const row = el("div", "wb-task"), main = el("div", "wb-task-main");
+      main.append(line(el("span", "wb-name", `${a.name}${a.travel?.name ? ` · ${a.travel.name}` : ""}`), el("span", `wb-pill ${tr.tone}`, tr.label)), el("div", "wb-sub", tr.note));
+      if (tr.progress !== undefined) {
+        const bar = el("div", "wb-bar"), fill = el("span");
+        fill.style.width = `${Math.max(2, tr.progress * 100)}%`;
+        bar.append(fill);
+        main.append(bar);
+      }
+      row.append(main);
+      if (tr.arrived && hooks.onRunAction) {
+        const claim = el("button", "wb-task-run claim", "领奖并出发");
+        claim.type = "button";
+        claim.onclick = async () => {
+          claim.disabled = true;
+          claim.textContent = "已提交";
+          try { await hooks.onRunAction("travel", [a.id]); }
+          catch (e) { claim.disabled = false; claim.textContent = "重试"; claim.title = e.message; }
+        };
+        row.append(claim);
+      }
+      card.append(row);
+    }
+    return card;
+  }
+
+  function campaignCard(mine) {
+    const camps = mine.flatMap(a => (a.campaigns || []).map(c => ({ a, c })));
+    if (!camps.length) return null;
+    const card = el("section", "wb-extra-card wb-task-card");
+    card.dataset.card = "campaigns";
+    const head = line(taskHeading("运营活动任务", "运营活动任务"), el("span", "wb-sub", `${camps.length} 个活动`));
+    card.append(head);
+    for (const { a, c } of camps) {
+      if (c.error) {
+        card.append(line(el("span", "wb-name", `${a.name} · ${c.label}`), el("span", "wb-pill warn", "读取失败")));
+        continue;
+      }
+      for (const t of c.tasks || []) {
+        if (t.claimed) continue;
+        const row = el("div", "wb-task"), main = el("div", "wb-task-main");
+        const [label, cls] = t.done ? ["可领奖", "ok"] : t.manual ? ["需手动", "warn"] : t.disabled ? ["设置已关闭", "warn"] : ["定时会完成", "go"];
+        main.append(el("div", "wb-name", `${c.label} · ${t.label}`), el("div", "wb-sub", [a.name, t.target != null ? `${t.progress}/${t.target}` : "", t.credit ? `+${num(t.credit)} 积分` : ""].filter(Boolean).join(" · ")));
+        row.append(main, el("span", `wb-pill ${cls}`, label));
+        if (!t.manual && !t.disabled && hooks.onRunAction) {
+          const act = el("button", `wb-task-run${t.done ? " claim" : ""}`, t.done ? "领奖" : "执行");
+          act.type = "button";
+          act.onclick = async () => {
+            act.disabled = true;
+            act.textContent = "已提交";
+            try { await hooks.onRunAction(t.done ? "sweep" : "tasks", [a.id]); }
+            catch (e) { act.disabled = false; act.textContent = "重试"; act.title = e.message; }
+          };
+          row.append(act);
+        } else if (t.manual) row.append(el("span", "wb-sub wb-task-why", "官方客户端"));
+        else if (t.disabled) row.append(el("span", "wb-sub wb-task-why", "设置 › 任务与对话"));
+        card.append(row);
+      }
+      if ((c.tasks || []).every(t => t.claimed)) card.append(el("div", "wb-task-done", `${a.name} · ${c.label}：已全部领取`));
+    }
+    return card;
+  }
+
   function tasksView(rows, now) {
-    const box = el("div", "wb-brief"), mine = rows.filter(a => !a.enterprise && !abroad(a) && !a.paused);
+    const box = el("div", "wb-view-tasks"), mine = rows.filter(a => !a.enterprise && !abroad(a) && !a.paused);
     const all = mine.flatMap(a => (a.tasks?.open || []).map(task => ({ account: a, task })));
     const auto = all.filter(({ task }) => task.state === "auto" || task.state === "claimable");
-    const unknown = all.filter(({ task }) => task.state === "manual");
+    const claimable = all.filter(({ task }) => task.state === "claimable");
+    const manual = all.filter(({ task }) => task.state === "manual");
     const locked = all.filter(({ task }) => task.state === "locked");
+    const credit = auto.reduce((sum, { task }) => sum + (task.credit || 0), 0);
     const compRows = mine.map(a => {
       if (a.errors?.compensation) return { a, error: true };
       const c = a.compensation;
       return c && c.active && !c.claimed && c.credit > 0 ? { a, c } : null;
     }).filter(Boolean);
-    const buddyRows = mine.map(a => a.buddy && a.buddy.affordable > 0 ? { a, b: a.buddy } : null).filter(Boolean);
-    const campaignRows = mine.flatMap(a => (a.campaigns || []).flatMap(c => (c.tasks || []).filter(t => !t.claimed).map(t => ({ a, c, t }))));
-    const catRows = mine.map(a => ({ a, tr: trip(a.travel, now, a) })).filter(x => x.tr && x.tr.state !== "none");
-    const needCount = compRows.length + unknown.length;
-    const details = el("details", "wb-brief-details");
-    const openDetails = () => {
-      if (!details.parentNode) return;
-      details.open = true;
-      details.scrollIntoView?.({ behavior: "smooth", block: "start" });
-    };
+    const catsReady = mine.filter(a => trip(a.travel, now, a)?.arrived).length;
+    const campReady = mine.reduce((s, a) => s + (a.campaigns || []).reduce((cs, c) => cs + (c.tasks || []).filter(t => !t.claimed && !t.manual && !t.disabled).length, 0), 0);
 
-    const tz = last?.[1]?.today?.timezone || "Asia/Shanghai";
-    let dateLabel = "";
-    try {
-      const stamp = new Date(now);
-      const day = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", timeZone: tz }).format(stamp);
-      const week = new Intl.DateTimeFormat("zh-CN", { weekday: "long", timeZone: tz }).format(stamp);
-      dateLabel = `${day}，${week}`;
-    } catch { dateLabel = new Date(now).toLocaleDateString("zh-CN"); }
-
-    const title = el("div", "wb-brief-head");
-    title.append(el("h2", "wb-brief-title", "今天"), el("p", "wb-brief-date", dateLabel));
-    const button = (label, run) => {
-      const b = el("button", "wb-brief-btn", label);
-      b.type = "button";
-      b.onclick = async () => {
-        b.disabled = true;
-        const before = b.textContent;
-        b.textContent = "已提交";
-        try { await run(); }
-        catch (e) { b.disabled = false; b.textContent = before; b.title = e.message; }
-      };
-      return b;
-    };
-
-    const completion = el("section", "wb-task-completion"), completionMain = el("div", "wb-task-completion-main"), mark = el("span", "wb-task-completion-mark");
-    mark.append(icon('<path d="m4 8.3 2.6 2.6L12.2 5.3"/>', 18));
-    const completionCopy = el("div", "wb-task-completion-copy");
-    completionCopy.append(
-      el("strong", undefined, needCount ? `有 ${needCount} 件需要你处理` : "当前无需手动处理"),
-      el("p", "wb-task-scope", `${mine.length} 个国内个人账号${auto.length ? ` · ${auto.length} 项任务会自动执行` : " · 已达标的奖励可一键补领"}`)
+    const summary = el("div", "wb-task-summary"), sLeft = el("div", "wb-task-summary-l"), sRight = el("div", "wb-task-summary-r");
+    sLeft.append(
+      el("strong", undefined, auto.length ? `${auto.length} 项可以自动做` : "没有可自动执行的任务"),
+      el("span", "wb-sub", `${all.length} 项待办${claimable.length ? ` · ${claimable.length} 项可领奖` : ""}${manual.length ? ` · ${manual.length} 项需手动` : ""}${locked.length ? ` · ${locked.length} 项未解锁` : ""}${credit ? ` · 合计 +${num(credit)} 积分` : ""}${catsReady ? ` · 另有 ${catsReady} 只猫猫待领奖` : ""}${campReady ? ` · ${campReady} 项活动可处理` : ""}`)
     );
-    completionMain.append(mark, completionCopy);
-    completion.append(completionMain);
+    const runnable = [...new Set(auto.map(({ account }) => account.id))];
     if (hooks.onRunAction) {
       const sweep = el("button", "wb-task-sweep", "补领奖励");
       sweep.type = "button";
+      sweep.title = "只接取待接受任务并领取已达标奖励，不发行为事件";
       sweep.onclick = async () => {
         sweep.disabled = true;
-        const before = sweep.textContent;
-        sweep.textContent = "正在提交…";
-        try { await hooks.onRunAction("sweep"); sweep.textContent = "已提交"; }
-        catch (e) { sweep.disabled = false; sweep.textContent = before; sweep.title = e.message; }
+        sweep.textContent = "已提交";
+        try { await hooks.onRunAction("sweep"); }
+        catch (e) { sweep.disabled = false; sweep.textContent = "重试"; sweep.title = e.message; }
       };
-      completion.append(sweep);
+      sRight.append(sweep);
+    }
+    if (runnable.length && hooks.onQueue) {
+      const runAll = el("button", "wb-task-run-all", "执行全部待办");
+      runAll.type = "button";
+      runAll.onclick = async () => {
+        runAll.disabled = true;
+        runAll.textContent = "已提交";
+        try { await hooks.onQueue(runnable); }
+        catch (e) { runAll.disabled = false; runAll.textContent = "重试"; runAll.title = e.message; }
+      };
+      sRight.append(runAll);
+    }
+    summary.append(sLeft, sRight);
+    box.append(summary);
+
+    if (!mine.length) {
+      box.append(el("p", "wb-calm", "没有国内个人账号。任务中心只列国内版个人账号的成长任务。"));
+      return box;
     }
 
-    const detailRow = (name, account, statusText, action) => {
-      const r = el("div", "wb-brief-detail-row");
-      r.append(el("span", "wb-brief-detail-name", name), el("span", "wb-brief-detail-account", account), el("span", "wb-brief-detail-status", statusText));
-      const holder = el("span", "wb-brief-detail-action");
-      if (action) holder.append(action);
-      r.append(holder);
-      return r;
-    };
-    const taskAction = (account, task) => {
-      if (!hooks.onTask || !task.code || !["auto", "claimable"].includes(task.state)) return null;
-      return button(task.state === "claimable" ? "领奖" : "执行", () => hooks.onTask(account.id, task.code, task.title));
-    };
-    const detailList = el("div", "wb-brief-list");
-    const group = (name, items) => { if (items.length) detailList.append(el("div", "wb-brief-group", name), ...items); };
-    group("自动执行", auto.map(({ account, task }) => detailRow(task.title, account.name, task.state === "claimable" ? "待领奖" : "可自动", taskAction(account, task))));
-    group("未解锁", locked.map(({ account, task }) => detailRow(task.title, account.name, task.unlockAt ? `${when(task.unlockAt)} 解锁` : "未解锁", null)));
-    group("需要你处理", [
-      ...compRows.map(({ a, error }) => detailRow("官方补偿", a.name, error ? "读取失败" : "待领", null)),
-      ...unknown.map(({ account, task }) => detailRow(task.title, account.name, "暂不支持", null))
-    ]);
-    group("可选", buddyRows.map(({ a, b }) => detailRow("Buddy 盲盒", a.name, `可开 ${num(b.affordable)} 个`, null)));
-    group("活动与手动", [
-      ...campaignRows.map(({ a, c, t }) => {
-        const active = !t.manual && !t.disabled;
-        const action = active && hooks.onRunAction ? button(t.done ? "领奖" : "处理", () => hooks.onRunAction(t.done ? "sweep" : "tasks", [a.id])) : null;
-        const label = t.done ? "可领奖" : t.manual ? "需手动" : t.disabled ? "设置已关闭" : "定时会完成";
-        return detailRow(`${c.label} · ${t.label}`, a.name, label, action);
-      }),
-      ...catRows.map(({ a, tr }) => detailRow("猫猫旅行", a.name, tr.label, tr.arrived && hooks.onRunAction ? button("收派", () => hooks.onRunAction("travel", [a.id])) : null))
-    ]);
-    const total = auto.length + locked.length + compRows.length + unknown.length + buddyRows.length + campaignRows.length + catRows.length;
-    details.append(el("summary", undefined, `查看全部任务（${total} 项）`), detailList);
-    const panels = taskPanels(rows, compRows, unknown, openDetails, now);
-    box.append(title, completion);
-    if (panels) box.append(panels);
-    if (total) box.append(details);
+    if (all.length) {
+      const tBar = el("div", "wb-board-toolbar");
+      tBar.append(
+        segs([["all", `全部 ${all.length}`], ["claimable", `可领奖 ${claimable.length}`], ["auto", `可自动 ${auto.length - claimable.length}`], ["manual", `需手动 ${manual.length}`], ["locked", `未解锁 ${locked.length}`]], taskFilter, v => { taskFilter = v; again(); }, "任务状态筛选"),
+        segs([["account", "按账号分组"], ["status", "按状态分组"]], taskGroup, v => { taskGroup = v; again(); }, "分组方式")
+      );
+      box.append(tBar);
+
+      const shown = all.filter(({ task }) => taskFilter === "all" || task.state === taskFilter);
+      if (taskGroup === "account") {
+        const group = el("section", "wb-group wb-task-group"), cards = el("div", "wb-task-cards");
+        group.setAttribute("aria-label", "国内版");
+        const head = el("div", "wb-group-head"), total = el("span", "wb-group-total");
+        total.append(el("strong", undefined, fine(mine.reduce((s, a) => s + (a.balance?.balance || 0), 0))), el("span", "wb-sub", ` 积分 · ${mine.length} 个账号`));
+        const top = line(el("span", "wb-group-name", "国内版"), total);
+        top.className += " wb-group-top";
+        head.append(top);
+        group.append(head, cards);
+        const accountCards = [];
+        for (const acc of mine) {
+          const open = shown.filter(x => x.account.id === acc.id).map(x => x.task), card = el("div", "wb-task-card");
+          card.dataset.orderKey = acc.id;
+          const header = line(taskHeading(acc.name, acc.name), el("span", "wb-sub", acc.tasks ? `${acc.tasks.claimed}/${acc.tasks.total} 已领 · ${acc.tasks.open.length} 项待办` : "任务读取失败"));
+          card.append(header);
+          if (acc.errors?.tasks) card.append(el("div", "wb-sub", acc.errors.tasks));
+          else if (!acc.tasks?.open?.length) card.append(el("div", "wb-task-done", "全部完成"));
+          else if (!open.length) card.append(el("div", "wb-task-done", "当前筛选下无待办"));
+          for (const task of open) card.append(taskLine(acc, task, now, false));
+          accountCards.push(card);
+        }
+        cards.append(...orderTaskNodes(accountCards, readTaskOrder(taskAccountsSaved)));
+        taskReorder(cards, taskAccountsSaved);
+        box.append(group);
+      } else {
+        const orderStates = [["claimable", "可领奖"], ["auto", "定时会完成"], ["manual", "需手动"], ["locked", "未解锁"]];
+        const cards = el("div", "wb-task-cards wb-task-cards-single");
+        for (const [st, title] of orderStates) {
+          const list = shown.filter(({ task }) => task.state === st);
+          if (!list.length) continue;
+          const card = el("div", "wb-task-card"), cr = list.reduce((s, { task }) => s + (task.credit || 0), 0);
+          card.append(line(el("strong", undefined, `${title} (${list.length})`), el("span", "wb-sub", cr ? `合计 +${num(cr)} 积分` : "")));
+          for (const { account, task } of list) card.append(taskLine(account, task, now, true));
+          cards.append(card);
+        }
+        if (!cards.children.length) box.append(el("p", "wb-calm", "当前筛选下没有待办任务。"));
+        else box.append(cards);
+      }
+    } else {
+      const failed = mine.filter(a => a.errors?.tasks);
+      box.append(el("p", "wb-calm", failed.length ? `任务读取失败：${failed.map(a => a.name).join("、")}。稍后刷新，或检查网络和代理。` : "国内个人账号的成长任务都已完成。"));
+    }
+
+    const panels = taskPanels(rows, compRows, now);
+    const extras = el("div", "wb-task-extras");
+    const travel = travelCard(mine, now), campaign = campaignCard(mine);
+    const extraCards = [travel, panels?.buddy, panels?.comp, campaign].filter(Boolean);
+    extras.append(...orderTaskNodes(extraCards, readTaskOrder(taskCardsSaved)));
+    taskReorder(extras, taskCardsSaved);
+    if (extras.children.length) box.append(extras);
+
+    box.append(el("p", "wb-legend", "「执行」只处理这一项任务，可用来补跑失败或到期的任务；手动项仍需在官方客户端完成。国际版任务按客户端实际使用计入，不在这里列出。"));
     return box;
   }
 

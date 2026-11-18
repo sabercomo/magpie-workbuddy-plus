@@ -2,6 +2,19 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { channel } from "./events.mjs";
 import { note as noteLimit, forget as forgetLimit } from "./limits.mjs";
+import { proxyFor } from "./storage.mjs";
+
+// What an error may say about the proxy: its address for the message, its
+// origin for diagnostics. A login in the URL is never shown.
+const proxyParts = proxy => {
+  try {
+    const url = new URL(proxy);
+    return { host: url.host, origin: url.origin };
+  } catch {
+    const plain = String(proxy).replace(/\/\/[^/@]*@/, "//").replace(/^[^/@]*@/, "");
+    return { host: plain, origin: plain };
+  }
+};
 
 // Each build answers on its own site; WorkBuddy AI keeps its billing there too.
 const sites = {
@@ -52,6 +65,7 @@ export class WorkBuddyClient {
     this.onRetry = onRetry;
     this.wait = wait;
     this.config = config;
+    this.proxy = proxyFor(config, account.realm);
     this.fetcher = fetcher;
     this.gap = gap;
     this.signal = signal;
@@ -82,17 +96,24 @@ export class WorkBuddyClient {
   clearLimit(model) { forgetLimit(this.limits, model); }
 
   async fetch(url, init = {}, timeout = 30_000) {
-    if (this.config.proxy && !globalThis.Bun && this.fetcher === globalThis.fetch) throw new Error("HTTP 代理需要使用 Bun 启动 WorkBuddy Plus");
+    if (this.proxy && !globalThis.Bun && this.fetcher === globalThis.fetch) throw new Error("HTTP 代理需要使用 Bun 启动 WorkBuddy Plus");
     const wait = this.gap - (Date.now() - this.lastRequest);
     if (wait > 0) await delay(wait, undefined, { signal: this.signal });
     this.lastRequest = Date.now();
     const signal = this.signal ? AbortSignal.any([this.signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
     try {
-      return await this.fetcher(url, { ...init, signal, ...(this.config.proxy ? { proxy: this.config.proxy } : {}) });
+      return await this.fetcher(url, { ...init, signal, ...(this.proxy ? { proxy: this.proxy } : {}) });
     } catch (error) {
       const refused = /^Proxy refused to open a tunnel: (\d{3}\b.*)/i.exec(error.message);
-      if (!refused) throw error;
-      throw new Error(`HTTP 代理无法连接 ${new URL(url).hostname}（${refused[1]}）。请检查代理节点和分流；可直连时，到设置清空 HTTP 代理再刷新。`, { cause: error });
+      if (refused) throw new Error(`HTTP 代理无法连接 ${new URL(url).hostname}（${refused[1]}）。请检查代理节点和分流；可直连时，到设置清空对应代理再刷新。`, { cause: error });
+      // A local proxy that isn't listening is not an account failure. Keep the
+      // raw error for logs and diagnostics, and say what the user can check.
+      const down = this.proxy && /ECONNREFUSED|Unable to connect|proxyconnect/i.test(`${error.code || ""} ${error.name || ""} ${error.message || ""}`);
+      if (!down) throw error;
+      const { host, origin } = proxyParts(this.proxy);
+      throw Object.assign(new Error(`代理 ${host} 连不上，检查代理设置或清空代理`, { cause: error }), {
+        code: error.code, name: error.name, proxy: true, diagnostic: `${origin} · ${error.code || error.name || "error"}`
+      });
     }
   }
 

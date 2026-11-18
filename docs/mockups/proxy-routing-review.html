@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WorkBuddy Plus · 代理提示与分流样稿</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f4f6;
+      --card: #ffffff;
+      --inset: #fafafa;
+      --fg: #1f1f24;
+      --muted: #6e6e78;
+      --line: #e3e3e8;
+      --accent: #4f46e5;
+      --soft: #eeedfd;
+      --urgent: #c0392b;
+      --warn: #b4691b;
+      --ok: #25583e;
+      --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", system-ui, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    body:has(#theme:checked) {
+      color-scheme: dark;
+      --bg: #1a1a1e;
+      --card: #232327;
+      --inset: #1f1f23;
+      --fg: #ececf1;
+      --muted: #9a9aa6;
+      --line: #34343b;
+      --accent: #8b84ff;
+      --soft: #2b2850;
+      --urgent: #f08a7e;
+      --warn: #e0a45c;
+      --ok: #8fc9a8;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font: 13px/1.5 var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+    .page { max-width: 1180px; margin: 0 auto; padding: 28px 24px 48px; }
+    .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 24px; }
+    h1 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: -0.02em; font-weight: 650; }
+    .sub { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-width: 720px; }
+    .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .control {
+      display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 11px;
+      border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+      color: var(--fg); font-size: 12px; cursor: pointer; user-select: none;
+    }
+    .control input { accent-color: var(--accent); margin: 0; }
+    .stage { max-width: 1120px; transition: max-width 180ms ease; }
+    body:has(#narrow:checked) .stage { max-width: 390px; }
+    body:has(#narrow:checked) .settings-grid { grid-template-columns: 1fr; }
+    body:has(#narrow:checked) .field.proxy,
+    body:has(#narrow:checked) .field.intl-proxy { grid-column: auto; }
+    body:has(#narrow:checked) .grid2 { grid-template-columns: 1fr; }
+    .section { margin-top: 28px; }
+    .section-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    h2 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+    .section-head .sub { margin: 0; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+    @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+    .card {
+      min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px;
+    }
+    .card-label { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
+    .tag { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--soft); color: var(--accent); font-size: 10.5px; font-weight: 600; }
+    .tag.before { background: color-mix(in srgb, var(--muted) 12%, transparent); color: var(--muted); }
+    .tag.after { background: var(--soft); color: var(--accent); }
+    .panel { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); }
+    .panel + .panel { margin-top: 12px; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+    .panel-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .panel-title strong { font-size: 13px; font-weight: 650; }
+    .panel-title small { color: var(--muted); font-size: 11.5px; }
+    .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 60px; padding: 12px 16px; border-top: 1px solid var(--line); }
+    .panel-head + .row { border-top: 0; }
+    .row-copy { min-width: 0; }
+    .name { display: block; font-size: 13px; font-weight: 600; }
+    .note { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; line-height: 1.45; overflow-wrap: anywhere; }
+    .note.urgent { color: var(--urgent); }
+    .action { font: inherit; font-size: 12px; min-height: 30px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--accent); cursor: pointer; white-space: nowrap; }
+    .action.primary { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 600; }
+    .hint { margin: 10px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+    .hint code, .note code, .table code { font-family: var(--mono); font-size: 11px; background: color-mix(in srgb, var(--muted) 10%, transparent); border-radius: 4px; padding: 1px 4px; }
+    .settings { border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 12px 14px 14px; }
+    .settings h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+    .settings-grid { display: grid; grid-template-columns: minmax(160px,.7fr) minmax(160px,.8fr) minmax(240px,1.5fr); gap: 12px; }
+    @media (max-width: 820px) { .settings-grid { grid-template-columns: 1fr 1fr; } .field.proxy, .field.intl-proxy { grid-column: 1 / -1; } }
+    @media (max-width: 520px) { .settings-grid { grid-template-columns: 1fr; } .field.proxy, .field.intl-proxy { grid-column: auto; } }
+    .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; color: var(--muted); }
+    .field input { width: 100%; font: inherit; font-size: 12.5px; padding: 6px 9px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--fg); }
+    .field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .field small { color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .field.invalid input { border-color: var(--urgent); }
+    .field.invalid small { color: var(--urgent); }
+    .settings-compare { grid-template-columns: 1fr; }
+    .after-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .validation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    body:has(#narrow:checked) .validation-grid { grid-template-columns: 1fr; }
+    @media (max-width: 520px) { .validation-grid { grid-template-columns: 1fr; } }
+    .table-wrap { margin-top: 14px; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    th { color: var(--muted); font-weight: 600; font-size: 11px; white-space: nowrap; }
+    td { overflow-wrap: anywhere; }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+    .mono { font-family: var(--mono); font-size: 11px; }
+    .raw { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 45%, transparent); }
+    .divider { height: 1px; background: var(--line); margin: 16px 0; }
+    @media (prefers-reduced-motion: reduce) { .stage { transition: none; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div>
+      <h1>代理提示与分流样稿</h1>
+      <p class="sub">静态样稿，未改生产代码。上半部分是任务页的错误提示，下半部分是设置页的「国内直连、国际走代理」。</p>
+    </div>
+    <div class="controls">
+      <label class="control"><input type="checkbox" id="theme">深色</label>
+      <label class="control"><input type="checkbox" id="narrow">390px 窄侧栏</label>
+    </div>
+  </header>
+
+  <div class="stage">
+    <section class="section" aria-labelledby="error-title">
+      <div class="section-head">
+        <h2 id="error-title">一、代理错误提示</h2>
+        <p class="sub">代理没开时，行内只留一句可操作的话；原始错误留在诊断和日志里。</p>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <p class="card-label"><span class="tag before">现在</span>任务页 · Buddy 盲盒</p>
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title"><strong>Buddy 盲盒</strong></div>
+              <button class="action primary" type="button">打开全部 · 2 个</button>
+            </div>
+            <div class="row">
+              <div class="row-copy"><strong class="name">主力号</strong><span class="note">能量 340 · 可开 2 个</span></div>
+              <button class="action" type="button">开 2 个</button>
+            </div>
+            <div class="row">
+              <div class="row-copy"><strong class="name">备用号</strong><span class="note urgent">配额查询失败 · ECONNREFUSED: Unable to connect. Is the computer able to access the url?</span></div>
+            </div>
+          </div>
+          <p class="hint">原始错误直接铺在账号行里，既长又不像用户能处理的事。</p>
+        </div>
+
+        <div class="card">
+          <p class="card-label"><span class="tag after">改后 · 方案 A</span>任务页 · Buddy 盲盒</p>
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title"><strong>Buddy 盲盒</strong></div>
+              <button class="action primary" type="button">打开全部 · 2 个</button>
+            </div>
+            <div class="row">
+              <div class="row-copy"><strong class="name">主力号</strong><span class="note">能量 340 · 可开 2 个</span></div>
+              <button class="action" type="button">开 2 个</button>
+            </div>
+            <div class="row">
+              <div class="row-copy"><strong class="name">备用号</strong><span class="note urgent">配额查询失败 · 代理不可用，检查代理设置</span></div>
+            </div>
+          </div>
+          <p class="hint">方案 A 最短，直接指向设置；代理地址放在日志和诊断里。</p>
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-top:16px">
+        <div class="card">
+          <p class="card-label"><span class="tag after">改后 · 方案 B</span>带地址的写法</p>
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title"><strong>官方补偿</strong></div></div>
+            <div class="row">
+              <div class="row-copy"><strong class="name">备用号</strong><span class="note urgent">补偿查询失败 · 代理 127.0.0.1:1082 连不上，检查代理设置或清空代理</span></div>
+              <button class="action" type="button">重新查询</button>
+            </div>
+          </div>
+          <p class="hint">方案 B 更像 Magpie 的说明：给出地址和下一步，但行内更长，窄侧栏会折两行。</p>
+        </div>
+
+        <div class="card">
+          <p class="card-label"><span class="tag before">现在</span>执行日志</p>
+          <div class="panel">
+            <div class="row" style="display:block">
+              <span class="note mono">网络/代理失败（1/3）：ECONNREFUSED: Unable to connect. Is the computer able to access the url?</span>
+            </div>
+          </div>
+          <p class="card-label" style="margin-top:14px"><span class="tag after">改后</span>执行日志</p>
+          <div class="panel">
+            <div class="row" style="display:block">
+              <span class="note mono">网络/代理失败（1/3）：代理不可用，检查代理设置</span>
+              <span class="note mono" style="color:var(--muted)">诊断：http://127.0.0.1:1082 · ECONNREFUSED</span>
+            </div>
+          </div>
+          <p class="hint">行内短句；代理地址和原始错误留在诊断/日志里，不进入账号行。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="split-title">
+      <div class="section-head">
+        <h2 id="split-title">二、国内直连、国际走代理</h2>
+        <p class="sub">只加一个国际版代理字段；留空保持现状，填 <code>direct</code> 表示国际版直连。</p>
+      </div>
+
+      <div class="grid2 settings-compare">
+        <div class="card">
+          <p class="card-label"><span class="tag before">现在</span>设置 · 通用设置</p>
+          <div class="settings">
+            <h3>通用设置</h3>
+            <div class="settings-grid">
+              <label class="field">随机错开（分钟，0 关闭）<input value="10" readonly></label>
+              <label class="field">时区<input value="Asia/Shanghai" readonly></label>
+              <label class="field proxy">HTTP 代理（可留空）<input value="http://127.0.0.1:1082" readonly></label>
+            </div>
+          </div>
+          <p class="hint">一个代理同时套在国内和国际请求上；梯子一关，国内查询先失败。</p>
+        </div>
+
+        <div class="card">
+          <p class="card-label"><span class="tag after">改后</span>设置 · 通用设置</p>
+          <div class="settings">
+            <h3>通用设置</h3>
+            <div class="settings-grid after-grid">
+              <label class="field">随机错开（分钟，0 关闭）<input value="10" readonly></label>
+              <label class="field">时区<input value="Asia/Shanghai" readonly></label>
+              <label class="field proxy">默认 HTTP 代理（可留空）<input value="" placeholder="http://127.0.0.1:7890" readonly></label>
+              <label class="field intl-proxy">国际版代理（可留空）<input value="http://127.0.0.1:1082" readonly></label>
+            </div>
+            <p class="hint">国内版使用默认代理，留空即直连；国际版留空时跟随默认，填 <code>direct</code> 表示国际版直连。</p>
+          </div>
+          <p class="hint">已有配置默认国际版代理为空，行为不变；只有填了国际版代理才分流。</p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <p class="card-label"><span class="tag after">规则</span>四种常见配置</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>默认 HTTP 代理</th><th>国际版代理</th><th>国内请求</th><th>国际请求</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>留空</code></td><td><code>留空</code></td><td class="ok">直连</td><td class="ok">直连</td></tr>
+              <tr><td><code>http://127.0.0.1:1082</code></td><td><code>留空</code></td><td class="ok">走代理</td><td class="ok">跟随上方，走代理</td></tr>
+              <tr><td><code>留空</code></td><td><code>http://127.0.0.1:1082</code></td><td class="ok">直连</td><td class="ok">走代理</td></tr>
+              <tr><td><code>http://127.0.0.1:1082</code></td><td><code>direct</code></td><td class="ok">走代理</td><td class="ok">直连</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="divider"></div>
+        <p class="card-label" style="margin-bottom:8px"><span class="tag before">校验</span>国际版代理只接受三种值</p>
+        <div class="settings-grid validation-grid">
+          <label class="field">留空 / direct / http(s):// 地址<input value="direct" readonly></label>
+          <label class="field invalid">错误示例<input value="127.0.0.1:1082" readonly><small>国际版代理需要 http:// 或 https:// 地址，或留空 / direct</small></label>
+        </div>
+      </div>
+    </section>
+
+    <p class="footer">确认后实施顺序：先做错误提示并跑测试；再做国际版代理字段，补国内/国际路由测试与中英文文档。生产文件仍未改动。</p>
+  </div>
+</div>
+</body>
+</html>

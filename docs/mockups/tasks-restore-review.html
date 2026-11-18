@@ -101,11 +101,12 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
 .wb-pill.warn{color:var(--wb-warn);background:color-mix(in srgb,var(--wb-warn) 11%,var(--wb-card))}
 .wb-pill.go{color:var(--wb-go);background:color-mix(in srgb,var(--wb-go) 10%,var(--wb-card))}
 .wb-pill.urgent{color:var(--wb-urgent);background:color-mix(in srgb,var(--wb-urgent) 12%,var(--wb-card))}
-.wb-task-run{flex:none;width:64px;font-size:12px;padding:4px 0;border-radius:7px;border:1px solid var(--wb-accent);background:transparent;color:var(--wb-accent);cursor:pointer;text-align:center;white-space:nowrap}
+.wb-task-run{flex:none;width:auto;min-width:64px;min-height:30px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;padding:4px 10px;border-radius:7px;border:1px solid var(--wb-accent);background:transparent;color:var(--wb-accent);cursor:pointer;text-align:center;white-space:nowrap}
 .wb-task-run:hover{background:var(--wb-soft)}
 .wb-task-run.claim{background:var(--wb-accent);border-color:var(--wb-accent);color:#fff;font-weight:600}
 .wb-task-run.claim:hover{filter:brightness(1.06);background:var(--wb-accent)}
-.wb-task-run:disabled{opacity:.55;cursor:default}
+.wb-task-run:disabled{color:var(--wb-muted);border-color:var(--wb-line);background:color-mix(in srgb,var(--wb-muted) 6%,var(--wb-card));cursor:default}
+.wb-task-run.claim:disabled{color:var(--wb-muted);border-color:var(--wb-line);background:color-mix(in srgb,var(--wb-muted) 8%,var(--wb-card));font-weight:600}
 .wb-task-why{flex:none;white-space:nowrap;width:64px;text-align:right;font-size:11.5px;color:var(--wb-muted)}
 .wb-segs{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:var(--wb-soft);max-width:100%;overflow-x:auto;scrollbar-width:none}
 .wb-seg-btn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:7px;font-size:12.5px;color:var(--wb-muted);white-space:nowrap;cursor:pointer}
@@ -114,8 +115,58 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
 .wb-empty{margin:4px 0 0;padding:14px;border:1px dashed var(--wb-line);border-radius:12px;color:var(--wb-muted);font-size:12px;text-align:center}
 
 /* —— 下方四张工作卡：旅行 / 盲盒 / 补偿 / 运营活动 —— */
-.wb-companions-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px;align-items:stretch}
+.wb-companions-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;align-items:stretch}
 .wb-task-card>.wb-line>strong{font-size:15px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 官方补偿 / Buddy 盲盒：直接复用当前 0.7.4 任务页的两张工作卡。 */
+.wb-work-card{min-width:0;padding:16px;background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px}
+.wb-work-title{margin:0 0 12px;font-size:13px;font-weight:650}
+.wb-task-panel{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.wb-task-panel .wb-work-title{margin:0}
+.wb-task-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:60px;padding:12px 16px;border-bottom:1px solid var(--wb-line)}
+.wb-task-panel-title{display:flex;align-items:center;gap:8px;min-width:0}
+.wb-task-count{font-size:11.5px;color:var(--wb-muted);font-variant-numeric:tabular-nums}
+.wb-task-head-action,.wb-task-row-action{font:inherit;font-size:12px;min-height:30px;display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border:1px solid var(--wb-line);border-radius:7px;background:var(--wb-card);color:var(--wb-accent);cursor:pointer;white-space:nowrap}
+.wb-task-head-action{border:0;background:transparent}
+.wb-task-head-action:hover,.wb-task-row-action:hover{background:var(--wb-soft)}
+.wb-task-row-action.primary,.wb-task-head-action.primary{border:1px solid var(--wb-accent);background:var(--wb-accent);color:#fff;font-weight:600;min-height:30px;font-size:12px}
+.wb-task-row-action.primary:hover,.wb-task-head-action.primary:hover{background:var(--wb-accent);filter:brightness(1.06)}
+.wb-task-head-action:disabled,.wb-task-row-action:disabled{color:var(--wb-muted);border-color:var(--wb-line);background:color-mix(in srgb,var(--wb-muted) 6%,var(--wb-card));cursor:default}
+.wb-task-row-action.primary:disabled,.wb-task-head-action.primary:disabled{color:var(--wb-muted);border-color:var(--wb-line);background:color-mix(in srgb,var(--wb-muted) 8%,var(--wb-card));font-weight:600}
+.wb-task-panel-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:60px;padding:12px 16px;border-top:1px solid var(--wb-line)}
+.wb-task-panel-head+.wb-task-panel-row{border-top:0}
+.wb-task-row-copy{min-width:0}
+.wb-task-row-name{display:block;font-size:13px;font-weight:600}
+.wb-task-row-note{display:block;margin-top:2px;color:var(--wb-muted);font-size:11.5px;line-height:1.45;overflow-wrap:anywhere}
+.wb-task-row-note.urgent{color:var(--wb-urgent)}
+.wb-task-auto{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:64px;padding:12px 16px;border-top:1px solid var(--wb-line);font-size:11.5px}
+.wb-task-auto strong{font-weight:500}
+.wb-task-auto .wb-task-row-note{margin-top:2px}
+
+/* Hallmark：四张工作卡统一 60px 标题行 / 60px 账号行 / 1px 分隔线。 */
+.wb-extra-card.wb-task-card{padding:0;gap:0}
+.wb-extra-card.wb-task-card>.wb-line{min-height:60px;padding:12px 16px;border-bottom:1px solid var(--wb-line)}
+.wb-extra-card.wb-task-card>.wb-task{padding:12px 16px;min-height:60px;align-items:center}
+.wb-extra-card.wb-task-card>.wb-line+.wb-task{border-top:0}
+.wb-extra-card .wb-work-title,
+.wb-extra-card.wb-task-card>.wb-line>strong,
+.wb-extra-card .wb-card-heading>strong{font-size:15px;font-weight:650}
+.wb-extra-card .wb-task .wb-name{font-size:13px;font-weight:600}
+.wb-extra-card .wb-task .wb-sub{font-size:11.5px}
+
+/* Magpie 概览的卡片排序：标题左侧六点手柄，拖动或 Alt+方向键移动。 */
+.wb-card-heading{display:flex;align-items:center;gap:8px;min-width:0}
+.wb-card-heading>strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-card-handle{appearance:none;border:0;background:transparent;color:var(--wb-muted);width:24px;height:24px;flex:none;display:inline-grid;place-items:center;padding:0;border-radius:6px;cursor:grab;opacity:.35;transition:opacity .15s,background-color .15s;touch-action:none}
+.wb-card-handle:hover{background:var(--wb-hover);color:inherit}
+.wb-card-handle:focus-visible{outline:2px solid var(--wb-accent);outline-offset:2px;opacity:1}
+.wb-card-handle:active{cursor:grabbing}
+.wb-card-handle svg{pointer-events:none}
+.wb-extra-card:hover .wb-card-handle,.wb-extra-card.dragging .wb-card-handle,
+.wb-task-card:hover .wb-card-handle,.wb-task-card.dragging .wb-card-handle{opacity:1}
+.wb-task-card .wb-card-heading>strong{font-size:15px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-extra-card.dragging,.wb-task-card.dragging{opacity:.55;border-style:dashed}
+.wb-companions-2.sorting,.wb-task-cards.sorting{user-select:none}
 .wb-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .wb-task .wb-line{gap:8px}
 .wb-task-main>.wb-sub{overflow-wrap:anywhere;line-height:1.45}
@@ -138,7 +189,7 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
   --magpie-muted:#9aa79f;--magpie-accent:#8fc9a8;--magpie-accent-soft:#243a2e;
   --wb-warn:#e0a45c;--wb-urgent:#f08a7e;--wb-go:#8bb8ea;background:#151a17;color:#e6ece8;
 }
-.mock-dark .quiet.primary,.mock-dark .wb-task-run-all,.mock-dark .wb-task-run.claim{color:#102019}
+.mock-dark .quiet.primary,.mock-dark .wb-task-run-all,.mock-dark .wb-task-run.claim,.mock-dark .wb-task-row-action.primary,.mock-dark .wb-task-head-action.primary{color:#102019}
 .mock-dark .wb-pill.warn{color:var(--wb-warn);background:color-mix(in srgb,var(--wb-warn) 14%,var(--wb-card))}
 
 @media (max-width:820px){
@@ -161,8 +212,8 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
 </head>
 <body>
 <div class="mock-banner">
-  <span><strong>样稿</strong> · 恢复旧任务页，并加入「官方补偿」「Buddy 盲盒」；猫猫旅行与盲盒一排，补偿与运营活动一排。未改生产文件。</span>
-  <span class="mock-side"><button class="mock-btn" type="button" id="theme-toggle">深色预览</button></span>
+  <span><strong>样稿</strong> · 恢复旧任务页，并加入「官方补偿」「Buddy 盲盒」；猫猫旅行与盲盒一排，补偿与运营活动一排。拖动卡片左侧六点手柄可排序（Alt+方向键也可）。未改生产文件。</span>
+  <span class="mock-side"><button class="mock-btn" type="button" id="reset-order">重置卡片顺序</button><button class="mock-btn" type="button" id="theme-toggle">深色预览</button></span>
 </div>
 
 <div class="wb-shell">
@@ -197,23 +248,21 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
     </div>
     <div class="wb-task-summary-r">
       <button class="wb-task-sweep" type="button" data-toast="已提交补领奖励：只接取和领取，不发行为事件">补领奖励</button>
-      <button class="wb-task-run-all" type="button" data-toast="已提交 2 个账号的待办任务；账号内串行执行">执行全部待办 · 2 个账号</button>
+      <button class="wb-task-run-all" type="button" data-toast="已提交 2 个账号的待办任务；账号内串行执行">执行全部待办</button>
     </div>
   </section>
 
   <div class="wb-board-toolbar">
-    <div class="wb-board-filters" role="group" aria-label="任务筛选">
-      <button class="wb-filter-btn on" type="button" data-filter="all" aria-pressed="true">全部 <span class="wb-filter-count">5</span></button>
-      <button class="wb-filter-btn" type="button" data-filter="claimable" aria-pressed="false">可领奖 <span class="wb-filter-count">0</span></button>
-      <button class="wb-filter-btn" type="button" data-filter="auto" aria-pressed="false">可自动 <span class="wb-filter-count">2</span></button>
-      <button class="wb-filter-btn" type="button" data-filter="manual" aria-pressed="false">需手动 <span class="wb-filter-count">2</span></button>
-      <button class="wb-filter-btn" type="button" data-filter="locked" aria-pressed="false">未解锁 <span class="wb-filter-count">1</span></button>
+    <div class="wb-segs" role="group" aria-label="任务状态筛选">
+      <button class="wb-seg-btn on" type="button" data-filter="all" aria-pressed="true">全部 5</button>
+      <button class="wb-seg-btn" type="button" data-filter="claimable" aria-pressed="false">可领奖 0</button>
+      <button class="wb-seg-btn" type="button" data-filter="auto" aria-pressed="false">可自动 2</button>
+      <button class="wb-seg-btn" type="button" data-filter="manual" aria-pressed="false">需手动 2</button>
+      <button class="wb-seg-btn" type="button" data-filter="locked" aria-pressed="false">未解锁 1</button>
     </div>
-    <div class="wb-view-switch" role="group" aria-label="分组方式">
-      <div class="wb-segs">
-        <button class="wb-seg-btn on" type="button" data-group="account">按账号分组</button>
-        <button class="wb-seg-btn" type="button" data-group="status">按状态分组</button>
-      </div>
+    <div class="wb-segs" role="group" aria-label="分组方式">
+      <button class="wb-seg-btn on" type="button" data-group="account">按账号分组</button>
+      <button class="wb-seg-btn" type="button" data-group="status">按状态分组</button>
     </div>
   </div>
 
@@ -225,9 +274,12 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
       </div>
     </div>
     <div class="wb-task-cards" id="account-cards">
-      <article class="wb-task-card" data-account="主力号">
+      <article class="wb-task-card" data-account="主力号" data-order-key="demo-1">
         <div class="wb-line">
-          <strong>主力号</strong>
+          <div class="wb-card-heading">
+            <button class="wb-card-handle" type="button" draggable="true" aria-label="拖动排序：主力号" title="拖动排序 · Alt+方向键移动"><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="9" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="9" cy="13" r="1.2"/></g></svg></button>
+            <strong>主力号</strong>
+          </div>
           <span class="wb-sub">1/4 已领 · 2 项待办</span>
         </div>
         <div class="wb-task" data-state="auto">
@@ -246,9 +298,12 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
         </div>
       </article>
 
-      <article class="wb-task-card" data-account="备用号">
+      <article class="wb-task-card" data-account="备用号" data-order-key="demo-2">
         <div class="wb-line">
-          <strong>备用号</strong>
+          <div class="wb-card-heading">
+            <button class="wb-card-handle" type="button" draggable="true" aria-label="拖动排序：备用号" title="拖动排序 · Alt+方向键移动"><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="9" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="9" cy="13" r="1.2"/></g></svg></button>
+            <strong>备用号</strong>
+          </div>
           <span class="wb-sub">1/4 已领 · 2 项待办</span>
         </div>
         <div class="wb-task" data-state="auto">
@@ -267,9 +322,12 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
         </div>
       </article>
 
-      <article class="wb-task-card" data-account="测试号">
+      <article class="wb-task-card" data-account="测试号" data-order-key="demo-5">
         <div class="wb-line">
-          <strong>测试号</strong>
+          <div class="wb-card-heading">
+            <button class="wb-card-handle" type="button" draggable="true" aria-label="拖动排序：测试号" title="拖动排序 · Alt+方向键移动"><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="9" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="9" cy="13" r="1.2"/></g></svg></button>
+            <strong>测试号</strong>
+          </div>
           <span class="wb-sub">3/5 已领 · 1 项待办</span>
         </div>
         <div class="wb-task" data-state="locked">
@@ -282,10 +340,13 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
     </div>
   </section>
 
-  <div class="wb-companions-2">
-    <section class="wb-task-card" aria-labelledby="travel-title">
+  <div class="wb-companions-2" id="task-extras">
+    <section class="wb-extra-card wb-task-card" data-card="travel" aria-labelledby="travel-title">
       <div class="wb-line">
-        <strong id="travel-title">猫猫旅行快捷处理</strong>
+        <div class="wb-card-heading">
+          <button class="wb-card-handle" type="button" draggable="true" aria-label="拖动排序：猫猫旅行快捷处理" title="拖动排序 · Alt+方向键移动"><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="9" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="9" cy="13" r="1.2"/></g></svg></button>
+          <strong id="travel-title">猫猫旅行快捷处理</strong>
+        </div>
         <button class="wb-task-run" type="button" data-toast="已提交猫猫旅行：先领奖，再派出">一键收派</button>
       </div>
       <div class="wb-task">
@@ -308,68 +369,60 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
       </div>
     </section>
 
-    <section class="wb-task-card" aria-labelledby="blind-title">
-      <div class="wb-line">
-        <strong id="blind-title">Buddy 盲盒</strong>
-        <button class="wb-task-run-all" type="button" data-toast="已提交 2 个 Buddy 盲盒；会消耗成长能量">打开全部 · 2 个</button>
-      </div>
-      <div class="wb-task">
-        <div class="wb-task-main">
-          <div class="wb-name">主力号</div>
-          <div class="wb-sub">能量 340 · 可开 2 个</div>
+    <section class="wb-extra-card wb-work-card wb-task-panel" data-card="buddy" aria-labelledby="blind-title">
+      <div class="wb-task-panel-head">
+        <div class="wb-task-panel-title">
+          <button class="wb-card-handle" type="button" draggable="true" aria-label="拖动排序：Buddy 盲盒" title="拖动排序 · Alt+方向键移动"><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="9" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="9" cy="13" r="1.2"/></g></svg></button>
+          <h2 class="wb-work-title" id="blind-title">Buddy 盲盒</h2>
         </div>
-        <button class="wb-task-run" type="button" data-toast="已提交主力号开 2 个盲盒">开 2 个</button>
+        <button class="wb-task-row-action primary" type="button" disabled>打开全部</button>
       </div>
-      <div class="wb-task">
-        <div class="wb-task-main">
-          <div class="wb-name">备用号</div>
-          <div class="wb-sub">盲盒配额尚未读取</div>
-        </div>
+      <div class="wb-task-panel-row">
+        <div class="wb-task-row-copy"><strong class="wb-task-row-name">主力号</strong><span class="wb-task-row-note">能量 0 · 没有可开盲盒</span></div>
+        <button class="wb-task-row-action" type="button" disabled>开盲盒</button>
       </div>
-      <div class="wb-task">
-        <div class="wb-task-main">
-          <div class="wb-name">测试号</div>
-          <div class="wb-sub">盲盒配额尚未读取</div>
-        </div>
+      <div class="wb-task-panel-row">
+        <div class="wb-task-row-copy"><strong class="wb-task-row-name">备用号</strong><span class="wb-task-row-note urgent">配额查询失败 · ECONNREFUSED: Unable to connect. Is the computer able to access the url?</span></div>
+        <button class="wb-task-row-action" type="button" data-toast="已提交备用号重新查询盲盒配额">重新查询</button>
       </div>
-      <div class="wb-task switch-row">
-        <div class="wb-task-main">
-          <div class="wb-name">旅行领奖后自动开盲盒</div>
-          <div class="wb-sub">默认关闭，开启后会消耗成长能量</div>
-        </div>
+      <div class="wb-task-panel-row">
+        <div class="wb-task-row-copy"><strong class="wb-task-row-name">测试号</strong><span class="wb-task-row-note">能量 3 · 没有可开盲盒</span></div>
+        <button class="wb-task-row-action" type="button" disabled>开盲盒</button>
+      </div>
+      <label class="wb-task-auto">
+        <span><strong>旅行领奖后自动开盲盒</strong><span class="wb-task-row-note">默认关闭，开启后会消耗成长能量</span></span>
         <input class="wb-pill-switch" type="checkbox" role="switch" aria-label="旅行领奖后自动开盲盒">
+      </label>
+    </section>
+
+    <section class="wb-extra-card wb-work-card wb-task-panel" data-card="compensation" aria-labelledby="comp-title">
+      <div class="wb-task-panel-head">
+        <div class="wb-task-panel-title">
+          <button class="wb-card-handle" type="button" draggable="true" aria-label="拖动排序：官方补偿" title="拖动排序 · Alt+方向键移动"><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="9" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="9" cy="13" r="1.2"/></g></svg></button>
+          <h2 class="wb-work-title" id="comp-title">官方补偿</h2><span class="wb-task-count">1</span>
+        </div>
+        <button class="wb-task-row-action" type="button" disabled>全部领取</button>
+      </div>
+      <div class="wb-task-panel-row">
+        <div class="wb-task-row-copy"><strong class="wb-task-row-name">主力号</strong><span class="wb-task-row-note">官方补偿已领取</span></div>
+        <button class="wb-task-row-action primary" type="button" disabled>领取</button>
+      </div>
+      <div class="wb-task-panel-row">
+        <div class="wb-task-row-copy"><strong class="wb-task-row-name">备用号</strong><span class="wb-task-row-note urgent">补偿查询失败 · ECONNREFUSED: Unable to connect. Is the computer able to access the url?</span></div>
+        <button class="wb-task-row-action" type="button" data-toast="已提交备用号重新查询补偿">重新查询</button>
+      </div>
+      <div class="wb-task-panel-row">
+        <div class="wb-task-row-copy"><strong class="wb-task-row-name">测试号</strong><span class="wb-task-row-note">当前没有补偿</span></div>
+        <button class="wb-task-row-action primary" type="button" disabled>领取</button>
       </div>
     </section>
 
-    <section class="wb-task-card" aria-labelledby="comp-title">
+    <section class="wb-extra-card wb-task-card" data-card="campaigns" aria-labelledby="campaign-title">
       <div class="wb-line">
-        <strong id="comp-title">官方补偿</strong>
-        <button class="wb-link-btn" type="button" data-toast="已提交全部账号的补偿领取">全部领取</button>
-      </div>
-      <div class="wb-task">
-        <div class="wb-task-main">
-          <div class="wb-name">主力号</div>
-          <div class="wb-sub">官方补偿 +500 积分 · 剩余 5 天</div>
+        <div class="wb-card-heading">
+          <button class="wb-card-handle" type="button" draggable="true" aria-label="拖动排序：运营活动任务" title="拖动排序 · Alt+方向键移动"><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="9" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="9" cy="13" r="1.2"/></g></svg></button>
+          <strong id="campaign-title">运营活动任务</strong>
         </div>
-        <button class="wb-task-run claim" type="button" data-toast="已提交主力号领取官方补偿 +500 积分">领取</button>
-      </div>
-      <div class="wb-task">
-        <div class="wb-task-main">
-          <div class="wb-name">备用号</div>
-          <div class="wb-sub">补偿状态尚未读取</div>
-        </div>
-      </div>
-      <div class="wb-task">
-        <div class="wb-task-main">
-          <div class="wb-name">测试号</div>
-          <div class="wb-sub">补偿状态尚未读取</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="wb-task-card" aria-labelledby="campaign-title">
-      <div class="wb-line">
-        <strong id="campaign-title">运营活动任务</strong>
         <span class="wb-sub">4 个活动</span>
       </div>
       <div class="wb-task">
@@ -432,7 +485,7 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
   let filter = "all";
   const applyFilter = () => {
     let visible = 0;
-    for (const card of document.querySelectorAll(".wb-task-card")) {
+    for (const card of document.querySelectorAll("#account-cards .wb-task-card")) {
       let cardVisible = 0;
       for (const task of card.querySelectorAll(".wb-task")) {
         const show = filter === "all" || task.dataset.state === filter;
@@ -462,6 +515,94 @@ header .muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:
       if (button.dataset.group === "status") toast("按状态分组：样稿仅展示按账号分组，正式版保持旧交互");
     });
   }
+
+  // Magpie 概览的排序模型：卡片有独立手柄，拖动或 Alt+方向键移动，顺序记在本机。
+  const setupReorder = (container, storageKey, message) => {
+    const keyOf = node => node.dataset?.orderKey || node.dataset?.card || "";
+    const cardList = () => [...container.children].filter(node => keyOf(node));
+    const defaults = cardList().map(keyOf);
+    const readOrder = () => {
+      try {
+        const value = JSON.parse(localStorage.getItem(storageKey) || "[]");
+        return Array.isArray(value) ? value.filter(key => typeof key === "string") : [];
+      } catch { return []; }
+    };
+    const applyOrder = () => {
+      const saved = readOrder(), list = cardList();
+      const rank = key => { const i = saved.indexOf(key); return i < 0 ? saved.length : i; };
+      list.map((card, i) => [card, i])
+        .sort(([a, i], [b, j]) => rank(keyOf(a)) - rank(keyOf(b)) || i - j)
+        .forEach(([card]) => container.append(card));
+    };
+    const saveOrder = () => {
+      const list = cardList(), seen = new Set(list.map(keyOf));
+      const order = [...list.map(keyOf), ...readOrder().filter(key => !seen.has(key))];
+      try { localStorage.setItem(storageKey, JSON.stringify(order)); } catch {}
+      toast(message);
+    };
+    applyOrder();
+
+    let dragCard = null;
+    container.addEventListener("dragstart", event => {
+      const handle = event.target.closest?.(".wb-card-handle");
+      const card = handle?.closest(".wb-task-card, .wb-extra-card");
+      if (!card || !cardList().includes(card)) return;
+      dragCard = card;
+      card.classList.add("dragging");
+      container.classList.add("sorting");
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", keyOf(card));
+        try { event.dataTransfer.setDragImage(card, 24, 24); } catch {}
+      }
+    });
+    container.addEventListener("dragover", event => {
+      if (!dragCard) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      const over = event.target.closest?.(".wb-task-card, .wb-extra-card");
+      if (!over || over === dragCard || !cardList().includes(over)) return;
+      const rect = over.getBoundingClientRect();
+      container.insertBefore(dragCard, event.clientY > rect.top + rect.height / 2 ? over.nextSibling : over);
+    });
+    container.addEventListener("drop", event => { if (dragCard) event.preventDefault(); });
+    container.addEventListener("dragend", () => {
+      if (!dragCard) return;
+      dragCard.classList.remove("dragging");
+      container.classList.remove("sorting");
+      dragCard = null;
+      saveOrder();
+    });
+    container.addEventListener("keydown", event => {
+      if (!event.altKey) return;
+      const handle = event.target.closest?.(".wb-card-handle");
+      const card = handle?.closest(".wb-task-card, .wb-extra-card");
+      if (!card || !cardList().includes(card)) return;
+      const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key];
+      if (!step) return;
+      event.preventDefault();
+      const list = cardList(), i = list.indexOf(card), to = i + step;
+      if (to < 0 || to >= list.length) return;
+      container.insertBefore(card, step < 0 ? list[to] : list[to].nextSibling);
+      handle.focus({ preventScroll: true });
+      saveOrder();
+    });
+    return () => {
+      try { localStorage.removeItem(storageKey); } catch {}
+      defaults.forEach(key => {
+        const card = [...container.children].find(node => keyOf(node) === key);
+        if (card) container.append(card);
+      });
+    };
+  };
+  const resetAccounts = setupReorder($("account-cards"), "wb-task-mock-accounts", "账号顺序已保存");
+  const resetExtras = setupReorder($("task-extras"), "wb-task-mock-extras", "卡片顺序已保存");
+  $("reset-order").addEventListener("click", () => {
+    try { localStorage.removeItem("wb-task-mock-order"); } catch {}
+    resetAccounts();
+    resetExtras();
+    toast("卡片顺序已重置");
+  });
 })();
 </script>
 </body>

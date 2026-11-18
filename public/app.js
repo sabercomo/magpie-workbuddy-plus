@@ -83,6 +83,7 @@ async function refresh() {
     model.append(pick, WBBoard.picker(pick, WBBoard.modelChoices(current.intlModels, wanted)));
     modelField = { host: model, pick, count: (current.intlModels || []).length };
     for (const key of ["timezone", "proxy"]) $("config-form").elements[key].value = current.config[key];
+    if ($("config-form").elements.intlProxy) $("config-form").elements.intlProxy.value = current.config.intlProxy || "";
     $("config-form").elements.spread.value = Number.isInteger(current.config.spread) ? current.config.spread : 10;
     $("config-form").elements.intlWeb.checked = current.config.intlWeb !== false;
     $("config-form").elements.campaignApp.checked = current.config.campaignApp === true;
@@ -104,6 +105,7 @@ async function board(view) {
     onTask: (account, task) => api("/api/run", { actions: ["task"], accounts: [account], task }).then(() => refresh()).catch(e => { failure(e); throw e; }),
     onQueue: accounts => api("/api/run", { actions: ["tasks"], accounts }).then(() => refresh()).catch(e => { failure(e); throw e; }),
     onRunAction: (action, accounts) => action === "refresh" ? api("/api/board", { accounts: accounts || [...selected] }).then(() => refresh()) : api("/api/run", { action, accounts: accounts || [...selected] }).then(() => refresh()).catch(e => { failure(e); throw e; }),
+    onRefresh: () => api("/api/board", {}).then(() => board()),
     onPauseAccount: (account, paused) => {
       const list = current.config.pausedAccounts || [];
       const config = { ...current.config, pausedAccounts: paused ? [...list, account] : list.filter(id => id !== account) };
@@ -156,6 +158,11 @@ $("config-form").onsubmit = async event => {
     config.intlSchedules = {}; for (const key of Object.keys(intlNames)) config.intlSchedules[key] = times(form.elements[`intl-${key}`].value);
     config.intlWebModel = form.elements["intl-model"].value || "auto";
     for (const key of ["timezone", "proxy"]) config[key] = form.elements[key].value.trim();
+    if (form.elements.intlProxy) {
+      const intlProxy = form.elements.intlProxy.value.trim();
+      if (intlProxy && intlProxy !== "direct" && !/^https?:\/\//.test(intlProxy)) { saveStatus("国际版代理需要 http:// 或 https:// 地址，或留空 / direct", true); return; }
+      config.intlProxy = intlProxy;
+    }
     config.spread = Number(form.elements.spread.value || 0);
     config.intlWeb = form.elements.intlWeb.checked;
     config.campaignApp = form.elements.campaignApp.checked;

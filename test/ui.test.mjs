@@ -26,9 +26,9 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   for (const id of ["error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "intl-schedule-fields", "intl-fields", "intl-conversation", "intl-model-pick", "cn-state", "intl-state", "saved", "board", "board-state", "board-refresh", "add-menu", "open-settings", "close-settings", "settings", "sched-pill", "run-scope-note", "wb-nav-toggle"]) nodes.set(id, new Element("div"));
   nodes.get("add-menu").contains = () => false;
   const form = nodes.get("config-form"); form.elements = {};
-  for (const name of ["timezone", "proxy", "spread", "intlWeb", "campaignApp", "skillShare"]) form.elements[name] = new Element("input");
+  for (const name of ["timezone", "proxy", "intlProxy", "spread", "intlWeb", "campaignApp", "skillShare"]) form.elements[name] = new Element("input");
   for (const id of ["schedule-fields", "intl-schedule-fields"]) nodes.get(id).append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };
-  const calls = [], status = { config: structuredClone(defaults), intlSchedules: structuredClone(defaults.intlSchedules), intlModels: ["hy3", "kimi-k3"], accounts: [
+  const calls = [], status = { config: { ...structuredClone(defaults), intlProxy: "http://127.0.0.1:1082" }, intlSchedules: structuredClone(defaults.intlSchedules), intlModels: ["hy3", "kimi-k3"], accounts: [
     { id: "cn:a", name: "国内测试", realm: "cn", source: "magpie", enabled: true },
     { id: "intl:c", name: "国际测试", realm: "intl", source: "magpie", enabled: true },
     { id: "cn:b", name: "国内测试二", realm: "cn", source: "magpie", enabled: true }
@@ -50,7 +50,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   ] }, accounts: [{ id: "cn:a", name: "国内测试", expires: 0, errors: {}, health: { state: "normal", failures: 0, lastSuccess: new Date(Date.now() - 60_000).toISOString(), cooldownUntil: 0, next: "21:00" }, balance: { balance: 120, size: 300, packages: [{ name: "活动赠送", balance: 120, size: 300, expires: Date.now() + 86400_000 }] },
     streak: { days: 8, makeupCards: 1, active: true, nextTier: { days: 14, remaining: 6, credit: 50, energy: 3 } },
     growth: { energy: 30, earned: 110, spent: 80, draws: 0, buddies: 2, rarity: { SR: 1, R: 1 }, current: ["团子"] },
-    compensation: { active: true, claimed: false, credit: 500, end: "2026-11-22 23:59:59" },
+    compensation: { active: true, claimed: false, credit: 500, end: new Date(Date.now() + 5 * 86400_000).toISOString() },
     buddy: { affordable: 2, maxOpen: 5 },
     tasks: { total: 3, claimed: 1, credit: 200, open: [{ code: "chat_5", title: "聊天 5 次", state: "auto", current: 0, target: 1, credit: 100, energy: 0, ends: 0 }, { title: "关注公众号", state: "manual", note: "需要关注官方公众号", current: 0, target: 1, credit: 100, energy: 5, ends: 0 }] },
     campaigns: [{ code: "campaign_starbucks_2026", label: "星巴克协作", tasks: [
@@ -203,31 +203,40 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   assert.match(alerts, /国内测试 的登录已过期[\s\S]*请在 Magpie「供应商」确认登录状态/);
   assert.doesNotMatch(alerts, /海外号 的登录/);
 
-  // Tasks center is a daily briefing: one primary action, needs, optional, accounts, details.
+  // Tasks center: the restored per-account matrix, with the 0.7.4 boxes below it.
   findNode(nodes.get("board"), n => n.dataset?.tab === "tasks").onclick();
   assert.equal(bodyEl.dataset.wbTab, "tasks");
   assert.equal(nodes.get("board").children[2].children.length, 0, "switching views clears the floating batch controls");
   const taskText = text(nodes.get("board"));
-  assert.match(taskText, /今天[\s\S]*有 2 件需要你处理/);
-  assert.match(taskText, /1 个国内个人账号 · 1 项任务会自动执行/);
-  assert.match(taskText, /需要你处理 2[\s\S]*国内测试 官方补偿 \+500 积分[\s\S]*关注公众号 · 需要你处理/);
-  assert.match(taskText, /Buddy 盲盒[\s\S]*国内测试 能量 30 · 可开 2 个/);
-  assert.match(taskText, /查看全部任务（\d+ 项）/);
-  const rewardCards = findNode(nodes.get("board"), n => n.className === "wb-task-panels");
-  assert.ok(rewardCards, "compensation and Buddy boxes live on the Tasks page");
+  assert.match(taskText, /1 项可以自动做[\s\S]*2 项待办 · 1 项需手动 · 合计 \+100 积分/);
+  assert.match(taskText, /全部 2[\s\S]*可领奖 0[\s\S]*可自动 1[\s\S]*需手动 1[\s\S]*未解锁 0/);
+  assert.match(taskText, /国内版[\s\S]*积分 · 1 个账号[\s\S]*国内测试[\s\S]*1\/3 已领 · 2 项待办/);
+  assert.match(taskText, /聊天 5 次[\s\S]*定时会完成[\s\S]*0\/1 · \+100 积分[\s\S]*执行/);
+  assert.match(taskText, /关注公众号[\s\S]*需手动[\s\S]*官方客户端/);
+  assert.match(taskText, /猫猫旅行快捷处理[\s\S]*一键收派/);
+  assert.match(taskText, /Buddy 盲盒[\s\S]*打开全部 · 2 个[\s\S]*国内测试 能量 30 · 可开 2 个/);
+  assert.match(taskText, /官方补偿 1[\s\S]*国内测试 官方补偿 \+500 积分 · 剩余 5 天/);
+  assert.match(taskText, /运营活动任务[\s\S]*星巴克协作/);
+  assert.doesNotMatch(taskText, /有 \d+ 件需要你处理|查看全部任务/);
+  const extras = findNode(nodes.get("board"), n => n.className === "wb-task-extras");
+  assert.ok(extras, "travel, Buddy, compensation and campaigns live in one extras grid");
+  assert.ok(findNode(extras, n => n.className?.includes("wb-task-panel")), "the two 0.7.4 panels are reused");
+  assert.equal(all(nodes.get("board"), "wb-card-handle").length, 5, "the account card and four extras each get a drag grip");
   await findNode(nodes.get("board"), n => n.textContent === "补领奖励" && n.className === "wb-task-sweep").onclick();
   assert.ok(calls.some(call => call.path === "/api/run" && JSON.stringify(call.body) === JSON.stringify({ action: "sweep", accounts: [] })));
   calls.length = 0;
-  await findNode(nodes.get("board"), n => n.textContent === "执行" && n.className === "wb-brief-btn").onclick();
+  await findNode(nodes.get("board"), n => n.textContent === "执行全部待办" && n.className === "wb-task-run-all").onclick();
+  assert.ok(calls.some(call => call.path === "/api/run" && JSON.stringify(call.body) === JSON.stringify({ actions: ["tasks"], accounts: ["cn:a"] })));
+  calls.length = 0;
+  await findNode(nodes.get("board"), n => n.textContent === "执行" && n.className === "wb-task-run").onclick();
   assert.ok(calls.some(call => call.path === "/api/run" && JSON.stringify(call.body) === JSON.stringify({ actions: ["task"], accounts: ["cn:a"], task: "chat_5" })));
   calls.length = 0;
-  await button(rewardCards, "领取").onclick();
+  await button(extras, "领取").onclick();
   assert.ok(calls.some(call => call.path === "/api/run" && JSON.stringify(call.body) === JSON.stringify({ action: "compensation", accounts: ["cn:a"] })));
   calls.length = 0;
-  await button(rewardCards, "开 2 个").onclick();
+  await button(extras, "开 2 个").onclick();
   assert.ok(calls.some(call => call.path === "/api/run" && JSON.stringify(call.body) === JSON.stringify({ action: "buddy", accounts: ["cn:a"] })));
   calls.length = 0;
-  assert.match(text(nodes.get("board")), /活动与手动[\s\S]*星巴克协作/);
   const autoBuddy = findNode(nodes.get("board"), n => n.className === "wb-task-auto")?.children[1];
   assert.equal(autoBuddy.checked, false);
   assert.equal(autoBuddy.getAttribute("role"), "switch");
@@ -236,6 +245,16 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   await autoBuddy.onchange();
   assert.ok(calls.some(call => call.path === "/api/config" && call.body.buddyAuto === true));
   calls.length = 0;
+
+  // The old status filter and grouping still work after the restore.
+  button(nodes.get("board"), "按状态分组").onclick();
+  assert.match(text(nodes.get("board")), /定时会完成 \(1\)[\s\S]*需手动 \(1\)/);
+  button(nodes.get("board"), "按账号分组").onclick();
+  button(nodes.get("board"), "可自动 1").onclick();
+  const filtered = text(nodes.get("board"));
+  assert.match(filtered, /聊天 5 次/);
+  assert.doesNotMatch(filtered, /关注公众号[\s\S]*需手动/);
+  button(nodes.get("board"), "全部 2").onclick();
 
   // Back to Board: list view preserves original expanded account detail unchanged.
   findNode(nodes.get("board"), n => n.dataset?.tab === "board").onclick();
@@ -318,6 +337,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   assert.deepEqual(calls.find(c => c.path === "/api/run").body, { action: "activity", accounts: ["cn:b"] });
 
   // Settings form deduplication & model choices
+  assert.equal(form.elements.intlProxy.value, "http://127.0.0.1:1082", "the international proxy is filled from the saved config");
   form.elements["schedule-daily"].value = "21:00, 09:00, 09:00";
   form.elements["intl-web"].value = "11:00，10:30";
   assert.equal(context.WBBoard.modelChoices([{ id: "hy3", name: "Hy3", rate: 0 }, { id: "gpt-6-luna", name: "GPT-6-Luna", rate: 0.07, tier: { exclusive: true } }, { id: "glm-5.3", name: "glm-5.3", rate: 0.69 }], "gone").map(r => [r.id, r.tag || "", r.note || ""].join("|")).join(" "),
@@ -327,12 +347,16 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   option.onclick();
   assert.equal(form.elements["intl-model"].value, "kimi-k3", "picking from the menu sets the form's value");
   form.elements["intl-model"].value = "hy3";
+  form.elements.intlProxy.value = "127.0.0.1:1082";
+  await form.onsubmit({ preventDefault() {}, currentTarget: form });
+  assert.match(nodes.get("saved").textContent, /^国际版代理需要/);
+  form.elements.intlProxy.value = "direct";
   assert.equal(form.elements.intlWeb.checked, true, "the switch shows the saved setting");
   form.elements.intlWeb.checked = false;
   form.elements.campaignApp.checked = true;
   await form.onsubmit({ preventDefault() {}, currentTarget: form });
   const saved = calls.filter(c => c.path === "/api/config").at(-1).body;
-  assert.deepEqual([saved.schedules.daily, saved.schedules.sweep, saved.intlSchedules.web, saved.intlSchedules.daily, saved.intlWebModel, saved.intlWeb, saved.campaignApp], [["09:00", "21:00"], ["10:01", "22:11"], ["10:30", "11:00"], ["09:01", "21:01"], "hy3", false, true]);
+  assert.deepEqual([saved.schedules.daily, saved.schedules.sweep, saved.intlSchedules.web, saved.intlSchedules.daily, saved.intlWebModel, saved.intlWeb, saved.campaignApp, saved.intlProxy], [["09:00", "21:00"], ["10:01", "22:11"], ["10:30", "11:00"], ["09:01", "21:01"], "hy3", false, true, "direct"]);
   assert.equal(nodes.get("saved").textContent, "已保存", "the save result sits beside the button");
   failConfig = true;
   await form.onsubmit({ preventDefault() {}, currentTarget: form });
@@ -352,15 +376,26 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const manualOnly = structuredClone(board);
   const manualAccount = manualOnly.accounts.find(a => a.id === "cn:a");
   manualAccount.tasks.open = [];
+  manualAccount.buddy = { affordable: 0, maxOpen: 5 };
   context.WBBoard.goTab("tasks");
   context.WBBoard.render(nodes.get("board"), manualOnly);
   const taskBadge = () => findNode(nodes.get("board"), n => n.dataset?.tab === "tasks").lastChild;
   assert.equal(taskBadge().textContent, "1 待办", "unclaimed compensation counts without automatic growth tasks");
-  assert.match(text(nodes.get("board")), /有 1 件需要你处理/);
+  assert.match(text(nodes.get("board")), /没有可自动执行的任务[\s\S]*0 项待办[\s\S]*官方补偿 1[\s\S]*国内测试 官方补偿 \+500 积分/);
   manualAccount.compensation.claimed = true;
   context.WBBoard.render(nodes.get("board"), manualOnly);
   assert.equal(taskBadge().hidden, true, "optional boxes and other realms do not raise manual todo badges");
-  assert.match(text(nodes.get("board")), /当前无需手动处理/);
+  assert.match(text(nodes.get("board")), /官方补偿 暂无待领取/);
+  assert.doesNotMatch(text(nodes.get("board")), /国内测试 官方补偿 \+500 积分/);
+  assert.match(text(nodes.get("board")), /Buddy 盲盒[\s\S]*能量 30 · 没有可开盲盒/);
+  assert.equal(findNode(nodes.get("board"), n => n.textContent === "打开全部" && n.className?.includes("wb-task-row-action")).disabled, true, "no boxes keeps a disabled open-all");
+  assert.equal(findNode(nodes.get("board"), n => n.textContent === "开盲盒" && n.className === "wb-task-row-action").disabled, true, "no boxes keeps a disabled per-account action");
+  assert.equal(findNode(nodes.get("board"), n => n.textContent === "全部领取" && n.className?.includes("wb-task-row-action")).disabled, true, "nothing claimable keeps a disabled bulk claim");
+  assert.equal(findNode(nodes.get("board"), n => n.textContent === "领取" && n.className?.includes("wb-task-row-action")).disabled, true, "claimed compensation keeps a disabled row claim");
+  manualAccount.errors.tasks = "ECONNREFUSED";
+  context.WBBoard.render(nodes.get("board"), manualOnly);
+  assert.match(text(nodes.get("board")), /任务读取失败：国内测试[\s\S]*检查网络和代理/);
+  delete manualAccount.errors.tasks;
   for (const account of manualOnly.accounts) account.limits = [];
   manualAccount.balance.balance = 120.25;
   context.WBBoard.goTab("board");
@@ -386,14 +421,14 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   const nodes = new Map(), requests = [];
   for (const id of ["state", "note", "board", "jobs", "panel", "cn-state", "intl-state", "sched-pill", "intl-model-pick", "settings", "settings-form", "open-settings", "close-settings", "save-settings", "save-status", "wb-nav-toggle"]) nodes.set(id, new Element("div"));
   const form = nodes.get("settings-form");
-  form.elements = Object.fromEntries(["daily", "tasks", "sweep", "night", "intl-daily", "intl-web", "intl-model", "intl-web-on", "campaign-app", "skill-share", "buddy-auto", "spread", "timezone", "proxy"].map(k => [k, new Element("input")]));
+  form.elements = Object.fromEntries(["daily", "tasks", "sweep", "night", "intl-daily", "intl-web", "intl-model", "intl-web-on", "campaign-app", "skill-share", "buddy-auto", "spread", "timezone", "proxy", "intlProxy"].map(k => [k, new Element("input")]));
   form.reportValidity = () => true;
   const bodyEl = new Element("body");
   const context = vm.createContext({
     WBPLUS: {
       panel: "http://127.0.0.1:4389", build: "abc123", generated: new Date().toISOString(), at: Date.now(), enabled: true, intlEnabled: true,
       schedules: structuredClone(defaults.schedules), intlSchedules: structuredClone(defaults.intlSchedules),
-      settings: { timezone: "Asia/Shanghai", spread: 10, proxy: "", intlWebModel: "auto", intlWeb: true, campaignApp: false, skillShare: true },
+      settings: { timezone: "Asia/Shanghai", spread: 10, proxy: "", intlProxy: "http://127.0.0.1:1082", intlWebModel: "auto", intlWeb: true, campaignApp: false, skillShare: true },
       intl: { accounts: 0 }, today: { timezone: "Asia/Shanghai", next: { kind: "tasks", at: "21:10", status: "upcoming" }, slots: [{ kind: "tasks", at: "21:10", status: "upcoming" }] },
       accounts: [{ id: "cn:a", name: "主力号", expires: 0, errors: {}, balance: { balance: 100, size: 200, packages: [] }, tasks: { total: 2, claimed: 1, credit: 50, open: [{ code: "skill_1", title: "技能任务", state: "claimable", current: 1, target: 1, credit: 50 }] }, travel: { state: "arrived", location: "大理", reward: 30 } }],
       jobs: []
@@ -420,19 +455,31 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   assert.equal(bodyEl.dataset.wbTab, "tasks");
   await findNode(nodes.get("board"), n => n.textContent === "补领奖励" && n.className === "wb-task-sweep").onclick();
   assert.equal(requests.at(-1).action, "sweep");
-  await findNode(nodes.get("board"), n => n.textContent === "收派" && n.className === "wb-brief-btn").onclick();
+  await findNode(nodes.get("board"), n => n.textContent === "领奖并出发" && n.className === "wb-task-run claim").onclick();
   assert.equal(requests.at(-1).action, "travel");
   assert.equal(requests.at(-1).accounts.join(","), "cn:a");
 
   // The App conversation setting is saved by Magpie's page too.
   assert.equal(form.elements["campaign-app"].checked, false);
   form.elements["campaign-app"].checked = true;
+  assert.equal(form.elements.intlProxy.value, "http://127.0.0.1:1082", "the international proxy is filled from the saved config");
+  form.elements.intlProxy.value = "direct";
   const button = nodes.get("save-settings");
   assert.match(readFileSync(new URL("../page/index.html", import.meta.url), "utf8"), /<button type="button" id="save-settings">/);
   await button.onclick({ currentTarget: button });
   const savedPage = requests.filter(r => r.action === "config").at(-1);
   assert.equal(savedPage.config.campaignApp, true);
+  assert.equal(savedPage.config.intlProxy, "direct");
   assert.equal(button.disabled, true, "the save button is disabled while saving");
+
+  // A malformed international proxy is rejected locally too.
+  form.elements.intlProxy.value = "127.0.0.1:1082";
+  button.disabled = false;
+  await button.onclick({ currentTarget: button });
+  assert.match(nodes.get("save-status").textContent, /^国际版代理需要/);
+  assert.equal(button.disabled, false, "a rejected proxy does not disable the button");
+  assert.equal(requests.filter(r => r.action === "config").length, 1, "nothing is sent for an invalid proxy");
+  form.elements.intlProxy.value = "direct";
 
   // A malformed time keeps the settings open and says so beside the button.
   form.elements.daily.value = "9:00";

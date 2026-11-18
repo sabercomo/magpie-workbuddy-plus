@@ -18,7 +18,7 @@ shot() {
   echo "docs/images/$1.png"
 }
 shot list "view=list"
-shot tasks "tab=tasks"
+shot tasks "tab=tasks" 1280
 shot accounts "tab=accounts" 900
 shot rings "view=rings"
 shot widgets "view=widgets"

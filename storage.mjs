@@ -31,6 +31,8 @@ export const defaults = {
   timezone: "Asia/Shanghai",
   magpieDir,
   proxy: "",
+  // WorkBuddy AI's own proxy: "" follows proxy, "direct" uses none.
+  intlProxy: "",
   // China's slots; WorkBuddy AI keeps its own below. Every default minute is
   // 01, so scheduled work does not start on the hour. Entries that need their
   // own place keep 10 minutes between them.
@@ -164,7 +166,7 @@ export function intlSchedules(config) {
 export function settle(config) {
   const { intl: _, ...rest } = config;
   const schedules = { ...defaults.schedules, ...withoutKeepalive(rest.schedules || {}) };
-  return { ...rest, concurrency: rest.concurrency ?? 1, tasksCacheTtl: rest.tasksCacheTtl ?? 20, progressCacheHours: rest.progressCacheHours ?? 6, campaignApp: rest.campaignApp === true, skillShare: rest.skillShare !== false, schedules, intlEnabled: intlOn(config), intlSchedules: intlSchedules({ ...rest, schedules }), disabledAccounts: Array.isArray(rest.disabledAccounts) ? rest.disabledAccounts : [], pausedAccounts: Array.isArray(rest.pausedAccounts) ? rest.pausedAccounts : [] };
+  return { ...rest, concurrency: rest.concurrency ?? 1, tasksCacheTtl: rest.tasksCacheTtl ?? 20, progressCacheHours: rest.progressCacheHours ?? 6, campaignApp: rest.campaignApp === true, skillShare: rest.skillShare !== false, intlProxy: typeof rest.intlProxy === "string" ? rest.intlProxy : "", schedules, intlEnabled: intlOn(config), intlSchedules: intlSchedules({ ...rest, schedules }), disabledAccounts: Array.isArray(rest.disabledAccounts) ? rest.disabledAccounts : [], pausedAccounts: Array.isArray(rest.pausedAccounts) ? rest.pausedAccounts : [] };
 }
 
 // Every kind of slot, the build it serves and what it runs. WorkBuddy AI's
@@ -197,6 +199,8 @@ const times = (value, name) => {
 export function validateConfig(value) {
   if (typeof value.enabled !== "boolean" || typeof value.proxy !== "string" || typeof value.magpieDir !== "string") throw new Error("开关、代理或 Magpie 路径无效");
   if (value.proxy && !/^https?:\/\//.test(value.proxy)) throw new Error("代理需要 http:// 或 https:// 地址");
+  if (value.intlProxy !== undefined && typeof value.intlProxy !== "string") throw new Error("国际版代理无效");
+  if (value.intlProxy && value.intlProxy !== "direct" && !/^https?:\/\//.test(value.intlProxy)) throw new Error("国际版代理需要 http:// 或 https:// 地址，或留空 / direct");
   new Intl.DateTimeFormat("en", { timeZone: value.timezone });
   if (value.intlEnabled !== undefined && typeof value.intlEnabled !== "boolean") throw new Error("国际版定时开关无效");
   if (value.intlWeb !== undefined && typeof value.intlWeb !== "boolean") throw new Error("国际版网页会话开关无效");
@@ -220,3 +224,11 @@ export function validateConfig(value) {
 
 // A proxy's credentials never reach the page: it sees user:pass as ***.
 export const maskProxy = proxy => String(proxy || "").replace(/\/\/[^/@]*@/, "//***@");
+
+// The proxy a realm's requests use: China keeps the saved proxy; WorkBuddy
+// AI follows it unless its own is set. "direct" means no proxy.
+export const proxyFor = (config, realm) => {
+  if (realm !== "intl") return config.proxy || "";
+  const own = String(config.intlProxy ?? "").trim();
+  return own === "direct" ? "" : own || config.proxy || "";
+};
