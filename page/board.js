@@ -1719,6 +1719,32 @@
       return box;
     }
 
+    const accountGroup = shown => {
+      const group = el("section", "wb-group wb-task-group"), cards = el("div", "wb-task-cards");
+      group.setAttribute("aria-label", "国内版");
+      const head = el("div", "wb-group-head"), total = el("span", "wb-group-total");
+      total.append(el("strong", undefined, fine(mine.reduce((s, a) => s + (a.balance?.balance || 0), 0))), el("span", "wb-sub", ` 积分 · ${mine.length} 个账号`));
+      const top = line(el("span", "wb-group-name", "国内版"), total);
+      top.className += " wb-group-top";
+      head.append(top);
+      group.append(head, cards);
+      const accountCards = [];
+      for (const acc of mine) {
+        const open = shown.filter(x => x.account.id === acc.id).map(x => x.task), card = el("div", "wb-task-card");
+        card.dataset.orderKey = acc.id;
+        const header = line(taskHeading(acc.name, acc.name), el("span", "wb-sub", acc.tasks ? `${acc.tasks.claimed}/${acc.tasks.total} 已领 · ${acc.tasks.open.length} 项待办` : "任务读取失败"));
+        card.append(header);
+        if (acc.errors?.tasks) card.append(el("div", "wb-sub", acc.errors.tasks));
+        else if (!acc.tasks?.open?.length) card.append(el("div", "wb-task-done", "全部完成"));
+        else if (!open.length) card.append(el("div", "wb-task-done", "当前筛选下无待办"));
+        for (const task of open) card.append(taskLine(acc, task, now, false));
+        accountCards.push(card);
+      }
+      cards.append(...orderTaskNodes(accountCards, readTaskOrder(taskAccountsSaved)));
+      taskReorder(cards, taskAccountsSaved);
+      return group;
+    };
+
     if (all.length) {
       const tBar = el("div", "wb-board-toolbar");
       tBar.append(
@@ -1728,31 +1754,8 @@
       box.append(tBar);
 
       const shown = all.filter(({ task }) => taskFilter === "all" || task.state === taskFilter);
-      if (taskGroup === "account") {
-        const group = el("section", "wb-group wb-task-group"), cards = el("div", "wb-task-cards");
-        group.setAttribute("aria-label", "国内版");
-        const head = el("div", "wb-group-head"), total = el("span", "wb-group-total");
-        total.append(el("strong", undefined, fine(mine.reduce((s, a) => s + (a.balance?.balance || 0), 0))), el("span", "wb-sub", ` 积分 · ${mine.length} 个账号`));
-        const top = line(el("span", "wb-group-name", "国内版"), total);
-        top.className += " wb-group-top";
-        head.append(top);
-        group.append(head, cards);
-        const accountCards = [];
-        for (const acc of mine) {
-          const open = shown.filter(x => x.account.id === acc.id).map(x => x.task), card = el("div", "wb-task-card");
-          card.dataset.orderKey = acc.id;
-          const header = line(taskHeading(acc.name, acc.name), el("span", "wb-sub", acc.tasks ? `${acc.tasks.claimed}/${acc.tasks.total} 已领 · ${acc.tasks.open.length} 项待办` : "任务读取失败"));
-          card.append(header);
-          if (acc.errors?.tasks) card.append(el("div", "wb-sub", acc.errors.tasks));
-          else if (!acc.tasks?.open?.length) card.append(el("div", "wb-task-done", "全部完成"));
-          else if (!open.length) card.append(el("div", "wb-task-done", "当前筛选下无待办"));
-          for (const task of open) card.append(taskLine(acc, task, now, false));
-          accountCards.push(card);
-        }
-        cards.append(...orderTaskNodes(accountCards, readTaskOrder(taskAccountsSaved)));
-        taskReorder(cards, taskAccountsSaved);
-        box.append(group);
-      } else {
+      if (taskGroup === "account") box.append(accountGroup(shown));
+      else {
         const orderStates = [["claimable", "可领奖"], ["auto", "定时会完成"], ["manual", "需手动"], ["locked", "未解锁"]];
         const cards = el("div", "wb-task-cards wb-task-cards-single");
         for (const [st, title] of orderStates) {
@@ -1769,6 +1772,7 @@
     } else {
       const failed = mine.filter(a => a.errors?.tasks);
       box.append(el("p", "wb-calm", failed.length ? `任务读取失败：${failed.map(a => a.name).join("、")}。稍后刷新，或检查网络和代理。` : "国内个人账号的成长任务都已完成。"));
+      box.append(accountGroup([]));
     }
 
     const panels = taskPanels(rows, compRows, now);

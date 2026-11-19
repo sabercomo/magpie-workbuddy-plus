@@ -382,6 +382,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const taskBadge = () => findNode(nodes.get("board"), n => n.dataset?.tab === "tasks").lastChild;
   assert.equal(taskBadge().textContent, "1 待办", "unclaimed compensation counts without automatic growth tasks");
   assert.match(text(nodes.get("board")), /没有可自动执行的任务[\s\S]*0 项待办[\s\S]*官方补偿 1[\s\S]*国内测试 官方补偿 \+500 积分/);
+  assert.match(text(nodes.get("board")), /国内测试 1\/3 已领 · 0 项待办[\s\S]*全部完成/, "accounts stay visible when every growth task is done");
   manualAccount.compensation.claimed = true;
   context.WBBoard.render(nodes.get("board"), manualOnly);
   assert.equal(taskBadge().hidden, true, "optional boxes and other realms do not raise manual todo badges");
