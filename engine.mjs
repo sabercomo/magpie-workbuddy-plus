@@ -355,8 +355,25 @@ export async function perform(action, client, context) {
   };
   // Growth energy opens Buddy blind boxes. It spends energy, so it only runs
   // when the board asks for it or the travel auto setting is on.
-  const buddy = async () => {
+  const travelBase = "/activity/growth/buddy/travel";
+  const buddy = async (travelStatus) => {
     if (intl) return { skipped: true, reason: "intl" };
+    const status = travelStatus === undefined ? await client.request(travelBase + "/status") : travelStatus;
+    const travelState = status?.state;
+    if (travelState !== "idle") {
+      let noBuddy = false;
+      // First-time opening can create a Buddy. A missing travel state alone
+      // does not establish that there is no trip to protect.
+      if (travelState == null || travelState === "") {
+        const pet = (await client.request("/activity/growth/buddy/info"))?.buddy;
+        noBuddy = pet === null || (typeof pet === "object" && !Array.isArray(pet) && Object.keys(pet).length === 0);
+      }
+      if (!noBuddy) {
+        const reason = travelState === "traveling" ? "猫猫正在旅行" : travelState === "arrived" ? "猫猫已归来，旅行奖励待领取" : "旅行状态无法确认";
+        log(`Buddy 盲盒：${reason}，跳过开盒`);
+        return { skipped: true, opened: 0 };
+      }
+    }
     const quota = await client.request("/v2/activity/growth/buddy/quota");
     const affordable = Math.max(0, Number(quota?.affordable) || 0);
     const maxOpen = Math.max(1, Number(quota?.max_open_count) || 1);
@@ -371,29 +388,33 @@ export async function perform(action, client, context) {
   const travel = async () => {
     // WorkBuddy AI has no Buddy travel: nothing is asked and nothing logged.
     if (intl) return { skipped: true, reason: "intl" };
-    const base = "/activity/growth/buddy/travel";
-    let status = await client.request(base + "/status"), opened = false;
-    if (!status?.state && config.buddyAuto === true) { await buddy(); opened = true; status = await client.request(base + "/status"); }
+    let status = await client.request(travelBase + "/status"), opened = false;
+    if (!status?.state && config.buddyAuto === true) {
+      const result = await buddy(status);
+      if (result.skipped) return result;
+      opened = result.opened > 0;
+      if (opened) status = await client.request(travelBase + "/status");
+    }
     if (!status?.state) { log("还没有可旅行的猫猫，跳过"); return { skipped: true }; }
     if (status.state === "arrived") {
-      const reward = await client.request(base + "/claim", { body: {} });
+      const reward = await client.request(travelBase + "/claim", { body: {} });
       log(`猫猫归来：已领取 ${reward?.reward_credit ?? 0} 积分`);
-      status = await client.request(base + "/status");
+      status = await client.request(travelBase + "/status");
     }
     if (status.state === "traveling") { log("猫猫正在旅行"); return status; }
     if (status.state !== "idle") throw new Error(`未知猫猫状态：${status.state}`);
     if (status.daily_limit_reached) { log("猫猫今日旅行已完成"); return status; }
     if (config.buddyAuto === true && !opened) {
-      await buddy();
-      status = await client.request(base + "/status");
+      await buddy(status);
+      status = await client.request(travelBase + "/status");
       if (status.state !== "idle" || status.daily_limit_reached) return status;
     }
-    const configuration = await client.request(base + "/config");
+    const configuration = await client.request(travelBase + "/config");
     const location = configuration?.locations?.[0];
     if (location?.id === undefined) throw new Error("旅行配置没有可用目的地");
     const first = (await tasks()).find(t => t.task_code === "first_buddy");
     if (first && first.accept_status !== "claimed") await progress(first);
-    const departed = await client.request(base + "/depart", { body: { location_id: location.id } });
+    const departed = await client.request(travelBase + "/depart", { body: { location_id: location.id } });
     log(`猫猫已出发：${location.name || location.id}`);
     return departed;
   };
@@ -460,7 +481,10 @@ export async function perform(action, client, context) {
         log("成长抽奖未开放，已跳过");
         break;
       }
-      log(`成长抽奖 ${draws + 1}/${lottery.chances}：${JSON.stringify(result)}`);
+      const prize = [result?.prize_name, result?.prize?.name, result?.prize, result?.name]
+        .find(name => typeof name === "string" && name.trim())?.trim() || "奖品名称未返回";
+      const physical = result?.prize_type === "physical" || result?.need_address === true || result?.require_address === true;
+      log(`成长抽奖 ${draws + 1}/${lottery.chances}：${prize}${physical ? "（实物奖，请到成长中心填写收件信息）" : ""}`);
     }
     // The starter gift and compensation are China's billing; WorkBuddy AI has neither.
     for (const [path, title] of intl ? [] : [["claim-gift", "新手礼包"]]) {

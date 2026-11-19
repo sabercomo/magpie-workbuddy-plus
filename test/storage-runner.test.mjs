@@ -10,7 +10,8 @@ import { dropped } from "../network.mjs";
 import { EventEmitter } from "node:events";
 import { Runner, jobOutcome, magpieBin, shifted } from "../runner.mjs";
 import { createService, answering } from "../server.mjs";
-import { portOf, handoff } from "../index.mjs";
+import { WorkBuddyPlusPlugin, portOf, handoff } from "../index.mjs";
+import { actions } from "../engine.mjs";
 import { newer, version } from "../storage.mjs";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
@@ -564,6 +565,19 @@ test("the service port comes from the plugin option, then the environment, then 
   assert.equal(portOf({ port: "nope" }, { WORKBUDDY_PLUS_PORT: "5000" }), 5000);
   assert.equal(portOf(undefined, {}), 3439);
   assert.equal(portOf({ port: 70000 }, {}), 3439);
+});
+
+test("the Magpie run tool advertises every backend action", async t => {
+  const { promise: ready, resolve } = Promise.withResolvers();
+  const server = createServer((request, response) => {
+    response.end(JSON.stringify({ config: {}, version }));
+    if (request.url === "/api/page-target") resolve();
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const { tool } = await WorkBuddyPlusPlugin({}, { port: server.address().port });
+  await ready;
+  assert.deepEqual(tool.run.args.properties.action.enum, actions);
 });
 
 test("only a WorkBuddy Plus answering on the port counts as one running", async () => {

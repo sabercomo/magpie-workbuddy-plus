@@ -393,6 +393,35 @@ test("a disabled lottery stops drawing without failing WorkBuddy AI's streak ben
   await assert.rejects(p.run("bonus"), /HTTP 400，invalid client token/);
 });
 
+test("lottery results log safe prize details even if compensation later fails", async t => {
+  const prizes = [
+    { prize_name: "纪念杯", prize_type: "physical", input: "private fixture text" },
+    { prize: { name: "冰箱贴" }, need_address: true },
+    { name: "胸针", require_address: true },
+    { prize: "成长能量", prize_type: "energy" },
+    { prize: { id: 1 } }
+  ];
+  let drawn = 0;
+  const p = fixture(t, path => {
+    if (path.endsWith("/heatmap")) return ok({ cells: [] });
+    if (path.endsWith("/streak")) return ok({ streak: { days: 1 } });
+    if (path.endsWith("/lottery/summary")) return ok({ chances: prizes.length });
+    if (path.endsWith("/lottery/draw")) return ok(prizes[drawn++]);
+    if (path.endsWith("/claim-gift")) return ok({ credit: 0 });
+    if (path.endsWith("/compensation-status")) return new Response(null, { status: 502 });
+    throw new Error("unexpected endpoint " + path);
+  });
+  await assert.rejects(p.run("bonus"), /HTTP 502/);
+  assert.deepEqual(p.logs.filter(line => line.startsWith("成长抽奖")), [
+    "成长抽奖 1/5：纪念杯（实物奖，请到成长中心填写收件信息）",
+    "成长抽奖 2/5：冰箱贴（实物奖，请到成长中心填写收件信息）",
+    "成长抽奖 3/5：胸针（实物奖，请到成长中心填写收件信息）",
+    "成长抽奖 4/5：成长能量",
+    "成长抽奖 5/5：奖品名称未返回"
+  ]);
+  assert.ok(!p.logs.some(line => line.includes("private fixture text")));
+});
+
 // The daily reward takes a finished web conversation, run the way the web app does.
 test("a WorkBuddy AI account's web conversation runs once a day through its sandbox, on a free model when there is one", async t => {
   let status = "working";
@@ -708,6 +737,7 @@ test("a failed compensation status query stays an error, not a claim", async t =
 test("buddy opens at most the single-open cap and uses a fresh client token", async t => {
   const opened = [];
   const p = fixture(t, (path, request) => {
+    if (path.endsWith("/travel/status")) return ok({ state: "idle" });
     if (path === "/v2/activity/growth/buddy/quota") return ok({ affordable: 3, max_open_count: 2 });
     if (path === "/v2/activity/growth/buddy/open") { opened.push(request.body); return ok({ buddy: "薄荷团子" }); }
     throw new Error("unexpected endpoint " + path);
@@ -717,11 +747,13 @@ test("buddy opens at most the single-open cap and uses a fresh client token", as
   assert.equal(opened[0].count, 2);
   assert.equal(typeof opened[0].client_token, "string");
   assert.ok(opened[0].client_token.length > 10);
+  assert.ok(p.seen[0].path.endsWith("/travel/status"));
 });
 
 test("buddy does not send an open request when energy is short", async t => {
   let opens = 0;
   const p = fixture(t, path => {
+    if (path.endsWith("/travel/status")) return ok({ state: "idle" });
     if (path === "/v2/activity/growth/buddy/quota") return ok({ affordable: 0, max_open_count: 5 });
     if (path === "/v2/activity/growth/buddy/open") { opens++; return ok({}); }
     throw new Error("unexpected endpoint " + path);
@@ -729,6 +761,41 @@ test("buddy does not send an open request when energy is short", async t => {
   assert.deepEqual(await p.run("buddy"), { opened: 0 });
   assert.equal(opens, 0);
   assert.ok(p.logs.some(line => /成长能量不足/.test(line)));
+});
+
+test("manual Buddy opening requires a safe travel state", async t => {
+  const cases = [
+    { state: "traveling", message: /正在旅行/ },
+    { state: "arrived", message: /奖励待领取/ },
+    { state: "new-state", message: /旅行状态无法确认/ },
+    { state: "", info: { buddy: { name: "团子" } }, message: /旅行状态无法确认/ },
+    { state: "", info: {}, message: /旅行状态无法确认/ }
+  ];
+  for (const { state, info, message } of cases) {
+    const p = fixture(t, path => {
+      if (path.endsWith("/travel/status")) return ok({ state });
+      if (path.endsWith("/buddy/info")) return ok(info);
+      if (path.endsWith("/buddy/quota")) return ok({ affordable: 1, max_open_count: 1 });
+      if (path.endsWith("/buddy/open")) return ok({ buddy: "芝麻" });
+      throw new Error("unexpected endpoint " + path);
+    });
+    assert.equal((await p.run("buddy")).skipped, true, state);
+    assert.match(p.logs.at(-1), message);
+    assert.deepEqual(p.seen.map(({ path }) => path), [
+      "/activity/growth/buddy/travel/status", ...(info ? ["/activity/growth/buddy/info"] : [])
+    ]);
+  }
+});
+
+test("a failed travel status query prevents Buddy opening", async t => {
+  const p = fixture(t, path => {
+    if (path.endsWith("/travel/status")) return new Response(null, { status: 502 });
+    if (path.endsWith("/buddy/quota")) return ok({ affordable: 1, max_open_count: 1 });
+    if (path.endsWith("/buddy/open")) return ok({ buddy: "芝麻" });
+    throw new Error("unexpected endpoint " + path);
+  });
+  await assert.rejects(p.run("buddy"), /HTTP 502/);
+  assert.deepEqual(p.seen.map(({ path }) => path), ["/activity/growth/buddy/travel/status"]);
 });
 
 test("buddy skips WorkBuddy AI and enterprise accounts", async t => {
@@ -777,10 +844,23 @@ test('automatic blind boxes refresh travel state before departing', async t => {
   assert.ok(!p.seen.some(r => r.path.endsWith('/depart')));
 });
 
+test("automatic Buddy opening skips an empty travel state for an existing Buddy", async t => {
+  const p = fixture(t, path => {
+    if (path.endsWith("/travel/status")) return ok({ state: "" });
+    if (path.endsWith("/buddy/info")) return ok({ buddy: { name: "团子" } });
+    throw new Error("unexpected endpoint " + path);
+  });
+  p.context.config.buddyAuto = true;
+  assert.equal((await p.run("travel")).skipped, true);
+  assert.match(p.logs.at(-1), /旅行状态无法确认/);
+  assert.deepEqual(p.seen.map(({ path }) => path), ["/activity/growth/buddy/travel/status", "/activity/growth/buddy/info"]);
+});
+
 test('opening the first Buddy happens once and logs the returned names before travel', async t => {
   let opened = 0;
   const p = fixture(t, path => {
     if (path.endsWith('/status')) return ok({ state: opened ? 'idle' : '', daily_limit_reached: false });
+    if (path.endsWith('/buddy/info')) return ok({ buddy: {} });
     if (path.endsWith('/quota')) return ok({ affordable: 2, max_open_count: 2 });
     if (path.endsWith('/open')) { opened++; return ok({ buddies: [{ name: '团子' }, { name: '芝麻' }] }); }
     if (path.endsWith('/config')) return ok({ locations: [{ id: 42, name: '杭州' }] });
@@ -792,5 +872,6 @@ test('opening the first Buddy happens once and logs the returned names before tr
   await p.run('travel');
   assert.equal(opened, 1);
   assert.ok(p.logs.some(l => l.includes('团子、芝麻')));
+  assert.equal(p.seen[1].path, '/activity/growth/buddy/info');
   assert.ok(p.seen.findIndex(r => r.path.endsWith('/open')) < p.seen.findIndex(r => r.path.endsWith('/depart')));
 });
