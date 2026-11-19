@@ -22,7 +22,7 @@ shot tasks "tab=tasks" 1400
 shot accounts "tab=accounts" 900
 shot rings "view=rings"
 shot widgets "view=widgets"
-shot alerts "view=list&to=.wb-alert-footer&click=.wb-alert-toggle"
+shot alerts "view=list&to=.wb-alert-footer&click=.wb-alert-toggle" 360
 shot models-cn "tab=models&realm=cn"
 shot models-intl "tab=models&realm=intl"
 shot models-ent "tab=models&realm=ent"

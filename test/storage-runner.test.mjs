@@ -403,6 +403,29 @@ test("the page lists every job from today with each log line", t => {
   assert.deepEqual(jobs[0].logs, [{ at: now, account: "cn:u1", message: "今天第 1 条" }]);
 });
 
+test("the board recalls real prize logs across days without adding old jobs to the queue", t => {
+  const p = fixture(t), runner = new Runner(p.dir), now = new Date().toISOString(), yesterday = new Date(Date.now() - 86400_000).toISOString();
+  const physical = "成长抽奖 1/1：纪念杯（实物奖，请到成长中心填写收件信息）";
+  runner.board.accounts = [{ id: "cn:u1", name: "主力号", realm: "cn", errors: {} }];
+  runner.state.jobs = [
+    { id: "today", actions: ["bonus"], accounts: ["cn:u1"], status: "succeeded", created: now, logs: [
+      { at: now, account: "cn:u1", action: "bonus", message: "成长抽奖 1/1：100 积分" },
+      { at: now, account: "cn:removed", action: "bonus", message: physical },
+      { at: now, account: "cn:u1", action: "tasks", message: physical }
+    ] },
+    { id: "past-prize", actions: ["all"], accounts: ["cn:u1"], status: "partial", created: yesterday, logs: [
+      { at: yesterday, account: "cn:u1", action: "all", message: physical },
+      { at: yesterday, account: "cn:u1", action: "all", message: "官方补偿查询失败" }
+    ] },
+    { id: "other-past", actions: ["bonus"], accounts: ["cn:u1"], status: "failed", created: yesterday, logs: [] }
+  ];
+  const view = runner.boardView();
+  assert.deepEqual(view.prizeReminders, [{ job: "past-prize", account: "cn:u1", at: yesterday, prize: "纪念杯" }]);
+  assert.deepEqual(view.jobs.map(job => job.id), ["today"]);
+  assert.deepEqual(view.pastPrizeJobs.map(job => job.id), ["past-prize"]);
+  assert.equal(view.pastPrizeJobs[0].logs[1].message, "官方补偿查询失败");
+});
+
 test("a job with completed work and failures is partial and reports both counts", () => {
   const outcome = jobOutcome([
     { ok: true },

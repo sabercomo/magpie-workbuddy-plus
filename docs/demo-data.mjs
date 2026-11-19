@@ -207,6 +207,8 @@ const slots = [["night", "01:00"], ["daily", "09:00"], ["tasks", "09:10"], ["dai
   return { kind, at: time, status: due ? "succeeded" : "upcoming", attempts: due ? 1 : 0 };
 });
 const job = (actions, minutes, last) => ({ accounts: [actions.includes("web") ? "intl:demo-4" : "demo-1"], logs: [{ at: new Date(now - minutes * 60_000).toISOString(), account: actions.includes("web") ? "intl:demo-4" : "demo-1", message: last, channel: actions.includes("web") ? "chat" : "task", level: "info" }], id: `demo-${minutes}`, actions, status: "succeeded", trigger: "manual", created: new Date(now - minutes * 60_000).toISOString(), finished: new Date(now - minutes * 60_000 + 40_000).toISOString(), last });
+const prize = "WorkBuddy 纪念杯";
+const draw = job(["bonus"], 55, `成长抽奖 1/1：${prize}（实物奖，请到成长中心填写收件信息）`);
 
 writePage(join(process.argv[2], "data.js"), {
   generated: new Date(now).toISOString(), at: now - 4 * 60_000, refreshing: false, enabled: true, intlEnabled: true,
@@ -215,12 +217,14 @@ writePage(join(process.argv[2], "data.js"), {
   intl: { enabled: true, web: true, accounts: 1 },
   settings: { timezone: "Asia/Shanghai", spread: 0, proxy: "", intlWebModel: "auto", intlWeb: true, buddyAuto: false, concurrency: 1, tasksCacheTtl: 20, progressCacheHours: 6 },
   accounts, models, today: { timezone: "Asia/Shanghai", slots, next: slots.find(s => s.status === "upcoming") || null },
+  prizeReminders: [{ job: draw.id, account: draw.accounts[0], at: draw.logs[0].at, prize }],
   jobs: [
     { id: "demo-running", actions: ["travel", "tasks"], accounts: ["demo-1", "demo-2"], status: "running", created: new Date(now - 25_000).toISOString(), started: new Date(now - 20_000).toISOString(), counts: { succeeded: 1, failed: 0, total: 1 }, queue: [
       { account: "demo-1", status: "running", completed: 1, total: 2, action: "tasks", message: "成长任务：接取工作台搭建师" },
       { account: "demo-2", status: "queued", completed: 0, total: 2 }
     ], logs: [{ at: new Date(now - 3000).toISOString(), account: "demo-1", channel: "task", message: "识别专家任务「工作台搭建师」，已接取" }] },
     { id: "demo-failed", actions: ["tasks"], accounts: ["demo-5"], status: "deferred", created: new Date(now - 15 * 60_000).toISOString(), finished: new Date(now - 14 * 60_000).toISOString(), counts: { succeeded: 0, failed: 1, limited: 1, total: 1 }, queue: [{ account: "demo-5", status: "deferred", completed: 1, total: 1, message: "上游限流，本轮请求已停止重试" }], retries: [0,5,25].map((sec,i) => ({ request: "demo-request", account: "demo-5", action: "tasks", path: "/v2/activity/growth/tasks", at: new Date(now - 15 * 60_000 + sec * 1000).toISOString(), attempt: i + 1, status: 429, waitMs: [5000,20000,0][i], error: true })), logs: [{ at: new Date(now - 14 * 60_000).toISOString(), account: "demo-5", channel: "task", level: "error", message: "成长任务被限流：HTTP 429，本次请求已停止重试，等待下一次定时补跑" }] },
+    draw,
     job(["web"], 70, "海外号：国际版网页会话已跑完（hy3，当前免费，11 秒），每日活跃奖励通常次日凌晨到账"),
     job(["tasks"], 95, "主力号：成长任务完成 2 项，领取 80 积分"),
     job(["travel"], 130, "备用号：芝麻出发去大理"),

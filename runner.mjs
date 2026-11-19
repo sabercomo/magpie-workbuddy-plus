@@ -161,12 +161,22 @@ export class Runner {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
     const onDay = value => value && calendar(new Date(value), config.timezone).day === day;
     const network = this.state.network;
-    const jobs = this.state.jobs
-      .filter(job => visibleJob(job) && (onDay(job.created) || onDay(job.started) || onDay(job.finished)))
-      .map(job => {
-        const outcome = job.results?.length ? jobOutcome(job.results, job.status === "cancelled") : { status: job.status, counts: job.counts };
-        return { id: job.id, actions: job.actions, ...(job.task ? { task: job.task } : {}), status: ["queued", "running", "interrupted"].includes(job.status) ? job.status : outcome.status, accounts: job.accounts, queue: job.queue, retries: job.retries, retryOf: job.retryOf, attempt: job.attempt, counts: outcome.counts, trigger: job.trigger, created: job.created, started: job.started, finished: job.finished, logs: job.logs };
-      });
+    const jobs = [], prizeReminders = [], pastPrizeJobs = [];
+    const personal = new Set(this.board.accounts.filter(a => !a.enterprise).map(a => a.id));
+    for (const job of this.state.jobs) {
+      if (!visibleJob(job)) continue;
+      const today = onDay(job.created) || onDay(job.started) || onDay(job.finished);
+      const prior = prizeReminders.length;
+      for (const entry of job.logs) {
+        if ((entry.action !== "bonus" && entry.action !== "all") || !personal.has(entry.account)) continue;
+        // Match the persisted v0.7.8 draw log so existing wins still surface.
+        const win = entry.message.match(/^成长抽奖 \d+\/\d+：(.+)（实物奖，请到成长中心填写收件信息）$/s);
+        if (win) prizeReminders.push({ job: job.id, account: entry.account, at: entry.at, prize: win[1] });
+      }
+      if (!today && prior === prizeReminders.length) continue;
+      const outcome = job.results?.length ? jobOutcome(job.results, job.status === "cancelled") : { status: job.status, counts: job.counts };
+      (today ? jobs : pastPrizeJobs).push({ id: job.id, actions: job.actions, ...(job.task ? { task: job.task } : {}), status: ["queued", "running", "interrupted"].includes(job.status) ? job.status : outcome.status, accounts: job.accounts, queue: job.queue, retries: job.retries, retryOf: job.retryOf, attempt: job.attempt, counts: outcome.counts, trigger: job.trigger, created: job.created, started: job.started, finished: job.finished, logs: job.logs });
+    }
     return {
       generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
@@ -185,7 +195,7 @@ export class Runner {
       }), models: this.board.models || null,
       intl: { enabled: config.intlEnabled, web: config.intlWeb !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
       networkPaused: network?.pausedUntil > Date.now() ? { until: network.pausedUntil, at: network.last?.at, message: network.last?.message } : null,
-      jobs
+      jobs, prizeReminders, pastPrizeJobs
     };
   }
   accountHealth(account, config, day) {
@@ -391,13 +401,13 @@ export class Runner {
     return this.board;
   }
   // An account as the board shows it: its check-in (Magpie's for China, its
-  // own for WorkBuddy AI) and its credit history, the grants named from this
-  // plugin's run logs and Magpie's check-in time. The raw grants stay here.
+  // own for WorkBuddy AI) and its credit history. The raw grants stay here.
   withLedger({ balance, checkinUpstream, ...a }, key, found, day) {
-    const signed = found.records[`workbuddy|${key}`], at = signed?.outcome === "claimed" ? Date.parse(signed.claimed || signed.at) : 0;
+    const signed = found.records[`workbuddy|${key}`];
+    const checkinGrant = signed?.outcome === "claimed" ? { at: Date.parse(signed.claimed || signed.at), credit: Number(signed.credit) } : null;
     const logs = this.state.jobs.flatMap(job => job.accounts.includes(a.id) ? job.logs.filter(l => l.account === a.id) : []);
     const shown = balance ? (({ grants, ...rest }) => rest)(balance) : balance;
-    return { ...a, balance: shown, checkin: a.realm === "intl" ? a.checkin : checkin(found, key, day, checkinUpstream, this.config().timezone), ...(balance?.grants ? { ledger: ledger(balance, a.usage, logs, at, Date.now(), 7, a.realm) } : {}) };
+    return { ...a, balance: shown, checkin: a.realm === "intl" ? a.checkin : checkin(found, key, day, checkinUpstream, this.config().timezone), ...(balance?.grants ? { ledger: ledger(balance, a.usage, logs, checkinGrant, Date.now(), 7, a.realm) } : {}) };
   }
   // Magpie hands the page's last request back on every plugin restart, so
   // each request id runs once and an old one is only acknowledged.

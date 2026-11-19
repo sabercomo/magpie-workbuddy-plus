@@ -101,7 +101,7 @@
   }
 
   function earned(a, now) {
-    const got = (a.ledger?.entries || []).filter(e => e.source === "每日活跃奖励").sort((x, y) => y.at - x.at)[0];
+    const got = (a.ledger?.entries || []).filter(e => e.activityReward || e.source === "每日活跃奖励").sort((x, y) => y.at - x.at)[0];
     if (got && days(got.at, now) === 0) return { label: `今日到账 +${num(got.credit)}`, tone: "ok", note: `${clock(got.at)} 到账；奖励在活跃后的次日凌晨发放` };
     const why = last?.[1]?.intlEnabled === false ? "国际版定时已暂停" : last?.[1]?.intl?.web === false ? "网页会话已关闭，需要在 workbuddy.ai 网页端自己完成一次对话" : "奖励在活跃后的次日凌晨发放，通常 02:00 到 07:00 到账";
     return { label: "今日未到账", tone: "", note: `${why}${got ? `；上次 ${when(got.at)} +${num(got.credit)}` : ""}` };
@@ -164,7 +164,7 @@
   }
 
   const again = () => { if (last) { switched = true; render(last[0], last[1]); } };
-  const goTab = next => { tab = next; savedTab.set(next); switched = true; again(); };
+  const goTab = next => { if (next !== "schedule") prizeRecord = null; tab = next; savedTab.set(next); switched = true; again(); };
   const setMode = next => { mode = next; savedView.set(next); if (next !== "rings") focus = null; again(); };
 
   const kinds = { daily: "活跃 · 旅行 · 福利", tasks: "成长任务", sweep: "补领清扫", night: "夜猫子", "intl-daily": "活跃 · 签到 · 福利", "intl-web": "网页会话" };
@@ -231,6 +231,7 @@
   const jobLabel = job => job.actions.map(a => actionNames[a] || a).join(" · ");
   const logFailed = entry => entry.level === "error" || (!entry.level && /失败|限流|中断|错误|HTTP [45]/.test(entry.message));
   let workTab = "queue", recordChannel = "all", logsChannel = "all", recordsFailed = false, logsFailed = false, cacheDraft = null;
+  let prizeRecord = null;
   const recordsOpen = new Set();
 
   function workButton(label, run, status) {
@@ -303,6 +304,7 @@
   function executionRecord(job, view, showActions = true) {
     const detail = el("details", "wb-execution-record"), summary = el("summary"), body = el("div", "wb-record-body"), content = el("div", "wb-record-detail");
     detail.dataset.job = job.id;
+    summary.id = `wb-record-${job.id}`;
     detail.open = recordsOpen.has(job.id) || job.status === "running";
     detail.ontoggle = () => detail.open ? recordsOpen.add(job.id) : recordsOpen.delete(job.id);
     const [state, tone] = slotStates[job.status] || [job.status, ""], channels = jobChannels(job);
@@ -387,9 +389,13 @@
         if (selected !== "all" && (entry.channel || jobChannels(job)[0]) !== selected || failed && !logFailed(entry)) continue;
         panel.append(logLine(entry, view, job)); count++;
       }
-    } else for (const job of view.jobs || []) {
-      if (selected !== "all" && !jobChannels(job).includes(selected) || failed && !badJob(job)) continue;
-      panel.append(executionRecord(job, view)); count++;
+    } else {
+      const jobs = view.jobs || [];
+      const prior = prizeRecord && !jobs.some(job => job.id === prizeRecord) && view.pastPrizeJobs?.find(job => job.id === prizeRecord);
+      for (const job of prior ? [prior, ...jobs] : jobs) {
+        if (selected !== "all" && !jobChannels(job).includes(selected) || failed && !badJob(job)) continue;
+        panel.append(executionRecord(job, view, job !== prior)); count++;
+      }
     }
     if (!count) panel.append(el("p", "wb-calm", failed ? "没有符合条件的失败记录" : "暂无记录"));
     return panel;
@@ -458,6 +464,10 @@
     const network = last?.[1]?.networkPaused;
     const webEnabled = last?.[1]?.intl?.web !== false;
     if (network) items.push({ tone: "urgent", text: `网络/代理连续失败，自动任务暂停至 ${when(network.until)}`, aside: network.message || "自动重试已暂停，手动执行仍可用", title: "连续网络错误后暂停定时任务，避免整轮卡在超时；修好代理或网络后可以手动执行确认恢复", order: -3 });
+    for (const { account, prize, at, job } of last[1].prizeReminders || []) {
+      const name = rows.find(a => a.id === account)?.name;
+      if (name) items.push({ kind: "prize", tone: "urgent", text: `${name} 获得实物奖「${prize}」`, at, job, order: -1.5 });
+    }
     for (const a of rows) {
       if (a.restricted) items.push({ tone: "urgent", text: `${a.name}：账号被上游限制，自动任务今天已暂停`, aside: a.restricted.message || "请先在官方客户端确认账号状态", title: "识别到上游限制后，本插件今天不再自动执行这个账号，避免继续触发风控", order: -2 });
       if (a.webPaused && webEnabled) items.push({ tone: "urgent", text: `${a.name}：国际版网页会话今天已暂停`, aside: "缺 CODEBUDDY_API_KEY，免费账号无法提供；不想看到可在设置关掉「每天跑一次网页会话」", title: `${a.webPaused.message || "缺少 CODEBUDDY_API_KEY"}；修好 Key 或代理后可在「立即执行」里手动重试`, order: -1 });
@@ -500,7 +510,34 @@
   function alerts(items) {
     if (!items.length) return el("div", "wb-calm", "没有需要你处理的事");
     const group = el("div", "wb-alert-group");
-    const row = (i, plain) => { const r = el("div", `wb-alert-row ${plain ? "plain" : i.tone || "plain"}`); r.append(el("span", "wb-alert-text", i.text), el("span", "wb-alert-aside", i.aside)); if (i.title) r.title = i.title; return r; };
+    const row = (i, plain) => {
+      const r = el("div", `wb-alert-row ${plain ? "plain" : i.tone || "plain"}`), text = el("span", "wb-alert-text"), aside = el("span", "wb-alert-aside");
+      if (i.kind === "prize") {
+        r.className += " wb-alert-prize";
+        text.append(el("strong", undefined, i.text), el("span", "wb-sub", "请到成长中心填写收件信息"));
+        const time = el("time", undefined, when(Date.parse(i.at))), button = el("button", "wb-alert-toggle", "查看执行记录");
+        time.dateTime = i.at;
+        button.type = "button";
+        button.onclick = () => {
+          prizeRecord = i.job;
+          workTab = "runs";
+          recordChannel = "all";
+          recordsFailed = false;
+          recordsOpen.add(i.job);
+          goTab("schedule");
+          const summary = document.getElementById(`wb-record-${i.job}`);
+          summary.focus({ preventScroll: true });
+          summary.scrollIntoView({ block: "nearest" });
+        };
+        aside.append(time, button);
+      } else {
+        text.textContent = i.text;
+        aside.textContent = i.aside || "";
+      }
+      if (i.title) r.title = i.title;
+      r.append(text, aside);
+      return r;
+    };
     const box = (list, head, cls) => { const b = el("section", `wb-alert-section${cls ? ` ${cls}` : ""}`); b.setAttribute("aria-label", head); b.append(el("div", "wb-alert-section-head", head), ...list.map(i => row(i))); return b; };
     const limited = items.filter(i => i.kind === "limit"), urgent = items.filter(i => i.kind !== "limit" && i.tone === "urgent"), rest = items.filter(i => i.kind !== "limit" && i.tone !== "urgent");
     if (limited.length) {
@@ -528,10 +565,12 @@
     if (!items.length) return skipLimits ? null : el("p", "wb-alert-empty", "没有需要你处理的事");
     const limited = items.filter(i => i.kind === "limit"), urgent = items.filter(i => i.kind !== "limit" && i.tone === "urgent"), rest = items.filter(i => i.kind !== "limit" && i.tone !== "urgent");
     const strip = el("section", `wb-alert-footer${urgent.length ? " has-urgent" : limited.length ? " has-warn" : ""}`);
+    if (urgent.some(i => i.kind === "prize")) strip.className += " wb-alert-with-prize";
     strip.setAttribute("aria-label", "提醒摘要");
     const bar = el("div", "wb-alert-bar"), chips = el("div", "wb-alert-chips");
     const headline = urgent.length ? `需处理 ${urgent.length} 件` : limited.length ? `限额/排队 ${limited.length} 项` : `提醒 ${rest.length} 件`;
-    chips.append(el("span", "wb-alert-mark", headline), el("span", "wb-alert-preview", [...urgent, ...limited, ...rest].slice(0, 2).map(i => i.aside ? `${i.text} · ${i.aside}` : i.text).join(" · ")));
+    const preview = [...urgent, ...limited, ...rest].slice(0, urgent[0]?.kind === "prize" ? 1 : 2);
+    chips.append(el("span", "wb-alert-mark", headline), el("span", "wb-alert-preview", preview.map(i => i.aside ? `${i.text} · ${i.aside}` : i.text).join(" · ")));
     const toggle = el("button", "wb-alert-toggle", alertsOpen ? "收起 ▴" : `展开全部 ${items.length} 条 ↓`);
     toggle.type = "button";
     toggle.setAttribute("aria-expanded", String(alertsOpen));
@@ -820,10 +859,10 @@
   function history(l, now) {
     const head = line(el("span", "wb-label", "积分流水 · 近 7 天"), el("span", "wb-sub", l ? `获得 +${num(l.gained)} · 用掉 ${num(l.used)}` : ""));
     if (!l?.entries.length) return [head, el("div", "wb-sub", "近 7 天没有新到账的积分")];
-    const list = el("div", "wb-ledger");
+    const list = el("div", "wb-ledger wb-credit-ledger");
     for (const e of l.entries.slice(0, 10)) {
       const row = el("div", "wb-ledger-row");
-      row.append(el("span", "wb-sub", when(e.at)), el("strong", "wb-gain", `+${num(e.credit)}`), el("span", "wb-ledger-why", e.source || short(e.name)),
+      row.append(el("span", "wb-sub", when(e.at)), el("strong", "wb-gain", `+${num(e.credit)}`), el("span", "wb-ledger-why", e.source || "来源未确认"),
         el("span", `wb-sub wb-when ${e.left > 0 && e.ends ? tone(e.ends, now) : ""}`, e.left <= 0 ? "已用完" : e.ends ? `余 ${num(e.left)} · ${date(e.ends)} 作废` : `余 ${num(e.left)}`));
       row.title = short(e.name);
       list.append(row);

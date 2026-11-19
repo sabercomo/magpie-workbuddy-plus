@@ -35,14 +35,32 @@ test("a grant is named by the run-log line that gave its amount, else Magpie's c
   // A draw's prize is written minutes later; its start time is the draw's.
   const draw = [log("2026-11-07T09:00:29", "成长抽奖 1/1：{\"prize_name\":\"100 积分\"}")];
   assert.equal(sourceOf({ at: at("2026-11-07T09:07:15"), start: at("2026-11-07T09:00:29"), credit: 100 }, draw), "成长抽奖");
-  assert.equal(sourceOf(grant("2026-11-07T00:01:59", 100), [], at("2026-11-07T00:01:50")), "每日签到");
-  assert.equal(sourceOf(grant("2026-11-05T00:07:07", 100), []), "每日签到", "Magpie's check-in lands just after midnight");
+  const checkin = { at: at("2026-11-07T00:01:50"), credit: 100 };
+  assert.equal(sourceOf(grant("2026-11-07T00:01:59", 100), [], checkin), "每日签到");
+  assert.equal(sourceOf(grant("2026-11-07T00:01:59", 50), [], checkin), "", "a different credit amount is not the check-in");
+  assert.equal(sourceOf(grant("2026-11-05T00:07:07", 100), []), "", "time and amount alone do not establish a check-in");
   const week = ledger({ grants: [{ ...grant("2026-11-07T09:07:15", 100), name: "国内运营裂变包", left: 100 }, { ...grant("2026-11-06T21:01:18", 10), name: "国内运营裂变包", left: 0 }, { ...grant("2026-10-20T09:00:00", 50), name: "x", left: 0 }] },
     { credit: 36.5 }, logs, 0, at("2026-11-07T20:00:00"));
   assert.deepEqual([week.gained, week.used, week.sources, week.entries.map(e => e.source)], [110, 36.5, [["成长任务", 100], ["猫猫旅行", 10]], ["成长任务", "猫猫旅行"]]);
-  // A late check-in: the day's one unexplained 100 is it; a second is not.
+  // Both grants lack evidence, even if one looks like a late check-in.
   const late = ledger({ grants: [{ at: at("2026-11-04T09:00:00"), credit: 100, name: "x", left: 0 }, { at: at("2026-11-04T02:14:11"), credit: 100, name: "x", left: 0 }] }, {}, [], 0, at("2026-11-07T20:00:00"));
-  assert.deepEqual(late.entries.map(e => e.source), ["", "每日签到"]);
+  assert.deepEqual(late.entries.map(e => e.source), ["来源未确认", "来源未确认"]);
+});
+
+test("the grant reason from a resource row takes precedence and other attributes stay private", () => {
+  const now = at("2026-11-07T12:00:00"), made = at("2026-11-07T09:00:00");
+  const row = { PackageName: "国内运营裂变包", CapacitySize: 100, CapacityRemain: 100, CreateTime: made };
+  const balance = summarize([
+    { ...row, AccountAttributes: [{ Key: "private", Value: "private-attribute" }, { Key: "grantReason", Value: " 官方活动发放 " }] },
+    { ...row, CreateTime: made + 20_000, AccountAttributes: [{ Key: "grantReason", Value: {} }] },
+    { ...row, CreateTime: made + 40_000, AccountAttributes: {} }
+  ], now);
+  const logs = [log("2026-11-07T09:00:00", "成长抽奖 1/1：纪念杯（实物奖，请到成长中心填写收件信息）"),
+    log("2026-11-07T09:00:20", "成长抽奖未开放，已跳过"), log("2026-11-07T09:00:40", "已兑换连登 7d 档位")];
+  const got = ledger(balance, {}, logs, 0, now);
+  assert.deepEqual(got.entries.map(e => e.source), ["来源未确认", "来源未确认", "官方活动发放"]);
+  assert.equal(ledger(balance, {}, [], { at: made, credit: 100 }, now).entries.at(-1).source, "官方活动发放", "upstream supersedes the Magpie record");
+  assert.doesNotMatch(JSON.stringify({ balance, got }), /AccountAttributes|private-attribute/);
 });
 
 test("the board view carries each account's ledger, not its raw grants", t => {
@@ -67,9 +85,12 @@ test("a WorkBuddy AI Bonus Pack of 30 or 50 is its daily activity reward; elsewh
     { at: now - 3 * 86400_000, credit: 250, name: "Bonus Pack", left: 0 }
   ] };
   const intl = ledger(balance, null, [], 0, now, 7, "intl");
-  assert.deepEqual(intl.entries.map(e => e.source), ["每日活跃奖励", "每日活跃奖励", ""]);
-  assert.deepEqual(intl.sources, [["其他", 250], ["每日活跃奖励", 80]]);
-  assert.deepEqual(ledger(balance, null, [], 0, now).entries.map(e => e.source), ["", "", ""]);
+  assert.deepEqual(intl.entries.map(e => e.source), ["每日活跃奖励", "每日活跃奖励", "来源未确认"]);
+  assert.deepEqual(intl.sources, [["来源未确认", 250], ["每日活跃奖励", 80]]);
+  assert.deepEqual(ledger(balance, null, [], 0, now).entries.map(e => e.source), ["来源未确认", "来源未确认", "来源未确认"]);
+  balance.grants[0].grantReason = "活动发放";
+  assert.deepEqual(ledger(balance, null, [], 0, now, 7, "intl").entries.map(e => [e.source, e.activityReward]),
+    [["活动发放", true], ["每日活跃奖励", undefined], ["来源未确认", undefined]]);
 });
 
 // 获得 and 用掉 sit side by side, so both cover the same seven calendar days.

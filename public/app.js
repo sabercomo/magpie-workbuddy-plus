@@ -98,7 +98,8 @@ async function refresh() {
 
 async function board(view) {
   view = view || await api("/api/board");
-  view = { ...view, jobs: current.jobs };
+  const jobs = view.jobs || [], currentIds = new Set(jobs.map(job => job.id));
+  view = { ...view, jobs: [...jobs, ...current.jobs.filter(job => !currentIds.has(job.id))] };
   updateSchedPill(view);
   WBBoard.render($("board"), view, Date.now(), {
     onSchedule: (intl, on) => save({ ...current.config, [intl ? "intlEnabled" : "enabled"]: on }).then(() => board()).catch(failure),

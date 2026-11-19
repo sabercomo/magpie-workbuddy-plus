@@ -18,6 +18,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
     removeAttribute() {}
     get lastChild() { return this.children.at(-1); }
     focus() { context.document.activeElement = this; }
+    scrollIntoView() {}
   }
   const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
   const nodes = new Map(), buttonNames = [...html.matchAll(/data-action="([^"]+)"/g)].map(m => m[1]);
@@ -86,7 +87,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const bodyEl = new Element("body");
   let failConfig = false;
   const context = vm.createContext({
-    document: { body: bodyEl, getElementById: id => nodes.get(id) ?? (id.startsWith("wb-account-scope-") ? findNode(nodes.get("board"), n => n.id === id) : undefined), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: selector => selector === "[data-action]" ? buttons : [], querySelector: () => null, addEventListener() {} },
+    document: { body: bodyEl, getElementById: id => nodes.get(id) ?? (/^wb-(account-scope|record)-/.test(id) ? findNode(nodes.get("board"), n => n.id === id) : undefined), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: selector => selector === "[data-action]" ? buttons : [], querySelector: () => null, addEventListener() {} },
     fetch: async (path, init) => { calls.push({ path, body: init.body ? JSON.parse(init.body) : undefined }); if (path === "/api/config" && failConfig) return { ok: false, json: async () => ({ error: "配置无效" }) }; return { ok: true, json: async () => path === "/api/status" ? structuredClone(status) : path === "/api/board" ? structuredClone(board) : {} }; },
     setInterval() {}, console
   });
@@ -129,6 +130,23 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   button(logPanel, "对话").onclick();
   assert.match(text(nodes.get("board")), /暂无记录/);
   context.WBBoard.goTab("board");
+
+  const wonAt = new Date(Date.now() - 86400_000).toISOString();
+  const priorDraw = { id: "prior-draw", actions: ["bonus"], status: "succeeded", accounts: ["cn:a"], created: wonAt,
+    logs: [{ at: wonAt, account: "cn:a", action: "bonus", message: "成长抽奖 1/1：纪念杯（实物奖，请到成长中心填写收件信息）" }] };
+  const priorBoard = { ...board, jobs: status.jobs, pastPrizeJobs: [priorDraw], prizeReminders: [{ job: priorDraw.id, account: "cn:a", prize: "纪念杯", at: wonAt }] };
+  context.WBBoard.render(nodes.get("board"), priorBoard);
+  const reminder = findNode(nodes.get("board"), n => n.className?.includes("wb-alert-prize"));
+  assert.match(text(reminder), /国内测试 获得实物奖「纪念杯」[\s\S]*请到成长中心填写收件信息/);
+  button(reminder, "查看执行记录").onclick();
+  const drawRecord = findNode(nodes.get("board"), n => n.dataset?.job === priorDraw.id);
+  assert.equal(drawRecord.open, true);
+  assert.equal(context.document.activeElement, drawRecord.children[0]);
+  assert.match(text(drawRecord), /成长抽奖 1\/1：纪念杯/);
+  assert.deepEqual(calls, [], "the reminder opens retained records without sending a request");
+  context.WBBoard.goTab("board");
+  context.WBBoard.render(nodes.get("board"), { ...board, jobs: status.jobs });
+  assert.equal(findNode(nodes.get("board"), n => n.className?.includes("wb-alert-prize")), undefined);
 
   // Accounts tab is the approved health/task matrix; the nav can become a sidebar.
   findNode(nodes.get("board"), n => n.dataset?.tab === "accounts").onclick();

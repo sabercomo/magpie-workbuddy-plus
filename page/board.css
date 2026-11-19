@@ -88,6 +88,11 @@ body.in-settings button.wb-nav-toggle{display:none}
 .wb-alert-row::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--tone);margin-top:.58em}
 .wb-alert-text{min-width:0;overflow-wrap:anywhere}
 .wb-alert-aside{min-width:0;font-size:11.5px;color:var(--wb-muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;justify-self:end;text-align:right}
+.wb-alert-prize .wb-alert-text,.wb-alert-prize .wb-alert-aside{display:grid;gap:2px}
+.wb-alert-prize .wb-alert-text strong{font-weight:600}
+.wb-alert-prize .wb-alert-aside{justify-items:end}
+.wb-alert-prize .wb-alert-toggle{min-height:28px}
+.wb-alert-prize .wb-alert-toggle:active{opacity:.8}
 .wb-alert-more{border-top:1px solid var(--wb-line);padding:9px 0 0}
 .wb-alert-more-head{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;padding:2px 0 6px;font-size:12px;color:var(--wb-muted);cursor:pointer;list-style:none}
 .wb-alert-more-head::-webkit-details-marker{display:none}
@@ -255,6 +260,7 @@ body.in-settings button.wb-nav-toggle{display:none}
 .wb-ledger-row{position:relative;display:grid;grid-template-columns:auto minmax(52px,max-content) minmax(0,1fr) auto;gap:10px;align-items:baseline;font-variant-numeric:tabular-nums}
 .wb-ledger-row strong{font-weight:600;text-align:right;white-space:nowrap}.wb-gain{color:var(--wb-accent)}
 .wb-ledger-why{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-credit-ledger .wb-ledger-why{white-space:normal;overflow-wrap:anywhere}
 .wb-clock{white-space:nowrap;font-variant-numeric:tabular-nums}
 .wb-ledger-row.wb-charge-new{animation:wb-charge-in 240ms cubic-bezier(.2,.8,.2,1)}
 @keyframes wb-charge-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
@@ -458,6 +464,8 @@ body.in-settings button.wb-nav-toggle{display:none}
 .wb-task-summary-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .wb-task-cards{column-width:320px;column-gap:12px;display:block}
 .wb-task-cards>.wb-task-card{break-inside:avoid;margin-bottom:12px}
+/* Keep the gap with its card when WebKit balances columns. */
+.wb-task-cards:not(.wb-task-cards-single)>.wb-task-card{display:inline-flex;width:100%;vertical-align:top}
 .wb-task-cards-single{column-width:auto;column-count:1;display:block}
 .wb-task-cards-single>.wb-task-card{break-inside:avoid;margin-bottom:12px}
 .wb-task-extras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;align-items:start}
@@ -539,11 +547,18 @@ body.in-settings button.wb-nav-toggle{display:none}
   .wb-b-top{grid-template-columns:1fr}
   .wb-alert-bar{flex-direction:column;gap:5px}.wb-alert-toggle{align-self:flex-end}
   .wb-alert-row{grid-template-columns:5px minmax(0,1fr)}.wb-alert-aside{grid-column:2;max-width:none;text-align:left;white-space:normal;justify-self:stretch}
+  .wb-alert-with-prize .wb-alert-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:12px}
+  .wb-alert-with-prize .wb-alert-chips{display:grid;gap:3px}
+  .wb-alert-with-prize .wb-alert-bar>.wb-alert-toggle{align-self:start;min-height:44px}
+  .wb-alert-prize .wb-alert-aside{display:flex;align-items:center;gap:12px}
+  .wb-alert-prize .wb-alert-toggle{min-height:44px}
   .wb-widgets{grid-template-columns:repeat(2,minmax(0,1fr))}.wb-w-m{grid-column:1/-1}
   .wb-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .wb-row{grid-template-columns:30px minmax(0,1fr) 94px 14px}.wb-row .wb-money{grid-column:2/4;grid-row:2}
   .wb-list-head{display:none}
   .wb-detail-grid{grid-template-columns:1fr;padding-left:14px}
+  .wb-credit-ledger .wb-ledger-row{grid-template-columns:max-content minmax(30px,max-content) minmax(0,1fr);gap:2px 8px}
+  .wb-credit-ledger .wb-when{grid-column:3;text-align:left;white-space:normal}
   .wb-kpis.wb-kpis-3{grid-template-columns:1fr}
   .wb-mrow{grid-template-columns:minmax(0,1fr) 92px}.wb-mrow .wb-mctx{display:none}.wb-mrow>.wb-copy{grid-column:1/-1;grid-row:2}.wb-mrow>.wb-mreason{grid-column:1/-1;grid-row:3;flex-direction:row;gap:8px}.wb-mhead>:nth-child(2),.wb-mhead>.wb-mreason{display:none}
   .wb-view-label{display:none}

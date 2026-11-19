@@ -36,7 +36,11 @@ export function summarize(rows, now = Date.now()) {
     // A grant may be written minutes after it was given (a draw's prize): its
     // cycle's start is the moment itself.
     const start = beijing(a.CycleStartTime);
-    if (made > now - 30 * 86400_000) grants.push({ at: made, ...(start && start !== made ? { start } : {}), credit: round(Number(a.CapacitySize) || 0), name: a.PackageName || a.ProductName || "积分包", left: round(remain), ...(end ? { ends: end } : {}) });
+    if (made > now - 30 * 86400_000) {
+      // WorkBuddy's package attribute, as read by workbuddy2api-hub (MIT).
+      const reason = Array.isArray(a.AccountAttributes) && a.AccountAttributes.find(attr => attr?.Key === "grantReason" && typeof attr.Value === "string")?.Value.trim();
+      grants.push({ at: made, ...(start && start !== made ? { start } : {}), credit: round(Number(a.CapacitySize) || 0), name: a.PackageName || a.ProductName || "积分包", left: round(remain), ...(end ? { ends: end } : {}), ...(reason ? { grantReason: reason } : {}) });
+    }
     if (end && end <= now) continue;
     const name = a.PackageName || a.ProductName || "积分包";
     const g = groups.get(name) || { name, balance: 0, size: 0, expires: 0, lots: new Map() };
