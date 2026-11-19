@@ -575,12 +575,19 @@
 
   // Accounts: a health and task matrix. Login renewal stays in Magpie.
   const accountSelection = new Set(), accountExpanded = new Set();
+  const accountScopes = {
+    all: ["全部账号", "全部", "暂无账号"],
+    domestic: ["国内个人", "国内", "暂无国内个人账号"],
+    international: ["国际个人", "国际", "暂无国际个人账号"],
+    enterprise: ["企业", "企业", "暂无企业账号"],
+    abnormal: ["仅看异常", "异常", "暂无异常账号"]
+  };
   let accountScope = "all";
   const accountHealthLabels = { normal: "正常", disabled: "已停用", paused: "任务已暂停", expired: "登录已过期", restricted: "账号受限", limited: "请求退避", quota: "模型额度用完", failed: "连续失败", attention: "执行失败" };
   const accountHealthGroup = state => state === "normal" ? "normal" : ["paused", "disabled"].includes(state) ? "paused" : state === "failed" ? "failed" : "attention";
   const accountHealthTone = state => state === "normal" ? "ok" : ["failed", "expired"].includes(state) ? "urgent" : ["paused", "disabled"].includes(state) ? "neutral" : "warn";
   const accountState = (a, now) => a.health?.state || (a.enabled === false ? "disabled" : a.paused ? "paused" : a.expires && a.expires <= now ? "expired" : "normal");
-  const accountScopeRows = (rows, now) => rows.filter(a => accountScope === "domestic" ? !a.enterprise && !abroad(a) : accountScope === "abnormal" ? accountHealthGroup(accountState(a, now)) !== "normal" : true);
+  const accountKind = a => a.enterprise ? "enterprise" : abroad(a) ? "international" : "domestic";
 
   function accountNextExpiry(a, now) {
     const lots = [];
@@ -603,21 +610,42 @@
     introText.append(el("h2", undefined, "账号与健康"), el("p", "wb-sub", "查看各号的健康状态与下一次定时。停用后只暂停任务，看板继续更新。"));
     intro.append(introText);
 
-    const states = rows.map(a => accountState(a, now));
+    const byScope = { all: rows, domestic: [], international: [], enterprise: [], abnormal: [] };
+    const healthCounts = { normal: 0, attention: 0, failed: 0, paused: 0 };
+    for (const a of rows) {
+      const group = accountHealthGroup(accountState(a, now));
+      healthCounts[group]++;
+      byScope[accountKind(a)].push(a);
+      if (group !== "normal") byScope.abnormal.push(a);
+    }
     const summary = el("div", "wb-account-summary");
     for (const [key, label] of [["normal", "正常"], ["attention", "需留意"], ["failed", "连续失败"], ["paused", "已暂停"]]) {
-      const count = states.filter(state => accountHealthGroup(state) === key).length, item = el("span", `wb-account-summary-item ${key === "normal" ? "ok" : key === "failed" ? "urgent" : key === "paused" ? "neutral" : "warn"}`);
+      const count = healthCounts[key], item = el("span", `wb-account-summary-item ${key === "normal" ? "ok" : key === "failed" ? "urgent" : key === "paused" ? "neutral" : "warn"}`);
       item.dataset.count = String(count);
       item.append(el("i", "wb-account-status-dot"), label, el("strong", undefined, String(count)));
       summary.append(item);
     }
-    const scopeOptions = [
-      ["all", `全部账号 ${rows.length}`],
-      ["domestic", `国内个人 ${rows.filter(a => !a.enterprise && !abroad(a)).length}`],
-      ["abnormal", `仅看异常 ${rows.filter(a => accountHealthGroup(accountState(a, now)) !== "normal").length}`]
-    ];
+    const scopes = el("div", "wb-segs wb-account-scopes");
+    scopes.setAttribute("role", "radiogroup");
+    scopes.setAttribute("aria-label", "账号范围");
+    for (const [key, [full, short]] of Object.entries(accountScopes)) {
+      const option = el("label"), input = el("input", "wb-account-scope-input"), face = el("span", "wb-seg-btn");
+      const count = byScope[key].length;
+      input.type = "radio";
+      input.name = "wb-account-scope";
+      input.id = `wb-account-scope-${key}`;
+      input.dataset.accountScope = key;
+      input.checked = key === accountScope;
+      input.setAttribute("aria-label", `${full} ${count} 个账号`);
+      input.setAttribute("aria-controls", "wb-account-results");
+      input.onchange = () => { accountScope = key; render(layout.host, view); };
+      face.setAttribute("aria-hidden", "true");
+      face.append(el("span", "wb-account-scope-full", full), el("span", "wb-account-scope-short", short), el("span", "wb-account-scope-count", String(count)));
+      option.append(input, face);
+      scopes.append(option);
+    }
     const toolbar = el("div", "wb-account-toolbar");
-    toolbar.append(summary, segs(scopeOptions, accountScope, value => { accountScope = value; again(); }, "账号范围", null, "accountScope"));
+    toolbar.append(summary, scopes);
     box.append(intro, toolbar);
 
     const selectedIds = [...accountSelection].filter(id => rows.some(a => a.id === id && a.enabled !== false));
@@ -636,7 +664,7 @@
     for (const title of ["账号", "健康状态 · 下次定时", "停用账号"]) headRow.append(el("th", undefined, title));
     head.append(headRow);
 
-    const visibleRows = accountScopeRows(rows, now);
+    const visibleRows = byScope[accountScope];
     selectAll.checked = visibleRows.length > 0 && visibleRows.every(a => accountSelection.has(a.id));
     selectAll.indeterminate = visibleRows.some(a => accountSelection.has(a.id)) && !selectAll.checked;
     selectAll.onchange = () => { for (const a of visibleRows) selectAll.checked ? accountSelection.add(a.id) : accountSelection.delete(a.id); again(); };
@@ -662,7 +690,7 @@
       toggle.setAttribute("aria-controls", detailId);
       toggle.append(el("span", "wb-account-name", a.name), el("i", undefined, "›"));
       toggle.onclick = () => { accountExpanded.has(a.id) ? accountExpanded.delete(a.id) : accountExpanded.add(a.id); again(); };
-      info.append(toggle);
+      info.append(toggle, el("span", "wb-account-cell-meta", a.enterprise ? "企业账号" : accountScopes[accountKind(a)][0]));
       account.append(avatar, info); who.append(account);
 
       const healthCell = el("td", "wb-account-health-cell"), status = el("span", `wb-account-status ${healthTone}`);
@@ -721,8 +749,15 @@
       }
       inner.append(diagnostic); disclosure.append(inner); detailCell.append(disclosure); detailRow.append(detailCell); body.append(detailRow);
     }
-    table.append(head, body); wrap.append(table); box.append(wrap);
-    box.append(el("p", "wb-account-hint", "点击账号名称展开诊断与最近失败重试链；勾选后批量操作。"), feedback);
+    const results = el("div");
+    results.id = "wb-account-results";
+    if (visibleRows.length) {
+      table.append(head, body); wrap.append(table);
+      results.append(wrap, el("p", "wb-account-hint", "点击账号名称展开诊断与最近失败重试链；勾选后批量操作。"));
+    } else {
+      results.append(el("p", "wb-account-empty", accountScopes[accountScope][2]));
+    }
+    box.append(results, feedback);
 
     const batch = el("div", "wb-account-batch"), refreshBatch = workButton("刷新余额", () => {
       if (!hooks.onRunAction) throw new Error("当前页面不支持刷新余额");
@@ -1916,6 +1951,7 @@
         button.setAttribute("aria-label", [button.title, badge.textContent].filter(Boolean).join(" "));
       }
     }
+    const focusedScope = document.activeElement?.dataset.accountScope;
     let body;
     if (tab === "accounts") body = accountsView(rows, view, now);
     else if (tab === "tasks") body = tasksView(rows, now);
@@ -1925,6 +1961,7 @@
 
     if (switched) { body.className = `${body.className || ""} wb-enter`.trim(); switched = false; }
     content.replaceChildren(body);
+    if (tab === "accounts" && focusedScope) document.getElementById(`wb-account-scope-${focusedScope}`).focus({ preventScroll: true });
   }
 
   let openPick = null, listening = false;

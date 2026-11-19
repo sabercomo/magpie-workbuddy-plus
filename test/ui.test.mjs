@@ -17,6 +17,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
     getAttribute(k) { return this.attributes?.[k] ?? null; }
     removeAttribute() {}
     get lastChild() { return this.children.at(-1); }
+    focus() { context.document.activeElement = this; }
   }
   const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
   const nodes = new Map(), buttonNames = [...html.matchAll(/data-action="([^"]+)"/g)].map(m => m[1]);
@@ -85,7 +86,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const bodyEl = new Element("body");
   let failConfig = false;
   const context = vm.createContext({
-    document: { body: bodyEl, getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: selector => selector === "[data-action]" ? buttons : [], querySelector: () => null, addEventListener() {} },
+    document: { body: bodyEl, getElementById: id => nodes.get(id) ?? (id.startsWith("wb-account-scope-") ? findNode(nodes.get("board"), n => n.id === id) : undefined), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: selector => selector === "[data-action]" ? buttons : [], querySelector: () => null, addEventListener() {} },
     fetch: async (path, init) => { calls.push({ path, body: init.body ? JSON.parse(init.body) : undefined }); if (path === "/api/config" && failConfig) return { ok: false, json: async () => ({ error: "配置无效" }) }; return { ok: true, json: async () => path === "/api/status" ? structuredClone(status) : path === "/api/board" ? structuredClone(board) : {} }; },
     setInterval() {}, console
   });
@@ -134,7 +135,34 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   assert.equal(bodyEl.dataset.wbTab, "accounts");
   const accountText = text(nodes.get("board"));
   assert.match(accountText, /账号与健康[\s\S]*正常 1[\s\S]*需留意 0[\s\S]*连续失败 1[\s\S]*已暂停 1/);
-  assert.match(accountText, /全部账号 3[\s\S]*国内个人 1[\s\S]*仅看异常 2/);
+  const accountScope = key => findNode(nodes.get("board"), n => n.dataset?.accountScope === key);
+  const accountRows = () => all(nodes.get("board"), "wb-account-main-row");
+  assert.deepEqual(["all", "domestic", "international", "enterprise", "abnormal"].map(key => accountScope(key)?.getAttribute("aria-label")),
+    ["全部账号 3 个账号", "国内个人 1 个账号", "国际个人 1 个账号", "企业 1 个账号", "仅看异常 2 个账号"]);
+  const filterAccounts = key => {
+    const input = accountScope(key);
+    input.focus();
+    input.onchange();
+    assert.equal(accountScope(key).checked, true);
+    assert.equal(context.document.activeElement, accountScope(key), "filter changes retain keyboard focus");
+    return accountRows().map(row => row.dataset.account);
+  };
+  assert.deepEqual(filterAccounts("international"), ["intl:x"]);
+  assert.match(text(accountRows()[0]), /海外号[\s\S]*国际个人/);
+  const internationalEnterprise = { id: "intl:e", name: "国际企业测试", realm: "intl", enterprise: true, enabled: false };
+  context.WBBoard.render(nodes.get("board"), { ...board, accounts: [...board.accounts, internationalEnterprise] });
+  assert.deepEqual(accountRows().map(row => row.dataset.account), ["intl:x"], "international personal still excludes enterprise after refresh");
+  assert.deepEqual(filterAccounts("enterprise"), ["cn:e", "intl:e"]);
+  assert.match(text(accountRows()[1]), /国际企业测试[\s\S]*企业账号[\s\S]*只读/);
+  assert.deepEqual(filterAccounts("abnormal"), ["cn:e", "intl:x", "intl:e"]);
+  context.WBBoard.render(nodes.get("board"), { ...board, accounts: [board.accounts[0]] });
+  assert.deepEqual(filterAccounts("enterprise"), []);
+  assert.equal(accountScope("enterprise").getAttribute("aria-label"), "企业 0 个账号");
+  assert.match(text(nodes.get("board")), /暂无企业账号/);
+  assert.deepEqual(filterAccounts("domestic"), ["cn:a"]);
+  context.WBBoard.render(nodes.get("board"), { ...board, jobs: status.jobs });
+  assert.deepEqual(filterAccounts("all"), ["cn:a", "cn:e", "intl:x"]);
+  assert.deepEqual(calls, [], "category changes use existing snapshot data");
   assert.match(accountText, /账号 健康状态 · 下次定时 停用账号/);
   assert.doesNotMatch(accountText, /每日签到 · 加油站|成长任务 · 福利活动|成长计划连登/);
   assert.doesNotMatch(accountText, /执行成长任务|派出旅行|猫猫旅行/);
@@ -143,9 +171,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   await pauseTask.onclick();
   assert.ok(calls.some(call => call.path === "/api/config" && (call.body?.pausedAccounts || []).includes("cn:a")));
   calls.length = 0;
-  const scope = findNode(nodes.get("board"), n => n.getAttribute?.("aria-label") === "账号范围");
-  await button(scope, "国内个人 1").onclick();
-  assert.equal(all(nodes.get("board"), "wb-account-main-row").length, 1);
+  assert.deepEqual(filterAccounts("domestic"), ["cn:a"]);
   const selectAll = findNode(nodes.get("board"), n => n.getAttribute?.("aria-label") === "选择当前筛选的全部账号");
   selectAll.checked = true;
   selectAll.onchange();

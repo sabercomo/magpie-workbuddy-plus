@@ -313,6 +313,18 @@ body.in-settings button.wb-nav-toggle{display:none}
 .wb-accounts-intro h2{font-size:16px;font-weight:650;margin:0}
 .wb-accounts-intro p{margin:3px 0 0;line-height:1.5}
 .wb-account-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.wb-accounts-intro .wb-sub{text-wrap:pretty}
+.wb-account-scopes{--wb-scope-ink:color-mix(in srgb,var(--wb-muted) 78%,var(--magpie-fg,currentColor));flex:none;overflow:visible}
+.wb-account-scopes label{position:relative;min-width:0}
+.wb-account-scope-input{position:absolute;width:1px;height:1px;clip-path:inset(50%);margin:0}
+.wb-account-toolbar .wb-account-scopes .wb-seg-btn{display:flex;justify-content:center;min-height:30px;padding:2px 10px;gap:4px;color:var(--wb-scope-ink);font-size:12px;font-variant-numeric:tabular-nums}
+.wb-account-scope-input:checked+.wb-seg-btn{background:var(--wb-card);color:var(--magpie-fg,inherit);font-weight:600;box-shadow:inset 0 0 0 1px var(--wb-line)}
+.wb-account-scope-input:focus-visible+.wb-seg-btn{outline:2px solid var(--wb-accent);outline-offset:-2px}
+@media(hover:hover){.wb-account-scope-input:not(:checked)+.wb-seg-btn:hover{background:var(--wb-hover)}}
+.wb-account-scope-input+.wb-seg-btn:active{background:var(--wb-soft)}
+.wb-account-scope-count{color:var(--wb-scope-ink)}
+.wb-account-scope-short{display:none}
+.wb-account-empty{margin:0;padding:24px 16px;border:1px solid var(--wb-line);border-radius:12px;background:var(--wb-card);color:var(--wb-muted);text-align:center}
 .wb-account-summary{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--wb-muted);font-variant-numeric:tabular-nums}
 .wb-account-summary-item,.wb-account-status{display:inline-flex;align-items:center;gap:5px;color:var(--wb-muted)}
 .wb-account-summary-item strong{font-weight:650;color:var(--magpie-fg,inherit)}
@@ -401,8 +413,10 @@ body.in-settings button.wb-nav-toggle{display:none}
 @container wb-page (max-width:600px){
   .wb-account-toolbar{align-items:flex-start}
   .wb-account-summary{gap:8px 14px}
-  .wb-account-toolbar .wb-segs{width:100%}
-  .wb-account-toolbar .wb-seg-btn{flex:1;justify-content:center;padding-inline:5px}
+  .wb-account-toolbar .wb-account-scopes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));width:100%}
+  .wb-account-toolbar .wb-account-scopes .wb-seg-btn{min-height:44px;padding-inline:2px;gap:3px}
+  .wb-account-scope-full{display:none}
+  .wb-account-scope-short{display:inline}
   .wb-account-batch{bottom:14px}
   .wb-account-main-row{grid-template-columns:34px minmax(0,1fr);gap:10px 12px}
   .wb-account-main-row td:nth-child(4){grid-column:1/-1;grid-row:2;justify-self:start;padding-top:4px}
@@ -412,6 +426,7 @@ body.in-settings button.wb-nav-toggle{display:none}
 @media(prefers-reduced-motion:reduce){.wb-account-toggle i,.wb-account-disclosure,.wb-account-batch{transition:none}.wb-account-batch-button:active{transform:none}}
 @media(prefers-reduced-transparency:reduce){.wb-account-batch{background:var(--wb-card);backdrop-filter:none}}
 @media(prefers-contrast:more){.wb-account-table-wrap,.wb-account-batch{border-color:var(--magpie-fg,currentColor)}}
+@media(prefers-contrast:more){.wb-account-scopes,.wb-account-scope-input:checked+.wb-seg-btn{box-shadow:inset 0 0 0 1px var(--wb-scope-ink)}}
 
 /* Model quota card at the foot of the board */
 .wb-quota{margin-top:18px;padding-top:14px;border-top:1px solid var(--wb-line)}
