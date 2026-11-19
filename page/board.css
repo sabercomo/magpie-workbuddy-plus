@@ -441,9 +441,11 @@ body.in-settings button.wb-nav-toggle{display:none}
 .wb-task-summary-l{display:flex;flex-direction:column;gap:2px;min-width:0}
 .wb-task-summary-l strong{font-size:15px;font-weight:650}
 .wb-task-summary-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.wb-task-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
-.wb-task-cards-single{grid-template-columns:1fr}
-.wb-task-extras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;align-items:stretch}
+.wb-task-cards{column-width:320px;column-gap:12px;display:block}
+.wb-task-cards>.wb-task-card{break-inside:avoid;margin-bottom:12px}
+.wb-task-cards-single{column-width:auto;column-count:1;display:block}
+.wb-task-cards-single>.wb-task-card{break-inside:avoid;margin-bottom:12px}
+.wb-task-extras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;align-items:start}
 .wb-task-card{background:var(--wb-card);border:1px solid var(--wb-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
 .wb-task-card>strong{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wb-task-card>.wb-line>strong{font-size:15px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -819,7 +821,6 @@ body.in-settings button.wb-nav-toggle{display:none}
   .wb-task-extras { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .wb-task-cards { grid-template-columns: 1fr; }
   .wb-task-summary-r { width: 100%; }
   .wb-task-summary-r .wb-task-run-all { flex: 1; }
 }
