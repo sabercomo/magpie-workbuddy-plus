@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import { dataDir, initialize } from "./storage.mjs";
+import { proxyEnvironment } from "./network.mjs";
 
 if (process.platform !== "darwin") throw new Error("此自用安装器目前支持 macOS；其他平台可直接运行 server.mjs 并自行配置后台服务");
 const source = dirname(fileURLToPath(import.meta.url));
@@ -26,7 +27,11 @@ writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>${xml(join(dataDir, "service.log"))}</string>
 <key>StandardErrorPath</key><string>${xml(join(dataDir, "service.log"))}</string>
-<key>EnvironmentVariables</key><dict><key>WORKBUDDY_PLUS_DIR</key><string>${xml(dataDir)}</string><key>WORKBUDDY_PLUS_PORT</key><string>${xml(process.env.WORKBUDDY_PLUS_PORT || 3439)}</string></dict>
+<key>EnvironmentVariables</key><dict>
+<key>WORKBUDDY_PLUS_DIR</key><string>${xml(dataDir)}</string>
+<key>WORKBUDDY_PLUS_PORT</key><string>${xml(process.env.WORKBUDDY_PLUS_PORT || 3439)}</string>
+${proxyEnvironment.map(key => `<key>${key}</key><string></string>`).join("\n")}
+</dict>
 </dict></plist>\n`, { mode: 0o600 });
 writeFileSync(join(destination, "WorkBuddy Plus.webloc"), `<?xml version="1.0"?><plist version="1.0"><dict><key>URL</key><string>http://127.0.0.1:${process.env.WORKBUDDY_PLUS_PORT || 3439}</string></dict></plist>\n`);
 // An agent set up by hand for the same folder would start a second server on the same port.

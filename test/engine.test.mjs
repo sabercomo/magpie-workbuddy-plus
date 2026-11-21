@@ -18,7 +18,7 @@ function fixture(t, serve, realm = "cn") {
   const config = { ...defaults };
   const client = new WorkBuddyClient(account, config, { gap: 0, fetcher: async (url, init = {}) => {
     const path = new URL(url).pathname;
-    seen.push({ path, host: new URL(url).host, body: init.body === undefined ? undefined : JSON.parse(init.body), headers: init.headers });
+    seen.push({ path, host: new URL(url).host, body: init.body === undefined ? undefined : JSON.parse(init.body), headers: init.headers, proxy: init.proxy });
     return serve(path, seen.at(-1), seen);
   } });
   const context = { account, config, state, log: message => logs.push(message), checkpoint() {}, pollDelay: 0, pace: 0, signal: new AbortController().signal, web: { poll: 0, sleep: async () => {} } };
@@ -456,6 +456,7 @@ test("a WorkBuddy AI account's web conversation runs once a day through its sand
   assert.deepEqual(calls, ["initialize", "session/load", "session/set_model", "session/prompt"]);
   assert.equal(p.seen.find(s => s.body?.method === "session/set_model").body.params.modelId, "hy3");
   assert.ok(p.seen.filter(s => s.path === "/acp" && s.body).every(s => s.headers["Acp-Connection-Id"] === "acp-1" && s.headers.Authorization === "Bearer sandbox-token"));
+  assert.ok(p.seen.every(s => s.proxy === false), "direct also disables environment proxies on the sandbox stream and RPCs");
   assert.deepEqual(p.seen.filter(s => /\/c1\/(stop|delete)$/.test(s.path)).map(s => s.path.split("/").pop()), ["stop"], "a finished one is kept, only stopped");
   assert.match(p.logs.at(-1), /国际版网页会话已跑完（hy3，当前免费，\d+ 秒）/);
 
@@ -640,6 +641,38 @@ test("sweep accepts pending tasks and claims reached rewards without reporting a
   assert.deepEqual(claimed, ["done"]);
   assert.ok(!p.seen.some(request => request.path === "/v2/report"));
   assert.equal(p.logs.at(-1), "补领：接取 2 项；领取 1 项 +100 积分 / 5 能量");
+});
+
+test("growth rounds and scheduled sweeps claim a manually completed subscription without faking the follow", async t => {
+  for (const action of ["tasks", "sweep"]) {
+    await t.test(action, async t => {
+      let status = "accepted", claims = 0;
+      const p = fixture(t, (path, request) => {
+        if (path === "/v2/activity/growth/tasks") return ok({ tasks: request.headers["X-Client-Platform"] ? [{
+          task_code: "wb_wechat_oa_subscribe_task", title: "关注公众号", task_type: "single",
+          accept_status: status, progress: { current: status === "accepted" ? 0 : 1, target: 1 }
+        }] : [] });
+        if (path === "/activity/growth/tasks/wb_wechat_oa_subscribe_task/claim") {
+          assert.equal(request.headers["X-Client-Platform"], "miniprogram");
+          claims++;
+          status = "claimed";
+          return ok({ credit: 50, energy: 5 });
+        }
+        if (path === "/portal/activity/config") return ok({ config: { in_period: false } });
+        throw new Error("unexpected endpoint " + path);
+      });
+      p.context.trigger = "schedule";
+      await p.run(action);
+      assert.equal(claims, 0, "a follow not confirmed by upstream is not claimed");
+      status = "completed";
+      await p.run(action);
+      assert.equal(claims, 1, "the next scheduled round claims the confirmed reward");
+      await p.run(action);
+      assert.equal(claims, 1, "an already claimed task is not claimed again");
+      assert.ok(!p.seen.some(r => /report|accept/.test(r.path)), "no follow, chat or accept is simulated");
+      assert.match(p.logs.join("\n"), /已领奖，50 积分 \/ 5 能量/);
+    });
+  }
 });
 
 test("sequential tasks 4-7 build the mini and desktop event shapes upstream counts", () => {

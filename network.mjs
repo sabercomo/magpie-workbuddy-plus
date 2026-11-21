@@ -1,3 +1,6 @@
+// Older Bun reads these at startup. Only WorkBuddy Plus settings select its proxy.
+export const proxyEnvironment = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"];
+
 // A connection dropped or timed out on the way (a proxy resetting it, a
 // temporary DNS failure, a refused connection). Upstream refusals carry a
 // status; those are not network failures. client.mjs marks a proxy that

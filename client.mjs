@@ -102,7 +102,8 @@ export class WorkBuddyClient {
     this.lastRequest = Date.now();
     const signal = this.signal ? AbortSignal.any([this.signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
     try {
-      return await this.fetcher(url, { ...init, signal, ...(this.proxy ? { proxy: this.proxy } : {}) });
+      // Omitting proxy lets Bun inherit HTTP(S)_PROXY, even for saved direct mode.
+      return await this.fetcher(url, { ...init, signal, proxy: this.proxy || false });
     } catch (error) {
       const refused = /^Proxy refused to open a tunnel: (\d{3}\b.*)/i.exec(error.message);
       if (refused) throw new Error(`HTTP 代理无法连接 ${new URL(url).hostname}（${refused[1]}）。请检查代理节点和分流；可直连时，到设置清空对应代理再刷新。`, { cause: error });

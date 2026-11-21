@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { defaults, proxyFor, settle, validateConfig } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
+import { intlModels } from "../models.mjs";
 
 const account = realm => ({ id: `${realm}:a`, name: "A", realm, auth: { access: "secret", uid: "a" } });
 
@@ -46,10 +47,23 @@ test("the international proxy can differ from China's or be direct", async () =>
   await cn.fetch("https://www.workbuddy.cn/v2/test");
   await intl.fetch("https://www.workbuddy.ai/v2/test");
   assert.deepEqual(seen, [
-    ["https://www.workbuddy.cn/v2/test", undefined],
+    ["https://www.workbuddy.cn/v2/test", false],
     ["https://www.workbuddy.ai/v2/test", "http://127.0.0.1:1082"]
   ]);
   const direct = new WorkBuddyClient(account("intl"), { proxy: "http://127.0.0.1:1082", intlProxy: "direct" }, { gap: 0, wait: async () => {}, fetcher });
   await direct.fetch("https://www.workbuddy.ai/v2/test");
-  assert.equal(seen.at(-1)[1], undefined, "direct means no proxy option at all");
+  assert.equal(seen.at(-1)[1], false, "direct explicitly disables inherited environment proxies");
+});
+
+test("direct requests ignore a dead inherited proxy, including international model reads", async () => {
+  const seen = [];
+  const fetcher = async (url, init) => {
+    // Bun falls back to HTTP(S)_PROXY when the option is absent or empty.
+    if (init.proxy !== false) throw Object.assign(new Error("inherited proxy refused"), { code: "ECONNREFUSED" });
+    seen.push(new URL(url).pathname);
+    return Response.json({ code: 0, data: {} });
+  };
+  await new WorkBuddyClient(account("cn"), { proxy: "" }, { gap: 0, fetcher }).request("/v2/activity/growth/tasks");
+  await intlModels(account("intl"), { fetcher });
+  assert.deepEqual(seen, ["/v2/activity/growth/tasks", "/v3/config", "/billing/meter/get-user-resource-summary"]);
 });

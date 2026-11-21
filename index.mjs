@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { appendFileSync, closeSync, openSync, mkdirSync, readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 import { dataDir, newer, version } from "./storage.mjs";
+import { proxyEnvironment } from "./network.mjs";
 import { answering, portTaken } from "./server.mjs";
 import { actions } from "./engine.mjs";
 
@@ -35,7 +36,9 @@ async function rpc(path, body) {
     if (!refused(e)) throw e;
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
     const file = join(dataDir, "service.log"), log = openSync(file, "a", 0o600);
-    const child = spawn(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "server.mjs")], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: { ...process.env, WORKBUDDY_PLUS_PORT: String(port), ...(hostConfig ? { WORKBUDDY_PLUS_HOST_CONFIG: hostConfig } : {}) } });
+    const env = { ...process.env, WORKBUDDY_PLUS_PORT: String(port), ...(hostConfig ? { WORKBUDDY_PLUS_HOST_CONFIG: hostConfig } : {}) };
+    for (const key of proxyEnvironment) env[key] = "";
+    const child = spawn(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "server.mjs")], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env });
     closeSync(log);
     child.unref();
     // A service that can't have the port says why in its log and exits.

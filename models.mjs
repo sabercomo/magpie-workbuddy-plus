@@ -98,7 +98,7 @@ export async function intlModels(account, { fetcher = fetch, proxy = "", now = D
     "User-Agent": "WorkBuddy/5.9.3 workbuddy-ai/5.9.3 CLI/2.165.0", Accept: "application/json", "Content-Type": "application/json"
   };
   const call = async (path, body) => {
-    const response = await fetcher(intl + path, { method: body ? "POST" : "GET", headers, ...(body ? { body } : {}), signal: AbortSignal.timeout(30_000), ...(proxy ? { proxy } : {}) });
+    const response = await fetcher(intl + path, { method: body ? "POST" : "GET", headers, ...(body ? { body } : {}), signal: AbortSignal.timeout(30_000), proxy: proxy || false });
     let payload = {};
     try { payload = JSON.parse(await response.text()); } catch {}
     if (!response.ok || (payload.code !== undefined && payload.code !== 0)) throw new UpstreamError(path, response.status, payload);

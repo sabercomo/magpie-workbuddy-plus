@@ -78,7 +78,7 @@ export async function webActivity(client, { model = fallback, prompt = "只回�
     }
     if (!session?.link || !session?.token) throw new Error("网页会话：沙箱没有就绪");
     const sid = session.sessionId || id, auth = { Authorization: `Bearer ${session.token}`, "User-Agent": agent };
-    const opened = await client.fetcher(session.link, { headers: { ...auth, Accept: "text/event-stream" }, signal: stream.signal, ...(client.proxy ? { proxy: client.proxy } : {}) });
+    const opened = await client.fetcher(session.link, { headers: { ...auth, Accept: "text/event-stream" }, signal: stream.signal, proxy: client.proxy || false });
     const connection = opened.headers.get("acp-connection-id");
     if (!opened.ok || !connection) throw new Error(`网页会话：沙箱事件流 HTTP ${opened.status}${connection ? "" : "，没有 Acp-Connection-Id"}`);
     // Read the stream so the sandbox can push its updates; count the reply's pieces.
@@ -98,7 +98,7 @@ export async function webActivity(client, { model = fallback, prompt = "只回�
       } catch {}
     })();
     const rpc = async (n, method, params) => {
-      const response = await client.fetcher(session.link, { method: "POST", headers: { ...auth, "Content-Type": "application/json", Accept: "application/json, text/event-stream", "Acp-Connection-Id": connection }, body: JSON.stringify({ jsonrpc: "2.0", id: n, method, params }), signal: AbortSignal.timeout(30_000), ...(client.proxy ? { proxy: client.proxy } : {}) });
+      const response = await client.fetcher(session.link, { method: "POST", headers: { ...auth, "Content-Type": "application/json", Accept: "application/json, text/event-stream", "Acp-Connection-Id": connection }, body: JSON.stringify({ jsonrpc: "2.0", id: n, method, params }), signal: AbortSignal.timeout(30_000), proxy: client.proxy || false });
       await response.text();
       if (![200, 202].includes(response.status)) throw new Error(`网页会话：${method} HTTP ${response.status}`);
     };
