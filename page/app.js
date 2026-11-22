@@ -59,7 +59,7 @@ function paint() {
 }
 
 const kinds = ["daily", "tasks", "sweep", "night"], intlKinds = ["daily", "web"];
-let edited = false;
+let edited = false, initialSettings;
 function fill(view) {
   const form = $("settings-form");
   if (!view?.settings || edited) return;
@@ -78,6 +78,7 @@ function fill(view) {
   form.elements.timezone.value = view.settings.timezone || "";
   form.elements.proxy.value = view.settings.proxy || "";
   if (form.elements.intlProxy) form.elements.intlProxy.value = view.settings.intlProxy || "";
+  initialSettings = readSettings(form);
 }
 $("settings-form").oninput = $("settings-form").onchange = () => { edited = true; };
 
@@ -103,19 +104,29 @@ async function ask(action, extra = {}) {
   setTimeout(reload, 2000);
 }
 
+function readSettings(form) {
+  const { scheduleTimes } = WBBoard, fields = form.elements;
+  return {
+    schedules: Object.fromEntries(kinds.map(k => [k, scheduleTimes(fields[k].value)])),
+    intlSchedules: Object.fromEntries(intlKinds.map(k => [k, scheduleTimes(fields[`intl-${k}`].value)])),
+    intlWebModel: fields["intl-model"].value || "auto", intlWeb: fields["intl-web-on"].checked,
+    campaignApp: fields["campaign-app"].checked, skillShare: fields["skill-share"].checked, buddyAuto: fields["buddy-auto"].checked,
+    spread: Number(fields.spread.value || 0), timezone: fields.timezone.value.trim(), proxy: fields.proxy.value.trim(),
+    ...(fields.intlProxy ? { intlProxy: fields.intlProxy.value.trim() } : {})
+  };
+}
+
 // Magpie's iframe allows scripts but blocks native form submission.
 $("save-settings").onclick = async event => {
   const form = $("settings-form"), button = event.currentTarget;
   if (!form.reportValidity()) return;
-  const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
-  const config = { schedules: Object.fromEntries(kinds.map(k => [k, times(form.elements[k].value)])), intlSchedules: Object.fromEntries(intlKinds.map(k => [k, times(form.elements[`intl-${k}`].value)])), intlWebModel: form.elements["intl-model"].value || "auto", intlWeb: form.elements["intl-web-on"].checked, campaignApp: form.elements["campaign-app"].checked, skillShare: form.elements["skill-share"].checked, buddyAuto: form.elements["buddy-auto"].checked, spread: Number(form.elements.spread.value || 0), timezone: form.elements.timezone.value.trim(), proxy: form.elements.proxy.value.trim() };
-  if (form.elements.intlProxy) config.intlProxy = form.elements.intlProxy.value.trim();
+  const config = readSettings(form);
   const bad = [...Object.values(config.schedules), ...Object.values(config.intlSchedules)].flat().find(t => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t));
   if (bad) return saveNote(`时间「${bad}」不对，应为 HH:MM，例如 09:00`, true);
   if (config.intlProxy && config.intlProxy !== "direct" && !/^https?:\/\//.test(config.intlProxy)) return saveNote("国际版代理需要 http:// 或 https:// 地址，或留空 / direct", true);
   button.disabled = true;
   saveNote("正在保存…");
-  try { await ask("config", { config }); edited = false; settings(false); }
+  try { await ask("config", { config: WBBoard.settingsChanges(initialSettings, config) }); initialSettings = config; edited = false; settings(false); }
   catch (e) { saveNote(`提交失败：${e.message}`, true); }
   finally { setTimeout(() => { button.disabled = false; }, 3000); }
 };

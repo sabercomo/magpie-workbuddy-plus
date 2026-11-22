@@ -293,7 +293,9 @@ The service listens on `127.0.0.1` only. A default HTTP proxy and a WorkBuddy AI
 
 ## Updating and stopping
 
-v0.7.10 fixes direct connections inheriting the process HTTP proxy. A stale environment proxy no longer breaks Buddy travel, campaign and balance reads for China accounts.
+v0.8.0 fixes proxy credentials appearing in local status and configuration responses. The panel, Magpie tools, and CLI now show masked proxy addresses. The background service merges changed settings into the latest configuration, preserving settings saved elsewhere and stored proxy credentials. You can still replace a proxy, leave the international proxy blank to inherit the default, or set it to `direct`.
+
+Click anywhere on the board's reminder summary to expand or collapse it, just like the model quota summary. The board keeps reminders expanded when it refreshes.
 
 Installed from Magpie: run `magpie plugin update`. If you installed a pinned version (`magpie plugin list` shows a suffix like `#v0.4.0`), remove it with `magpie plugin rm` and `magpie plugin add` the unpinned address again; plugin options such as the port need setting again. From 0.5.5 on, when Magpie loads the updated plugin it finds the older service, asks it to exit and starts the new version, so no restart is needed (with a job running it waits for it, asking again each minute). Coming from 0.5.4 or earlier, the old service doesn't know that request yet: end it one last time (or log out, restart, or restart the container).
 

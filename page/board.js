@@ -40,7 +40,7 @@
   let tab = tabs.some(([k]) => k === initRawTab) ? initRawTab : (["tasks", "models"].includes(initRawView) ? initRawView : "board");
   let mode = boardViews.some(([k]) => k === initRawView) ? initRawView : "list";
   let realmFilter = "all", focus = null, last = null, switched = false;
-  let alertsOpen = false, taskFilter = "all", taskGroup = "account";
+  let alertDisclosure, taskFilter = "all", taskGroup = "account";
   let realm = ["intl", "ent"].includes(remembered.get()) ? remembered.get() : "cn", byRate = false, onlyPromo = false, modelSearch = "", lockedOpen = true;
   const expanded = new Set(), unfolded = new Set(), grown = new Set();
   const seenCharges = new Map(), firstPaint = new Set();
@@ -564,26 +564,23 @@
     if (skipLimits) items = items.filter(i => i.kind !== "limit");
     if (!items.length) return skipLimits ? null : el("p", "wb-alert-empty", "没有需要你处理的事");
     const limited = items.filter(i => i.kind === "limit"), urgent = items.filter(i => i.kind !== "limit" && i.tone === "urgent"), rest = items.filter(i => i.kind !== "limit" && i.tone !== "urgent");
-    const strip = el("section", `wb-alert-footer${urgent.length ? " has-urgent" : limited.length ? " has-warn" : ""}`);
+    const strip = el("details", `wb-alert-footer${urgent.length ? " has-urgent" : limited.length ? " has-warn" : ""}`);
     if (urgent.some(i => i.kind === "prize")) strip.className += " wb-alert-with-prize";
     strip.setAttribute("aria-label", "提醒摘要");
-    const bar = el("div", "wb-alert-bar"), chips = el("div", "wb-alert-chips");
+    const bar = el("summary", "wb-alert-bar"), chips = el("span", "wb-alert-chips");
     const headline = urgent.length ? `需处理 ${urgent.length} 件` : limited.length ? `限额/排队 ${limited.length} 项` : `提醒 ${rest.length} 件`;
     const preview = [...urgent, ...limited, ...rest].slice(0, urgent[0]?.kind === "prize" ? 1 : 2);
     chips.append(el("span", "wb-alert-mark", headline), el("span", "wb-alert-preview", preview.map(i => i.aside ? `${i.text} · ${i.aside}` : i.text).join(" · ")));
-    const toggle = el("button", "wb-alert-toggle", alertsOpen ? "收起 ▴" : `展开全部 ${items.length} 条 ↓`);
-    toggle.type = "button";
-    toggle.setAttribute("aria-expanded", String(alertsOpen));
-    const body = el("div", "wb-alert-drawer");
-    body.hidden = !alertsOpen;
-    body.append(alerts(items));
-    toggle.onclick = () => {
-      alertsOpen = !alertsOpen;
-      toggle.textContent = alertsOpen ? "收起 ▴" : `展开全部 ${items.length} 条 ↓`;
-      toggle.setAttribute("aria-expanded", String(alertsOpen));
-      body.hidden = !alertsOpen;
+    const expand = `展开全部 ${items.length} 条 ↓`;
+    strip.open = alertDisclosure?.open ?? false;
+    alertDisclosure = strip;
+    const label = el("span", "wb-alert-control", strip.open ? "收起 ▴" : expand);
+    strip.ontoggle = () => {
+      label.textContent = strip.open ? "收起 ▴" : expand;
     };
-    bar.append(chips, toggle);
+    const body = el("div", "wb-alert-drawer");
+    body.append(alerts(items));
+    bar.append(chips, label);
     strip.append(bar, body);
     return strip;
   }
@@ -2046,5 +2043,8 @@
     return [{ id: "auto", label: "自动", note: "优先当前免费的模型", shown: "自动 · 优先当前免费的模型", rule: rows.length > 0 }, ...rows];
   }
 
-  globalThis.WBBoard = { render, when, picker, modelChoices, goTab, setMode };
+  const scheduleTimes = value => [...new Set(value.split(/[,，\s]+/).filter(Boolean))].sort();
+  const settingsChanges = (before, after) => Object.fromEntries(Object.entries(after).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(before?.[key])));
+
+  globalThis.WBBoard = { render, when, picker, modelChoices, goTab, setMode, scheduleTimes, settingsChanges };
 })();

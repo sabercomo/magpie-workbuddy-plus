@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const scheduleNames = { daily: "活跃 / 旅行 / 连登福利", tasks: "成长任务", sweep: "补领清扫", night: "夜猫子任务" };
 const intlNames = { daily: "连登活跃 / 签到 / 连登福利", web: "网页会话（每日活跃奖励）" };
 
-let current, filled = false, modelField = null;
+let current, initialSettings, modelField = null;
 const selected = new Set();
 function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 async function api(path, body) {
@@ -59,7 +59,7 @@ async function refresh() {
     toggle.type = "button";
     toggle.onclick = async () => {
       try {
-        const config = { ...current.config, disabledAccounts: account.enabled ? [...current.config.disabledAccounts, account.id] : current.config.disabledAccounts.filter(id => id !== account.id) };
+        const config = { disabledAccounts: account.enabled ? [...current.config.disabledAccounts, account.id] : current.config.disabledAccounts.filter(id => id !== account.id) };
         selected.delete(account.id); updateScopeNote(); await save(config);
       } catch (e) { failure(e); }
     };
@@ -67,7 +67,7 @@ async function refresh() {
   }
   updateScopeNote();
 
-  if (!filled) {
+  if (!initialSettings) {
     for (const [key, times] of Object.keys(scheduleNames).map(k => [k, current.config.schedules[k] || []])) {
       const label = element("label", scheduleNames[key]), input = element("input");
       input.name = `schedule-${key}`; input.value = times.join(", "); input.placeholder = "HH:MM, HH:MM";
@@ -88,7 +88,7 @@ async function refresh() {
     $("config-form").elements.intlWeb.checked = current.config.intlWeb !== false;
     $("config-form").elements.campaignApp.checked = current.config.campaignApp === true;
     $("config-form").elements.skillShare.checked = current.config.skillShare !== false;
-    filled = true;
+    initialSettings = readSettings($("config-form"));
   }
   if (modelField && (current.intlModels || []).length !== modelField.count && !modelField.host.lastChild.open) {
     modelField.count = (current.intlModels || []).length; modelField.host.lastChild.remove();
@@ -102,18 +102,18 @@ async function board(view) {
   view = { ...view, jobs: [...jobs, ...current.jobs.filter(job => !currentIds.has(job.id))] };
   updateSchedPill(view);
   WBBoard.render($("board"), view, Date.now(), {
-    onSchedule: (intl, on) => save({ ...current.config, [intl ? "intlEnabled" : "enabled"]: on }).then(() => board()).catch(failure),
+    onSchedule: (intl, on) => save({ [intl ? "intlEnabled" : "enabled"]: on }).then(() => board()).catch(failure),
     onTask: (account, task) => api("/api/run", { actions: ["task"], accounts: [account], task }).then(() => refresh()).catch(e => { failure(e); throw e; }),
     onQueue: accounts => api("/api/run", { actions: ["tasks"], accounts }).then(() => refresh()).catch(e => { failure(e); throw e; }),
     onRunAction: (action, accounts) => action === "refresh" ? api("/api/board", { accounts: accounts || [...selected] }).then(() => refresh()) : api("/api/run", { action, accounts: accounts || [...selected] }).then(() => refresh()).catch(e => { failure(e); throw e; }),
     onRefresh: () => api("/api/board", {}).then(() => board()),
     onPauseAccount: (account, paused) => {
       const list = current.config.pausedAccounts || [];
-      const config = { ...current.config, pausedAccounts: paused ? [...list, account] : list.filter(id => id !== account) };
+      const config = { pausedAccounts: paused ? [...list, account] : list.filter(id => id !== account) };
       return save(config).then(() => refresh()).catch(e => { failure(e); throw e; });
     },
-    onPauseAccounts: (accounts, paused) => save({ ...current.config, pausedAccounts: paused ? [...new Set([...current.config.pausedAccounts, ...accounts])] : current.config.pausedAccounts.filter(id => !accounts.includes(id)) }),
-    onConfig: config => save({ ...current.config, ...config }),
+    onPauseAccounts: (accounts, paused) => save({ pausedAccounts: paused ? [...new Set([...current.config.pausedAccounts, ...accounts])] : current.config.pausedAccounts.filter(id => !accounts.includes(id)) }),
+    onConfig: save,
     onRetry: id => api("/api/retry", { id }).then(refresh),
     onCancel: id => api("/api/cancel", { id }).then(refresh),
     onOpenSettings: () => toggleSettings(true)
@@ -148,28 +148,27 @@ for (const button of document.querySelectorAll("[data-action]")) button.onclick 
   catch (e) { failure(e); } finally { button.disabled = false; }
 };
 
+function readSettings(form) {
+  const { scheduleTimes } = WBBoard, fields = form.elements;
+  return {
+    schedules: Object.fromEntries(Object.keys(scheduleNames).map(key => [key, scheduleTimes(fields[`schedule-${key}`].value)])),
+    intlSchedules: Object.fromEntries(Object.keys(intlNames).map(key => [key, scheduleTimes(fields[`intl-${key}`].value)])),
+    intlWebModel: fields["intl-model"].value || "auto", timezone: fields.timezone.value.trim(), proxy: fields.proxy.value.trim(),
+    ...(fields.intlProxy ? { intlProxy: fields.intlProxy.value.trim() } : {}),
+    spread: Number(fields.spread.value || 0), intlWeb: fields.intlWeb.checked, campaignApp: fields.campaignApp.checked, skillShare: fields.skillShare.checked
+  };
+}
+
 $("config-form").onsubmit = async event => {
   event.preventDefault();
   const form = event.currentTarget;
   try {
     if (!current) throw new Error("还没有读到后台状态，请稍等再试");
-    const config = { ...current.config, schedules: {} };
-    const times = v => [...new Set(v.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean))].sort();
-    for (const key of Object.keys(scheduleNames)) config.schedules[key] = times(form.elements[`schedule-${key}`].value);
-    config.intlSchedules = {}; for (const key of Object.keys(intlNames)) config.intlSchedules[key] = times(form.elements[`intl-${key}`].value);
-    config.intlWebModel = form.elements["intl-model"].value || "auto";
-    for (const key of ["timezone", "proxy"]) config[key] = form.elements[key].value.trim();
-    if (form.elements.intlProxy) {
-      const intlProxy = form.elements.intlProxy.value.trim();
-      if (intlProxy && intlProxy !== "direct" && !/^https?:\/\//.test(intlProxy)) { saveStatus("国际版代理需要 http:// 或 https:// 地址，或留空 / direct", true); return; }
-      config.intlProxy = intlProxy;
-    }
-    config.spread = Number(form.elements.spread.value || 0);
-    config.intlWeb = form.elements.intlWeb.checked;
-    config.campaignApp = form.elements.campaignApp.checked;
-    config.skillShare = form.elements.skillShare.checked;
+    const config = readSettings(form), { intlProxy } = config;
+    if (intlProxy && intlProxy !== "direct" && !/^https?:\/\//.test(intlProxy)) { saveStatus("国际版代理需要 http:// 或 https:// 地址，或留空 / direct", true); return; }
     saveStatus("正在保存…");
-    await save(config);
+    await save(WBBoard.settingsChanges(initialSettings, config));
+    initialSettings = config;
     saveStatus("已保存");
   } catch (e) { saveStatus(`保存失败：${e.message}`, true); }
 };

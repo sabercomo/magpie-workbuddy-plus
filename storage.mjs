@@ -196,7 +196,8 @@ const times = (value, name) => {
   }
 };
 
-export function validateConfig(value) {
+export function validateConfig(value, current) {
+  if (current) value = { ...value, proxy: restoreProxy(value.proxy, current.proxy), intlProxy: restoreProxy(value.intlProxy, current.intlProxy) };
   if (typeof value.enabled !== "boolean" || typeof value.proxy !== "string" || typeof value.magpieDir !== "string") throw new Error("开关、代理或 Magpie 路径无效");
   if (value.proxy && !/^https?:\/\//.test(value.proxy)) throw new Error("代理需要 http:// 或 https:// 地址");
   if (value.intlProxy !== undefined && typeof value.intlProxy !== "string") throw new Error("国际版代理无效");
@@ -222,8 +223,26 @@ export function validateConfig(value) {
   return { ...value, schedules, intlSchedules: intl };
 }
 
-// A proxy's credentials never reach the page: it sees user:pass as ***.
-export const maskProxy = proxy => String(proxy || "").replace(/\/\/[^/@]*@/, "//***@");
+// Keep the network address visible without exposing any URL userinfo.
+export function maskProxy(proxy) {
+  if (!proxy || proxy === "direct") return proxy || "";
+  try {
+    const url = new URL(proxy);
+    return url.username || url.password ? `${url.protocol}//***@${url.host}` : proxy;
+  } catch {
+    return "http://***@";
+  }
+}
+
+export function publicConfig(config) {
+  return { ...config, proxy: maskProxy(config.proxy), intlProxy: maskProxy(config.intlProxy) };
+}
+
+function restoreProxy(value, saved) {
+  if (value === undefined || value === maskProxy(saved)) return saved ?? "";
+  if (typeof value === "string" && /^https?:\/\/\*\*\*@/.test(value)) throw new Error("代理设置已更改，请刷新后重试，或填写完整地址");
+  return value;
+}
 
 // The proxy a realm's requests use: China keeps the saved proxy; WorkBuddy
 // AI follows it unless its own is set. "direct" means no proxy.

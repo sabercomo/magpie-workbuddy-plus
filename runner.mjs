@@ -5,7 +5,7 @@ import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { accounts, calendar, checkins, initialize, intlAccount, intlSchedules, magpieDir, maskProxy, plan, proxyFor, publicAccount, readJSON, settle, validateConfig, version, writeJSON } from "./storage.mjs";
+import { accounts, calendar, checkins, initialize, intlAccount, intlSchedules, magpieDir, maskProxy, plan, proxyFor, publicAccount, publicConfig, readJSON, settle, validateConfig, version, writeJSON } from "./storage.mjs";
 import { WorkBuddyClient } from "./client.mjs";
 import { actions, perform } from "./engine.mjs";
 import { checkin, collect, usageSince, writePage } from "./board.mjs";
@@ -143,6 +143,14 @@ export class Runner {
     if (this.hostConfig && !process.env.WORKBUDDY_PLUS_MAGPIE_DIR && config.magpieDir === magpieDir) config.magpieDir = this.hostConfig;
     return settle(config);
   }
+  updateConfig(changes) {
+    if (!changes || typeof changes !== "object" || Array.isArray(changes)) throw new Error("设置应为对象");
+    const file = join(this.dir, "config.json"), current = settle(readJSON(file));
+    const config = validateConfig({ ...current, ...changes }, current);
+    writeJSON(file, config);
+    this.wake();
+    return publicConfig(config);
+  }
   // Minutes a slot may move either way; settings from before it have 10.
   spread(config = this.config()) { return Number.isInteger(config.spread) ? config.spread : 10; }
   // The install's own seed for its slot moments, kept with its state.
@@ -151,7 +159,7 @@ export class Runner {
   list() { return accounts(this.config(), this.dir); }
   status() {
     const config = this.config();
-    return { version, config, intlSchedules: intlSchedules(config), intlModels: (this.board.models?.intl?.models || []).map(({ id, name, rate, promo, tier }) => ({ id, name, rate, promo, tier })), accounts: this.list().map(publicAccount), jobs: this.state.jobs.filter(visibleJob), daily: this.state.daily, slots: this.state.slots };
+    return { version, config: publicConfig(config), intlSchedules: intlSchedules(config), intlModels: (this.board.models?.intl?.models || []).map(({ id, name, rate, promo, tier }) => ({ id, name, rate, promo, tier })), accounts: this.list().map(publicAccount), jobs: this.state.jobs.filter(visibleJob), daily: this.state.daily, slots: this.state.slots };
   }
   // A job queued or running: the service must not be swapped out under it.
   working() { return this.controllers.size > 0 || this.state.jobs.some(j => ["running", "queued"].includes(j.status)); }
@@ -418,29 +426,26 @@ export class Runner {
       if (!(Date.now() - Number(request.at) < 10 * 60_000)) throw new Error("页面请求已过期，请重新点击");
       if (request.action === "refresh") { this.boardStale = true; this.refreshBoard(0, request.accounts).catch(e => console.error(e)); }
       else if (["login", "login-intl"].includes(request.action)) this.login(request.action === "login-intl" ? "intl" : "cn");
-      else if (["pause", "resume"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), enabled: request.action === "resume" });
+      else if (["pause", "resume"].includes(request.action)) this.updateConfig({ enabled: request.action === "resume" });
       else if (request.action === "config") {
-        // Settings saved from Magpie's page: times, spread, time zone, proxy,
-        // the web conversation, campaign App conversation and skill-share
-        // switches. A proxy shown masked and sent back unchanged keeps the
-        // saved one.
-        const current = this.config(), given = request.config || {};
-        const next = { ...current, ...(given.schedules ? { schedules: given.schedules } : {}), ...(given.intlSchedules ? { intlSchedules: given.intlSchedules } : {}), ...(given.intlWebModel ? { intlWebModel: given.intlWebModel } : {}), ...(typeof given.intlWeb === "boolean" ? { intlWeb: given.intlWeb } : {}), ...(typeof given.campaignApp === "boolean" ? { campaignApp: given.campaignApp } : {}), ...(typeof given.skillShare === "boolean" ? { skillShare: given.skillShare } : {}), ...(typeof given.buddyAuto === "boolean" ? { buddyAuto: given.buddyAuto } : {}), ...Object.fromEntries(["concurrency", "tasksCacheTtl", "progressCacheHours"].filter(k => given[k] !== undefined).map(k => [k, given[k]])), ...(given.spread !== undefined ? { spread: given.spread } : {}), ...(given.timezone ? { timezone: given.timezone } : {}),
-          ...(given.proxy !== undefined && given.proxy !== maskProxy(current.proxy) ? { proxy: given.proxy } : {}),
-          ...(given.intlProxy !== undefined && given.intlProxy !== maskProxy(current.intlProxy || "") ? { intlProxy: given.intlProxy } : {}) };
-        writeJSON(join(this.dir, "config.json"), validateConfig(next));
-        this.wake();
+        // The sidebar can edit these settings. Account and schedule switches
+        // have their own actions, and the host configuration path stays local.
+        const given = request.config || {}, changes = {};
+        for (const key of ["schedules", "intlSchedules", "intlWebModel", "timezone"]) if (given[key]) changes[key] = given[key];
+        for (const key of ["intlWeb", "campaignApp", "skillShare", "buddyAuto"]) if (typeof given[key] === "boolean") changes[key] = given[key];
+        for (const key of ["proxy", "intlProxy", "concurrency", "tasksCacheTtl", "progressCacheHours", "spread"]) if (given[key] !== undefined) changes[key] = given[key];
+        this.updateConfig(changes);
       }
       else if (request.action === "retry") note.job = this.retry(request.job).id;
       else if (request.action === "cancel") this.cancel(request.job);
       else if (["pause-tasks", "resume-tasks"].includes(request.action)) {
         const ids = request.accounts;
         if (!Array.isArray(ids) || !ids.length || ids.some(id => !this.list().some(a => a.id === id))) throw new Error("账号不存在");
-        const config = this.config(), list = new Set(config.pausedAccounts || []);
+        const list = new Set(this.config().pausedAccounts);
         for (const id of ids) { if (request.action === "pause-tasks") list.add(id); else list.delete(id); }
-        writeJSON(join(this.dir, "config.json"), validateConfig({ ...config, pausedAccounts: [...list] }));
+        this.updateConfig({ pausedAccounts: [...list] });
       }
-      else if (["intl-on", "intl-off"].includes(request.action)) writeJSON(join(this.dir, "config.json"), { ...this.config(), intlEnabled: request.action === "intl-on" });
+      else if (["intl-on", "intl-off"].includes(request.action)) this.updateConfig({ intlEnabled: request.action === "intl-on" });
       else note.job = this.submit([request.action], request.accounts, "page", { task: request.task }).id;
       note.ok = true;
     } catch (e) { note.error = e.message; }

@@ -30,6 +30,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const form = nodes.get("config-form"); form.elements = {};
   for (const name of ["timezone", "proxy", "intlProxy", "spread", "intlWeb", "campaignApp", "skillShare"]) form.elements[name] = new Element("input");
   for (const id of ["schedule-fields", "intl-schedule-fields"]) nodes.get(id).append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };
+  nodes.get("intl-model-pick").append = function (...children) { for (const child of children) if (child.name) form.elements[child.name] = child; this.children.push(...children); };
   const calls = [], status = { config: { ...structuredClone(defaults), intlProxy: "http://127.0.0.1:1082" }, intlSchedules: structuredClone(defaults.intlSchedules), intlModels: ["hy3", "kimi-k3"], accounts: [
     { id: "cn:a", name: "国内测试", realm: "cn", source: "magpie", enabled: true },
     { id: "intl:c", name: "国际测试", realm: "intl", source: "magpie", enabled: true },
@@ -236,11 +237,19 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   findNode(nodes.get("board"), n => n.dataset?.tab === "board").onclick();
 
   // The alert footer follows the board content and expands into a flat list.
-  const alertToggle = findNode(nodes.get("board"), n => n.className === "wb-alert-toggle");
-  assert.ok(alertToggle);
+  const alertFooter = findNode(nodes.get("board"), n => n.className?.startsWith("wb-alert-footer"));
+  const [alertSummary] = alertFooter.children;
+  assert.equal(alertFooter.tag, "details");
+  assert.equal(alertSummary.tag, "summary");
+  assert.ok(findNode(alertSummary, n => n.className === "wb-alert-preview"), "the preview belongs to the expandable row");
+  assert.equal(findNode(alertSummary, n => n.tag === "button"), undefined, "the row is one native control");
   assert.ok(text(nodes.get("board")).indexOf("国内测试 个人 · 连登 8 天") < text(nodes.get("board")).indexOf("模型额度"));
   assert.match(text(nodes.get("board")), /模型额度[\s\S]*kimi-k3-1[\s\S]*国内测试[\s\S]*额度已用完[\s\S]*kimi-k3\.1-pro[\s\S]*企业号[\s\S]*排队中/);
-  alertToggle.onclick();
+  alertFooter.open = true;
+  alertFooter.ontoggle();
+  assert.match(text(alertSummary), /收起/);
+  context.WBBoard.render(nodes.get("board"), board);
+  assert.equal(findNode(nodes.get("board"), n => n.className?.startsWith("wb-alert-footer")).open, true, "a refresh preserves the expanded reminders");
   const rendered = text(nodes.get("board")), alerts = rendered.slice(rendered.indexOf("需要你处理"));
   assert.match(alerts, /需要你处理[\s\S]*网络\/代理连续失败，自动任务暂停至 \d\d\/\d\d \d\d:\d\d[\s\S]*120 积分（活动赠送）将作废[\s\S]*其他提醒 2 件[\s\S]*官方补偿 500 积分待领[\s\S]*「关注公众号」需手动完成 \+100 积分/);
   assert.doesNotMatch(alerts, /星巴克协作：邀请好友/);
@@ -371,7 +380,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   assert.equal(nodes.get("cn-state").textContent, "· 定时已暂停", "the settings card follows the saved config");
   await switches[1].onclick();
   assert.equal(switches[1].attributes["aria-checked"], "true");
-  assert.equal(calls.filter(c => c.path === "/api/config").at(-1).body.intlEnabled, true, "the WorkBuddy AI switch flips its own schedule only");
+  assert.deepEqual(calls.filter(c => c.path === "/api/config").at(-1).body, { intlEnabled: true }, "the WorkBuddy AI switch submits just its own setting");
 
   // Local panel account selection + manual action
   assert.deepEqual(nodes.get("accounts").children.map(row => row.children[1].children[0].textContent), ["国内测试", "国内测试二", "国际测试"]);
@@ -401,6 +410,7 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   await form.onsubmit({ preventDefault() {}, currentTarget: form });
   const saved = calls.filter(c => c.path === "/api/config").at(-1).body;
   assert.deepEqual([saved.schedules.daily, saved.schedules.sweep, saved.intlSchedules.web, saved.intlSchedules.daily, saved.intlWebModel, saved.intlWeb, saved.campaignApp, saved.intlProxy], [["09:00", "21:00"], ["10:01", "22:11"], ["10:30", "11:00"], ["09:01", "21:01"], "hy3", false, true, "direct"]);
+  assert.ok(!("proxy" in saved) && !("enabled" in saved) && !("pausedAccounts" in saved), "unrelated settings can change while the form is open");
   assert.equal(nodes.get("saved").textContent, "已保存", "the save result sits beside the button");
   failConfig = true;
   await form.onsubmit({ preventDefault() {}, currentTarget: form });
@@ -513,8 +523,7 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   assert.match(readFileSync(new URL("../page/index.html", import.meta.url), "utf8"), /<button type="button" id="save-settings">/);
   await button.onclick({ currentTarget: button });
   const savedPage = requests.filter(r => r.action === "config").at(-1);
-  assert.equal(savedPage.config.campaignApp, true);
-  assert.equal(savedPage.config.intlProxy, "direct");
+  assert.deepEqual(JSON.parse(JSON.stringify(savedPage.config)), { campaignApp: true, intlProxy: "direct" }, "the Magpie form only sends settings changed since it was filled");
   assert.equal(button.disabled, true, "the save button is disabled while saving");
 
   // A malformed international proxy is rejected locally too.

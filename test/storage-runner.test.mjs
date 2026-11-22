@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { defaults, accounts, calendar, initialize, intlSchedules, legacySchedules, plan, readJSON, settle, validateConfig, writeJSON } from "../storage.mjs";
+import { defaults, accounts, calendar, initialize, intlSchedules, legacySchedules, plan, proxyFor, readJSON, settle, validateConfig, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient, isRestricted } from "../client.mjs";
 import { dropped } from "../network.mjs";
 import { EventEmitter } from "node:events";
@@ -221,6 +221,78 @@ test("HTTP service serves the panel, rejects cross-site mutations, and validates
   assert.equal(checkin.status, 400);
   assert.match((await checkin.json()).error, /无效的操作/);
   const status = await (await fetch(base + "/api/status")).text(); assert.ok(!status.includes("private-access"));
+});
+
+test("HTTP status and config mask proxy credentials and preserve them when schedules are saved", async t => {
+  const p = fixture(t);
+  const proxy = "http://cn-user:cn-private@with-at@cn-proxy.example:8080";
+  const intlProxy = "http://intl-user:intl-private@intl-proxy.example:8080";
+  writeJSON(join(p.dir, "config.json"), { ...p.config(), proxy, intlProxy });
+  const { server } = createService({ dir: p.dir });
+  server.listen(0, "127.0.0.1"); await new Promise(resolve => server.once("listening", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const save = config => fetch(base + "/api/config", { method: "POST", headers: { "Content-Type": "application/json", "X-WorkBuddy-Plus": "1" }, body: JSON.stringify(config) });
+
+  const status = await fetch(base + "/api/status").then(r => r.json());
+  const masked = ["http://***@cn-proxy.example:8080", "http://***@intl-proxy.example:8080"];
+  assert.doesNotMatch(JSON.stringify(status), /cn-user|cn-private|with-at|intl-user|intl-private/);
+  assert.deepEqual([status.config.proxy, status.config.intlProxy], masked);
+
+  const schedules = { ...status.config.schedules, daily: ["09:21"] };
+  const saved = await save({ ...status.config, schedules, intlEnabled: true });
+  assert.equal(saved.status, 200);
+  const shown = await saved.json();
+  assert.doesNotMatch(JSON.stringify(shown), /cn-user|cn-private|with-at|intl-user|intl-private/);
+  assert.deepEqual([shown.proxy, shown.intlProxy], masked);
+  assert.deepEqual([p.config().proxy, p.config().intlProxy, p.config().schedules, p.config().intlEnabled], [proxy, intlProxy, schedules, true]);
+
+  const replacement = "http://new-user:new-private@new-proxy.example:8080";
+  const { proxy: _, ...otherSettings } = shown;
+  const updated = await save({ ...otherSettings, intlProxy: replacement });
+  assert.equal(updated.status, 200);
+  const updatedConfig = await updated.json();
+  assert.equal(updatedConfig.intlProxy, "http://***@new-proxy.example:8080");
+  assert.doesNotMatch(JSON.stringify(updatedConfig), /new-user|new-private/);
+  assert.deepEqual([p.config().proxy, p.config().intlProxy], [proxy, replacement]);
+
+  const stale = await save(shown);
+  assert.equal(stale.status, 400);
+  assert.equal(p.config().intlProxy, replacement, "a stale masked address must not replace the current proxy");
+
+  for (const [input, expected] of [["direct", ""], ["", proxy]]) {
+    const res = await save({ ...updatedConfig, intlProxy: input });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).intlProxy, input);
+    assert.equal(p.config().intlProxy, input);
+    assert.equal(proxyFor(p.config(), "intl"), expected);
+  }
+});
+
+test("local config patches preserve settings saved through Magpie and by other requests", async t => {
+  const p = fixture(t);
+  const { server } = createService({ dir: p.dir });
+  server.listen(0, "127.0.0.1"); await new Promise(resolve => server.once("listening", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (path, value) => fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", "X-WorkBuddy-Plus": "1" }, body: JSON.stringify(value) });
+  const proxy = "http://test-user:test-private@intl-proxy.example:8080";
+  const page = await post("/api/page", { id: "proxy-change", at: Date.now(), action: "config", config: { intlProxy: proxy } });
+  assert.equal((await page.json()).ok, true);
+
+  const [schedule, account] = await Promise.all([
+    post("/api/config", { intlEnabled: true }),
+    post("/api/config", { pausedAccounts: ["cn:u1"] })
+  ]);
+  assert.equal(schedule.status, 200);
+  assert.equal(account.status, 200);
+  assert.equal((await schedule.json()).intlProxy, "http://***@intl-proxy.example:8080");
+  assert.equal((await account.json()).intlProxy, "http://***@intl-proxy.example:8080");
+  const saved = p.config();
+  assert.deepEqual([saved.enabled, saved.intlEnabled, saved.pausedAccounts, saved.intlProxy], [false, true, ["cn:u1"], proxy]);
+  const invalid = await post("/api/config", { schedules: { ...saved.schedules, daily: ["25:00"] }, intlEnabled: false });
+  assert.equal(invalid.status, 400);
+  assert.deepEqual(p.config(), saved, "an invalid patch saves nothing");
 });
 
 // After a plugin update the running service still has the old code; the

@@ -1,11 +1,10 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
 import { Runner } from "./runner.mjs";
-import { dataDir, newer, validateConfig, version, writeJSON } from "./storage.mjs";
+import { dataDir, newer, version } from "./storage.mjs";
 
-export { validateConfig };
+export { validateConfig } from "./storage.mjs";
 
 export function createService({ dir = dataDir, runner = new Runner(dir), stop = () => {} } = {}) {
   const root = new URL("./public/", import.meta.url), shared = new URL("./page/", import.meta.url);
@@ -42,9 +41,7 @@ export function createService({ dir = dataDir, runner = new Runner(dir), stop = 
         return send(202, runner.submit(value.actions || [value.action], value.accounts, "manual", { task: value.task }));
       }
       if (url.pathname === "/api/config") {
-        const config = validateConfig(value);
-        writeJSON(join(dir, "config.json"), config);
-        runner.wake();
+        const config = runner.updateConfig(value);
         runner.publish();
         return send(200, config);
       }

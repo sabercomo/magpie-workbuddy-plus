@@ -3,7 +3,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendFileSync, closeSync, openSync, mkdirSync, readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
-import { dataDir, newer, version } from "./storage.mjs";
+import { dataDir, newer, publicConfig, version } from "./storage.mjs";
 import { proxyEnvironment } from "./network.mjs";
 import { answering, portTaken } from "./server.mjs";
 import { actions } from "./engine.mjs";
@@ -122,8 +122,11 @@ export const WorkBuddyPlusPlugin = async (input, options) => {
       description: "查看或开关 WorkBuddy Plus 的定时执行：enabled 是国内版的定时，intlEnabled 是国际版的定时，关掉只停定时、手动执行不受影响。国内版与国际版各有自己的时段（schedules 与 intlSchedules），在本地面板的「定时与设置」或 Magpie 页面的「设置」中调整，已开始的手动任务不受开关影响。",
       args: { type: "object", properties: { enabled: { type: "boolean" }, intlEnabled: { type: "boolean" } }, additionalProperties: false },
       async execute(args) {
-        const { config } = await rpc("/api/status");
-        return args.enabled === undefined && args.intlEnabled === undefined ? config : rpc("/api/config", { ...config, ...args });
+        const running = await rpc("/api/status");
+        if (args.enabled === undefined && args.intlEnabled === undefined) return publicConfig(running.config);
+        // An older service may still be finishing a job during the upgrade.
+        const changes = newer("0.8.0", running.version) ? { ...running.config, ...args } : args;
+        return publicConfig(await rpc("/api/config", changes));
       }
     }
   } };

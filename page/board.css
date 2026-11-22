@@ -68,11 +68,12 @@ body.in-settings button.wb-nav-toggle{display:none}
 .wb-alert-footer.has-warn{--tone:var(--wb-warn)}
 .wb-alert-footer.has-urgent{--tone:var(--wb-urgent)}
 .wb-alert-empty{margin:18px 0 0;padding-top:14px;border-top:1px solid var(--wb-line);font-size:12px;color:var(--wb-muted)}
-.wb-alert-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.wb-alert-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:-6px -8px;padding:6px 8px}
 .wb-alert-chips{display:flex;align-items:baseline;gap:9px;min-width:0;flex:1;flex-wrap:wrap}
 .wb-alert-mark{display:inline-flex;align-items:center;gap:7px;flex:none;font-size:12px;font-weight:600;color:var(--tone)}
 .wb-alert-mark::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 .wb-alert-preview{font-size:12px;line-height:1.45;color:var(--wb-muted);min-width:0;overflow-wrap:anywhere}
+.wb-alert-control{flex:none;font-size:12px;color:var(--wb-accent);padding:1px 0;white-space:nowrap}
 .wb-alert-toggle{all:unset;box-sizing:border-box;flex:none;font-size:12px;color:var(--wb-accent);cursor:pointer;padding:1px 0;white-space:nowrap}
 .wb-alert-toggle:hover{text-decoration:underline;text-underline-offset:3px}
 .wb-alert-toggle:focus-visible{outline:2px solid var(--wb-accent);outline-offset:3px;border-radius:3px}
@@ -545,11 +546,11 @@ body.in-settings button.wb-nav-toggle{display:none}
 
 @container wb-page (max-width:640px){
   .wb-b-top{grid-template-columns:1fr}
-  .wb-alert-bar{flex-direction:column;gap:5px}.wb-alert-toggle{align-self:flex-end}
+  .wb-alert-bar{flex-direction:column;gap:5px}.wb-alert-control{align-self:flex-end}
   .wb-alert-row{grid-template-columns:5px minmax(0,1fr)}.wb-alert-aside{grid-column:2;max-width:none;text-align:left;white-space:normal;justify-self:stretch}
   .wb-alert-with-prize .wb-alert-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:12px}
   .wb-alert-with-prize .wb-alert-chips{display:grid;gap:3px}
-  .wb-alert-with-prize .wb-alert-bar>.wb-alert-toggle{align-self:start;min-height:44px}
+  .wb-alert-with-prize .wb-alert-bar>.wb-alert-control{align-self:start;min-height:44px}
   .wb-alert-prize .wb-alert-aside{display:flex;align-items:center;gap:12px}
   .wb-alert-prize .wb-alert-toggle{min-height:44px}
   .wb-widgets{grid-template-columns:repeat(2,minmax(0,1fr))}.wb-w-m{grid-column:1/-1}
@@ -795,10 +796,11 @@ body.in-settings button.wb-nav-toggle{display:none}
 .wb-board .wb-account-progress { padding: var(--wb-space-control); gap: var(--wb-space-small); }
 .wb-board .wb-account-progress>.wb-sub { min-height: 32px; }
 .wb-quota { padding-block: var(--wb-space-card); margin-top: var(--wb-space-section); border-bottom: 1px solid var(--wb-line); }
-.wb-quota-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--wb-space-small) var(--wb-space-card); margin: calc(-1 * var(--wb-space-small)) calc(-1 * var(--wb-space-control)); padding: var(--wb-space-small) var(--wb-space-control); border-radius: 8px; cursor: pointer; list-style: none; }
-.wb-quota-summary::-webkit-details-marker { display: none; }
-@media (hover: hover) { .wb-quota-summary:hover { background: var(--wb-hover); } }
-.wb-quota-summary:focus-visible { outline: 2px solid var(--wb-accent); outline-offset: 2px; }
+.wb-quota-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--wb-space-small) var(--wb-space-card); margin: calc(-1 * var(--wb-space-small)) calc(-1 * var(--wb-space-control)); padding: var(--wb-space-small) var(--wb-space-control); }
+.wb-quota-summary, .wb-alert-bar { border-radius: 8px; cursor: pointer; list-style: none; }
+.wb-quota-summary::-webkit-details-marker, .wb-alert-bar::-webkit-details-marker { display: none; }
+@media (hover: hover) { .wb-quota-summary:hover, .wb-alert-bar:hover { background: var(--wb-hover); } }
+.wb-quota-summary:focus-visible, .wb-alert-bar:focus-visible { outline: 2px solid var(--wb-accent); outline-offset: 2px; }
 .wb-quota-head { display: flex; flex-wrap: wrap; gap: var(--wb-space-small) var(--wb-space-card); align-items: center; padding-bottom: 0; }
 .wb-quota .wb-quota-title { font-size: 13px; }
 .wb-quota-state-summary { font-size: 12px; color: var(--wb-muted); }
