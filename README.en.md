@@ -112,7 +112,23 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 
 ## Features
 
-The plugin does three things: **run tasks on schedule**, **explain every account**, and **collect what needs you at the bottom**.
+- **Automatic tasks:** China runs growth tasks, Buddy travel and streak rewards. WorkBuddy AI has its own schedule for activity, streak rewards and check-in when a campaign runs. Magpie still handles China's daily check-in.
+- **Multi-account board:** Check credit balances, expiry dates and 7-day usage together. Personal credits and enterprise allowances stay separate.
+- **Tasks and account health:** In Tasks, see progress for China personal accounts, run individual tasks or claim rewards. In Accounts & health, diagnose, retry or pause an account's tasks.
+- **Model catalog:** See the models available to China, WorkBuddy AI and enterprise accounts, with their reasoning levels, context sizes and credit multipliers.
+
+[Screenshots](#screenshots) · [Default schedule](#default-schedule) · [Settings and data](#settings-and-data)
+
+> [!IMPORTANT]
+> - Some growth tasks report simulated client events; this does not mean the action took place in the desktop client.
+> - WorkBuddy decides what counts, which rewards are paid and whether an account is restricted. Not every task can be completed.
+> - Campaign App chats and WorkBuddy AI web chats may spend credits. Buddy blind boxes spend growth energy.
+
+<details>
+<summary>Full feature reference</summary>
+
+- Following the official WeChat account and making donations must be done manually. Skill sharing creates a real link and reports the copy action. Completed tasks can still be claimed automatically.
+- Desktop, web and mini-program event formats follow [workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel).
 
 ```mermaid
 flowchart LR
@@ -124,81 +140,135 @@ flowchart LR
   E --> F["Board · run history · alerts"]
 ```
 
-| Layer | What you see / get |
+| Area | What you can do |
 | --- | --- |
-| **Automatic tasks** | China runs activity, growth tasks, campaigns, claim-only sweeps, Buddy travel and streak rewards; official compensation is queried before claiming; new expert tasks are recognised from their `jump_url`. WorkBuddy AI runs activity, check-in and the web session. Each side keeps its own schedule and retries failures. |
-| **What to do first** | The Tasks view lists growth tasks and progress by account in natural-height columns, with automatic tasks ready to run; short cards keep their own height. Below it, four cards handle travel, Buddy blind boxes, official compensation and campaigns account by account. Account cards and the four extras drag to reorder, remembered on this machine. |
-| **Board, tasks and account health** | The board has five read-only views refreshed every 3 minutes. The Tasks page lists growth tasks by account in natural-height columns (short cards do not stretch), with filters and account/status grouping; account cards and the four extra cards drag to reorder (Alt+arrows too), remembered on this machine, and handle travel, Buddy blind boxes, official compensation and campaigns account by account. Accounts & health filters by account type or abnormal status and shows health, next schedule, pause controls and failure retry chains. Check-in, growth and travel stay on the board, and exhausted or queued models get a model-quota card at the foot of the board. |
-| **Entry points** | Magpie sidebar, local panel `127.0.0.1:3439`, CLI and MCP; settings split into Schedule, WorkBuddy AI, Tasks, and Network & time zone. |
-| **Guardrails** | Three days of format failures pause reporting; three network errors pause for 10 minutes; post-sleep catch-up and restart dedupe. Manual runs always work. |
+| Automatic tasks | Schedule each version separately and retry failed runs. See the rules and switches below. |
+| Tasks | Check per-account progress and handle growth tasks, travel, blind boxes, compensation and campaigns. |
+| Board and health | Use list, rings or widgets to check accounts. Diagnose issues, pause work or retry in Accounts & health. |
+| Models | Browse each version's catalog and see recorded quota or queue events. |
+| Access | Use the Magpie sidebar, local panel, CLI or MCP. |
 
-To see the UI, jump to [Screenshots](#screenshots); for exact times see [Default schedule](#default-schedule).
+### Full automatic-task rules
 
-<details>
-<summary><b>Expand: full automatic-task rules</b></summary>
+**China: growth tasks and campaigns**
 
-**Automatic tasks**
+| Task | How it runs |
+| --- | --- |
+| Growth and streaks | Checks streak activity and rewards in the Growth Center. Accepts tasks, reports events and checks progress before claiming. Incomplete tasks are not marked claimed. |
+| Desktop and web | Supports desktop chats, opening a Buddy app, 企鹅教师助手, and reading the web library introduction. |
+| Mini-program tasks | `Sequential_Tasks_1` to `7` cover chats, an expert, GLM5.2, creating a scheduled task, ten chats and the PC playbook task. One unlocks per day after the previous reward is claimed. |
+| Mini-program chats | Roughly 45 seconds between reports; WorkBuddy rolls back bursts. |
+| New expert tasks | Reads the task's `jump_url` for an `expertId`, including `deeplink` and `expert_use_<slug>`. Unrecognized tasks are marked manual on the account's task card. |
+| Skill sharing | Creates a real share channel and reports the link copy. The same account reuses its channel that day. Turning off automatic sharing skips it in bulk runs; individual runs still work. |
+| Campaigns | Reads progress for events such as Starbucks and Reporter's Day. Runs supported chat, expert, skill and desktop tasks and claims rewards once reached. Invitations are manual; ended campaigns are skipped. |
+| Campaign App chat | Runs one real cloud App chat before claiming and **may spend credits**. Off by default; scheduled and run-all jobs skip it, Tasks shows 「设置已关闭」, and other tasks still run. |
+| Manual tasks | Following the official account and donating are not shown or counted. Rewards are claimed once WorkBuddy confirms completion; following requires 24 hours according to WorkBuddy's progress. |
+| Claim-only sweep | Accepts pending tasks and claims reached growth or campaign rewards without sending behavior events. Runs separately from growth tasks, or manually via 「补领奖励」 without signing in to each account. |
 
-- Login-streak activity and reward checks in the China growth center.
-- Growth tasks: accept, report events, check progress and claim; a task not reached is never recorded as claimed. Sharing a skill creates a real share channel and reports the link-copy actions; the same account reuses that channel for the rest of the day, so retries do not create duplicate links. Turn 「自动分享技能给好友」 off under 「设置 › 任务与对话」 to keep bulk runs from creating share links; the task center can still run that one task on demand. Mini-program tasks cover `Sequential_Tasks_1` to `7` (chats, an expert, GLM5.2, creating a scheduled task, ten chats and the PC playbook task); chat-style tasks go at a person's pace, about 45 seconds apart, because a burst is rolled back.
-- Campaigns: it reads each China account's progress in the Starbucks, Reporter's Day and similar campaigns, performs the chat, expert, skill and desktop actions that can be reported as those clients, and claims rewards already earned. The App task creates a real cloud App conversation and waits for one completed turn before claiming; inviting friends still needs you. Because that conversation calls a model and may spend credits, 「自动完成活动 App 对话」 under 「设置 › 任务与对话」 is off by default: scheduled runs and 「执行所有任务」 skip only that item, the task center marks it 「设置已关闭」, and the campaign's other tasks still run. Only completed tasks are claimed, and once a campaign ends it is skipped.
-- Claim-only sweep: runs apart from the growth-task round, accepts pending tasks and claims reached growth-task and campaign rewards without sending any behavior event. It can also be run by hand with 「补领奖励」 under 「立即执行」. Tasks you complete yourself, such as following the official WeChat account, are claimed automatically on the next growth-task round or sweep once upstream confirms completion, without signing into each account. The follow task requires 24 hours of following, as confirmed by server progress.
-- Failure pause: a task whose `/v2/report` is rejected for its format (HTTP 400) on three days in a row is paused for scheduled runs; three consecutive network/proxy errors such as `ECONNRESET`, timeouts or refused connections pause automatic runs for 10 minutes. Manual runs always remain available and clear the pause on success.
-- Buddy travel: send out and claim on return; handles `first_buddy` on first use.
-- Streak make-up cards, 7/14/28-day streak exchanges, growth draws, starter packs and event compensation (status checked first). This streak is a different event from the daily check-in credits.
-- Official compensation reads `compensation-status` first and claims only when the campaign is active, unclaimed and has credit. `active=false` and "already claimed" are not failures; a failed query is shown as a read failure.
-- Open Buddy blind boxes with growth energy from the Tasks view. The “open a blind box after travel” setting is off by default. When enabled under Settings › Tasks & conversation, it opens boxes once while a Buddy is idle and eligible to depart. Manual and automatic opening check the travel status first and skip if a trip is underway, a reward is waiting, or the status is unclear. An account confirmed to have no Buddy can still open its first box.
-- Growth draws record prize names in the existing execution log. A physical prize or address-required flag adds a reminder at the bottom of the Board. It asks you to enter shipping details in the Growth Center and opens the matching execution record. The reminder remains available across days while that record is retained. The response fields still need live-account verification.
-- New expert tasks take their real `expertId` from their own `jump_url` (`deeplink` or `expert_use_<slug>`); they run as expert tasks once recognised. Unrecognised ones stay in that account's task card in Tasks, marked manual.
-- China's check-in still belongs to Magpie; this plugin only reads `checkin-activity-status` to verify it, and the later record wins when upstream is checked but Magpie's file isn't updated yet.
-- **WorkBuddy AI (international)**, with its own schedule switch (on its row in 「今日定时」) and times: daily activity that lights the heatmap and builds the streak; the 14-day (+50 credits) and 28-day (+150) tiers redeemed automatically; and the daily check-in whenever WorkBuddy AI runs a campaign (Magpie checks in on China only; as of 2026-11 WorkBuddy AI answers 「签到活动未开启或已过期」, no campaign running, and the plugin starts claiming once one does). WorkBuddy AI's **daily activity reward** (a Bonus Pack of 30 or 50 credits) counts only a finished conversation on its web app, not the desktop activity report, so WorkBuddy AI has a web conversation slot of its own (10:31 by default) that does what workbuddy2api does: it opens a conversation through the workbuddy.ai web channel, asks for a one-word reply, waits for it to finish and ends it, once a day. The model is picked automatically from those free right now (such as Hy3 while it's free, which cost nothing when measured); with none free, or if the free one turns it down (its daily free allowance spent, say), DeepSeek-V4.1-Flash runs it instead (about 0.6 credits). A model can also be set in 「设置」. Turn off 「每天跑一次网页会话」 there (the streak carries on, without this reward), or clear the slot, to stop it. WorkBuddy's usage list usually shows one web conversation as two requests a few seconds apart. The reward does not land when the conversation ends: it has arrived the night after the active day (02:00 to 07:00 Beijing time). The board shows 「每日活跃奖励 今日到账 +30」 or 「今日未到账」 for WorkBuddy AI accounts, and the credit history names that grant 「每日活跃奖励」. WorkBuddy AI's growth tasks (its 「养虾」 levels) count real use of its client and can't be simulated, so the board and the reminders no longer list them; with no check-in campaign running, no check-in is shown; it has no Buddy travel, so none is asked for, logged or shown, and its board rings are just activity and growth tasks.
-- The night-owl task runs inside its valid window in Beijing time, at most once per account per day.
-- Retries, catch-up after sleep for the day's slots, and no double runs after a restart.
+**China: travel, rewards and check-in**
+
+| Task | How it runs |
+| --- | --- |
+| Buddy travel | Sends Buddy out and claims on return; handles `first_buddy` on first use. |
+| Streaks and packs | Processes streak make-up cards, 7/14/28-day exchanges, growth draws, starter packs and campaign compensation. Streak make-up is separate from daily check-in. |
+| Official compensation | Reads `compensation-status` and claims only active, unclaimed compensation with quota. Inactive or already claimed is not a failure; failed reads are shown separately. |
+| Buddy blind boxes | Opening manually in Tasks **spends growth energy**. Automatic opening after travel is off by default. If enabled, it opens once when Buddy is idle and eligible to depart. |
+| Blind box checks | Both modes check travel state and skip while in transit, awaiting a reward or unsure of the state. A confirmed account without Buddy can open its first box. |
+| Growth draws and physical prizes | Run history records prize names. A physical prize or address flag prompts you to enter shipping details in the Growth Center and links to the record. It stays visible while the record is retained; response fields need live-account verification. |
+| Daily check-in | Magpie claims it. The plugin reads `checkin-activity-status` to verify and uses the newer same-day record. |
+| Night-owl task | Runs within the eligible Beijing-time window, at most once per account per day. |
+
+The automatic switches for skill sharing, campaign App chats and blind boxes are in Settings › Tasks & conversation.
+
+**WorkBuddy AI (international)**
+
+| Task | How it runs |
+| --- | --- |
+| Schedule and streaks | Separate switch and times under Today's Schedule. Activity lights the heatmap and builds the streak; day 14 redeems 50 credits, day 28 redeems 150. |
+| Daily check-in | The plugin checks in when a campaign is active; otherwise no check-in is shown. The November 2026 observation was 「签到活动未开启或已过期」; check-in resumes when a campaign opens. |
+| Daily activity reward | A Bonus Pack of 30 or 50 credits requires one completed web chat. Desktop activity reports do not count. |
+| Web conversation | Defaults to 10:31, once a day. Creates a chat via workbuddy.ai, asks for a one-word reply, waits for completion and ends the chat. WorkBuddy normally lists two usage requests. |
+| Models and credits | Picks an available free model first. Hy3 was measured as free during its offer. With no usable free model it falls back to DeepSeek-V4.1-Flash (about 0.6 credits). You can choose a model in Settings. |
+| Turn off web chats | Disable the daily web conversation in Settings or clear its slot. No activity reward is earned through the automated chat, but the streak continues. |
+| Reward arrival | Observed the following morning at 02:00–07:00 Beijing time. The board shows today's amount or that it hasn't arrived; credit history labels it a daily activity reward. |
+| Limits | Growth levels count real client use only; the plugin does not simulate them or list them on the board or in alerts. No Buddy travel is requested, tracked or displayed; rings show activity and growth only. |
+
+**Failures, sleep and restart**
+
+| Situation | What happens |
+| --- | --- |
+| Three days of format failures for one task | HTTP 400 from `/v2/report` pauses automatic reporting for that task. A successful manual run clears the pause. |
+| Three consecutive network or proxy errors | Timeouts, refused connections or resets (`ECONNRESET`) pause automatic runs for 10 minutes. A successful manual run clears the pause. |
+| Wake or restart | Catches up on slots due that day after sleep, retries failures and avoids duplicate runs after a restart. |
+
+### Board views and account details
+
+**Accounts and credits**
+
+| Where | What it shows |
+| --- | --- |
+| Updates and balances | Read-only, refreshed every three minutes. China accounts signed in or out in Magpie appear within half a minute. Personal totals are separate by version, to two decimal places. |
+| Enterprise allowances | Separate from personal credits. Shows monthly team allowance, usage, reset time and daily team totals. Requests from this account are folded separately. |
+| Credit history | Seven days of grants, with time, amount, source, credit left and expiry, plus totals by source and spending. Same-name grants expire separately; each 「国内运营裂变包」 grant has its own 20 days. |
+| Credit sources | Uses the grant reason first, then matching run history or Magpie check-in. Unmatched items are marked “source unconfirmed”; reason coverage needs live-account verification. |
+| Charges | Up to 50 charged requests in the last seven days, with time, cost to two decimal places, model and client. Shows 10 initially; choose Show more for the rest. |
+| Request totals | Shows charged and free counts; earlier requests count only in totals. |
+| Growth and campaigns | Open the task count to see energy, Buddies, streak tiers and unfinished tasks. Campaigns show progress and claim state. Manual items such as invitations appear in Tasks only. |
+| Daily check-in | China personal accounts show Magpie's result and alert on missed or disabled check-in. WorkBuddy AI shows the plugin result or no campaign. Enterprise has no check-in row. |
+
+**Views and operations**
+
+| View | How to use it |
+| --- | --- |
+| List groups | China and WorkBuddy AI each show their balance and account count. China shows today's progress, growth and 7-day use; WorkBuddy AI shows today's reward and 7-day use. |
+| Group order | Move the lower group up to reorder the list, rings and widgets. Personal accounts come first. Open an account for credit packages, usage, tasks and travel. |
+| Account rows | Collapsed by default, with a credit bar colored by each grant's expiry, today's rings and a 7-day trend. WorkBuddy AI accounts carry the international label. |
+| Rings | One account at a time: activity, travel and task rings, expiry timeline and usage. |
+| Widgets | One measure per tile: expiring credits, today, Buddies, energy, personal credits by version, enterprise allowance, 7-day use and growth tasks. |
+| Task filters | China personal accounts only. Filter by claimable, automatic, manual or locked; group by account or state. |
+| Task order | Drag the six-dot handle or use Alt+arrows to reorder accounts and the four cards. Order is saved locally; status grouping remains by state. Cards keep their own height. |
+| Task actions | Travel sits beside blind boxes, and compensation beside campaigns. Travel can be claimed and sent at once; open boxes and claim compensation per account or in bulk; campaign actions follow the status. |
+| Model catalog | China and WorkBuddy AI each have lists; WorkBuddy AI requires a `workbuddy-ai` sign-in. An enterprise tab appears only for an enterprise login and follows its own configuration. |
+| Model information | Available models come first; WorkBuddy AI Pro-only models are dimmed. Click a model ID to copy it. Shows context, credit multiplier, limited-time free offers, night discounts and subscriber priority. Multipliers of 3 or more are orange. |
+| Reasoning levels | WorkBuddy's native options, such as `low high max`. Default is bold; 「可关」 means thinking can be switched off, 「固定」 means only one level, and 「—」 means no level was listed. |
+
+**Schedule, alerts and model quota**
+
+| What you see | What it means |
+| --- | --- |
+| Today's Schedule | The result of each slot and its next run. |
+| Board alerts | Groups expired logins, failed reads, credits expiring within two days and network/proxy pauses. Other alerts fold away: credits expiring within ten days, enterprise resets and check-in notes. |
+| Quota exhausted (429 / 6004) | Each model has a 24-hour allowance per account. A refused request records the reset time. The plugin doesn't probe models, and WorkBuddy doesn't expose remaining quota. |
+| Queued (429 / 6020) | Capacity limits can queue personal and enterprise requests. The position and wait are recorded and disappear at the estimated time; a queued model is checked again at most hourly. |
+| Finding quota records | Below 7-day usage in account details or under the Model quota summary and monitoring notes. No record does not mean the model was probed. |
+| Record sources | The plugin does not send its own China chat probes. WorkBuddy AI's activity chat records a failure only when it hits one. Magpie can also report `exceeded retry limit, last status: 429` after queue retries. |
+
+### Entry points and settings
+
+| Where | What you can do |
+| --- | --- |
+| Magpie sidebar | Board, Accounts & health, Tasks, Schedule & Logs and Models. Board shows the account count; Tasks badges due compensation, failed compensation reads and unsupported tasks only. |
+| Navigation and views | The control left of the title switches between horizontal tabs and sidebar and remembers the choice. Wide sidebar is resizable; narrow uses icons. The board's view picker shares a row with the version filter. |
+| Refresh and schedule | Refresh beside the update time. Use the separate Today's Schedule switches for each version; manual runs still work. |
+| Run now | Run all, Buddy travel, growth tasks or claim-only from beside the run history. |
+| Add account | Choose a version. Magpie runs `magpie plugin login workbuddy` or `magpie plugin login workbuddy-ai` and opens the browser. Re-signing in replaces the account's old sign-in. |
+| Credentials | Magpie manages sign-in. The plugin does not handle login tokens or import/export account files. |
+| Local panel | http://127.0.0.1:3439, local access only. Select accounts, see the last 100 runs or edit times and proxies. Use sidebar settings when the panel isn't reachable from outside Docker. |
+
+The Settings button opens four groups:
+
+| Group | What it controls |
+| --- | --- |
+| Schedule | Each version's slots and random offset. |
+| WorkBuddy AI | Daily web conversation and its model. |
+| Tasks | Automatic skill sharing and opening blind boxes after travel. |
+| Network and time zone | Time zone, default HTTP proxy and WorkBuddy AI proxy. See [Settings and data](#settings-and-data) for inheritance and direct connections. |
 
 </details>
-
-<details>
-<summary><b>Expand: what each board view shows</b></summary>
-
-**Account board** (read only; refreshes with the service every 3 minutes, and shows China accounts signed in or out in Magpie within half a minute; claims or spends nothing)
-
-Each realm header totals personal credits only, keeping up to two decimal places. Shared enterprise allowances stay on their own account rows and are never added to personal balances. The model-quota footer is a single summary row; clicking anywhere on its header, including the title or “View records / Monitoring notes”, expands the details. No refusal records means no refusals have been observed, rather than every model having been probed.
-
-- Credit history (「积分流水」) in account details lists each grant's time, amount, source, remaining credit and expiration over the last seven days, with totals by source and spending for the same period. It shows the package's grant reason when available, then checks for a matching execution log or Magpie check-in record. Rows that cannot be matched show 「来源未确认」 (source unconfirmed). Coverage of the grant-reason field still needs live-account verification.
-- Deductions (「扣分明细」): in the detail's right column, beside the credit history, the week's 50 most recent requests that cost credit, one row each: when, how much (to two decimals), the model and the client that sent it. Ten show; the rest open under 「再显示」. Above them, how many requests were charged and how many were free; older requests count only in the totals. An enterprise's allowance is shared by the team and its request list holds only this login's requests, so for enterprise accounts this column lists the team's daily totals from the enterprise daily usage endpoint (they add up to the total), with this login's request detail folded underneath.
-- Model limits (「模型限额」): besides credits, each model has its own 24-hour allowance on each account; once it's spent, the model is refused (HTTP 429, code 6004) until it resets, and a model short of capacity answers 429 too (code 6020) with a queue position. WorkBuddy doesn't say how much is left, and the board sends no probe. Only a real chat that is refused is recorded: 6004 keeps its reset time, 6020 its queue position and wait, and spent models show under 「近 7 天用量」 in the account's detail and in the yellow 「模型额度用完」 box at the bottom. China's plugin sends no chat request of its own, so China's accounts show no such records; WorkBuddy AI's web conversation records one only when it is actually refused.
-- Model queues (「排队中」): when a model is short of capacity, WorkBuddy queues requests and answers HTTP 429 too (code 6020, with the queue position and estimated wait), **enterprise accounts included**, however much allowance they have. Tools like Magpie retry a few times and then report `exceeded retry limit, last status: 429`. The check above records the position and when the wait should be over, shows it in the account's detail and the same yellow box, and drops it once that time passes; a queued model is checked again at most hourly.
-- An account's 「成长」 (energy, Buddies, the next streak tier and open tasks) starts folded; click 「任务 x/y ▾」 to open it.
-- An account's 「活动」 lists the running campaigns, each task's progress and claim state; manual items such as inviting friends are listed in the Tasks tab only and no longer raise reminders.
-- A package is counted grant by grant: every reward in 「国内运营裂变包」, for one, is its own grant with its own 20 days, so only the grants about to lapse turn red and count as lapsing, never the whole package.
-- List (「列表」): a group each for China and WorkBuddy AI. A group's header gives its credits and accounts (separate wallets, never added together), and under it a line of what its accounts need today: today's progress, growth tasks and 7-day use for China, the daily reward and 7-day use for WorkBuddy AI. The lower group's header has 「移到上面」 (move up), which swaps the two and is remembered, the rings and widgets following. Personal logins come first and an enterprise login last inside a group. One row per account, folded until opened (credit bar coloured by each grant's own lapse date, today's rings, a 7-day trend); open a row for packages, usage, tasks and travel.
-- Tasks (「任务」): growth tasks and progress for domestic personal accounts only, filterable by claimable / automatic / manual / locked and groupable by account or status. Account cards sit in natural-height columns and short cards keep their own height; account cards and the four extras each have a six-dot grip: drag or use Alt+arrows to reorder, remembered on this machine; status grouping still groups by status. Four cards sit below in two rows — travel + Buddy blind boxes, official compensation + campaigns — while each keeps its content height, so a short card does not stretch. Compensation can be claimed per account or in bulk, blind boxes opened per account or in bulk, travel sent and claimed with one action, and campaigns run or claimed by state. Enterprise and WorkBuddy AI accounts never enter this view.
-- Rings (「圆环」): one account at a time with today's rings (activity, travel, tasks), a credit lapse timeline and usage.
-- Widgets (「小组件」): one fact per tile across all accounts: next lapse, today, Buddies, energy, personal credits (a subtotal each for China and WorkBuddy AI, with enterprise allowances listed separately), 7-day usage, growth tasks.
-- Models (「模型」): switch between China (「国内版」) and WorkBuddy AI (「国际版」); with an enterprise account added, an 「企业」 tab comes first with the models that account may use (set by its enterprise, not the personal list), and without one it isn't shown. Models the current plan can use come first; WorkBuddy AI's Pro-only models are dimmed below. Each row has the model id (click to copy), reasoning levels, context and multiplier. Reasoning levels are each model's native ones from WorkBuddy's config (such as `low high max`), the default in bold, 「可关」 when thinking can be switched off, 「固定」 when there is only one, 「—」 when none are listed; multipliers of 3 or more are orange, and limited-time free, night discounts and subscriber priority follow WorkBuddy's own labels. WorkBuddy AI needs a `workbuddy-ai` sign-in in Magpie.
-- At the bottom, today's schedule (「今日定时」) shows each slot's result and the next run; below it, the alert footer groups spent models (with their reset time) and queued models (with the estimated wait), logins about to expire, failed reads, credits lapsing within 2 days and network/proxy pauses by reason. Everything else (credit lapsing within 10 days, enterprise allowance resets, check-in notes) stays folded under 「其他提醒」 until opened.
-- Each personal account shows today's daily check-in: for China, Magpie's record (checked in +100, not yet, needs the WorkBuddy client…), with a switched-off or missed check-in in the alerts; for WorkBuddy AI, this plugin's own result, or 「暂无签到活动」 (no campaign) while none runs. Enterprise accounts have no daily check-in credits and show none. WorkBuddy AI accounts are tagged 「国际版」 in the list.
-- Enterprise accounts show their monthly allowance, usage and reset time.
-
-</details>
-
-<details>
-<summary><b>Expand: entry points and settings</b></summary>
-
-**Entry points**
-
-- Magpie's sidebar page: 「添加账号」 (add account, China or WorkBuddy AI) at the top right; 「刷新」 (refresh) beside the update time; five tabs across the top by default — Board (with the account count), Accounts, Tasks (a badge only for compensation requiring manual action, failed compensation reads or unsupported tasks), Schedule &amp; Logs and Models; the fixed button to the left of the title switches between top tabs and a left sidebar and remembers the choice. Drag the divider to resize the sidebar in wide windows. Narrow windows show an icon rail. The view switcher (List / Rings / Widgets) is on the same line as the realm filter; in the board's 「今日定时」, a China row and a WorkBuddy AI row, each with a switch that pauses or starts that build's schedule (it only stops schedules; manual runs still work); and 「立即执行」 (run now) beside the run history, with 「执行所有任务」 (everything), 「猫猫旅行」 (Buddy travel), 「成长任务」 (growth tasks) and 「补领奖励」 (claim only). 「设置」 at the top right opens a settings view of its own in four groups: 「定时」, each build's times and the random offset; 「国际版」, the web conversation's switch and model; 「任务」, whether skill sharing and travel-time blind-box opening run automatically; 「网络与时区」, the time zone, the default HTTP proxy and the WorkBuddy AI proxy (for setups such as Docker where the local panel can't be reached; leaving the default empty makes China go direct, and WorkBuddy AI follows it unless set to `direct` or its own address).
-- The local panel at http://127.0.0.1:3439 (local access only, so not from outside when Magpie runs in Docker): the same board, plus running selected accounts, the last 100 runs, and editing schedules and both proxies.
-- Add account (「添加账号」) offers China or WorkBuddy AI and runs Magpie's own `magpie plugin login workbuddy` or `magpie plugin login workbuddy-ai`, which opens the official browser sign-in; signing in to an account again replaces its old login. This plugin never touches login tokens and offers no account file import or export.
-
-</details>
-
-> [!IMPORTANT]
-> Growth tasks include simulated client event reports; they don't mean the action was really done in the desktop client. Whether they count, pay out, or get an account restricted is up to WorkBuddy, and not every task can be completed. Following the official account and real donations need you and are no longer listed (nor counted in the task total); sharing a skill creates a real share channel and reports the link-copy actions, so it runs automatically; once a task is reached it is still claimed. Besides the ordinary tasks, three kinds are reported as another client would: the desktop client's (a desktop chat, entering a Buddy app, 企鹅教师助手), the web app's (reading the library's introduction) and the mini program's own (`Sequential_Tasks_1` to `7`: chats, an expert, GLM5.2, a scheduled task, ten chats and the PC playbook task). The mini program's tasks unlock one a day, each after the one before it is claimed, and its chats are reported at a person's pace (about 45 seconds apart, since a burst is rolled back). Their event shapes follow [workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel) and [WorkBuddy-Daily](https://github.com/L0NE-6/WorkBuddy-Daily).
 
 ## Default schedule
 
-All times are `Asia/Shanghai` and can be changed in the panel; clearing a kind's times turns that kind off.
+Times use `Asia/Shanghai`. Edit each version's times in Settings; clearing a kind's slots disables that kind.
 
 | Time | China | WorkBuddy AI |
 | --- | --- | --- |
@@ -208,22 +278,43 @@ All times are `Asia/Shanghai` and can be changed in the panel; clearing a kind's
 | 10:01, 22:11 | Claim-only sweep | — |
 | 10:31 | — | Web conversation (daily activity reward, once a day) |
 
-Every default minute is 01, with ten minutes between the slots that need their own place, so scheduled work does not reach WorkBuddy on the hour. Each build's times are edited in 「设置」 and paused with the switch on its row in 「今日定时」. On upgrade to 0.7.2 a config still holding the old untouched defaults moves to these times; a custom schedule is kept as it is. WorkBuddy AI's growth-task slot is gone from 0.5.9 (its tasks count only real use of its client, and the slot never claimed anything); a saved one is ignored. Upgrading from 0.5.6 or earlier, WorkBuddy AI keeps the times it had, with a missing web conversation slot filled at 10:31; if 「国际版任务」 was off, its schedule stays paused. A saved config without sweep times gets the default 10:01 and 22:11.
+- Pause each version separately in Today's Schedule. Magpie handles China's check-in; when an international check-in campaign is active, the WorkBuddy AI activity slot checks in.
+- Slots run up to 10 minutes early or late by default. Today's Schedule shows the actual time. Set the random offset to 0 to disable it.
+- Scheduled retries are at least 15 minutes apart, with at most three attempts per slot.
 
-Each slot runs at a random moment around its set time (±10 minutes by default, different every day and on every computer; the night-owl task stays inside 23:00–08:00), and a scheduled run waits a random 5–45 seconds between accounts, so not everyone reaches WorkBuddy on the hour. Change it with 「随机错开」 under the panel's settings; 0 turns it off. The board's 「今日定时」 shows when each slot runs today. Schedules are checked every 30 seconds. A failure is retried at least 15 minutes later, up to 3 tries per slot. When WorkBuddy rate-limits (HTTP 429) the run first waits and retries; a run still limited is marked "retry later" (「稍后重试」) rather than failed, and is retried on the same spacing. Each kind takes up to 24 times. Streak activity doesn't repeat once it succeeded that day; travel and task rewards are checked against WorkBuddy's state. China's daily check-in follows Magpie's own setting and is not one of this plugin's schedules; WorkBuddy AI's check-in runs in the activity, travel and streak-rewards slots. With "open a blind box after travel" on, opening runs after a trip's reward and before departure inside the travel slot; it adds no slot of its own.
+<details>
+<summary>Execution details and schedule migration</summary>
+
+**Execution details**
+
+| Area | Rule |
+| --- | --- |
+| Checks and spacing | Checks every 30 seconds, up to 24 times per kind. Scheduled accounts are spaced 5–45 seconds apart. The night-owl task stays within 23:00–08:00. |
+| Rate limits and repeats | Waits and retries HTTP 429 during the run; persistent limits show “retry later,” not failed. Successful streak activity is not repeated that day. Travel and task rewards are checked against WorkBuddy's state. |
+| Blind boxes after travel | If enabled, opens after claiming travel and before departure without adding another slot. |
+
+**Schedule migration**
+
+| Version | What changes |
+| --- | --- |
+| 0.7.2 defaults | Only untouched old defaults move to the times above; custom slots stay unchanged. |
+| 0.5.6 or earlier | WorkBuddy AI keeps its times. Adds 10:31 if the web slot is missing; a previously disabled international schedule stays paused. |
+| 0.5.9 and missing sweep slots | Ignores obsolete WorkBuddy AI growth slots. Adds 10:01 and 22:11 when claim-only slots are missing. |
+
+</details>
 
 ## Tools and terminal
 
-The plugin's card under Plugins → Installed shows its tool names and lets you copy Magpie's MCP address.
+The card under Plugins → Installed shows the tools and the Magpie MCP address.
 
 | Tool | Use |
 | --- | --- |
 | `status` | China accounts, runs and schedule settings |
 | `run` | Start an action; `all` covers activity, growth tasks, travel and streak rewards |
-| `schedules` | Show or switch schedules (`enabled` for China, `intlEnabled` for WorkBuddy AI); times are edited in the web panel |
-| `board` | The account board: credits, package lapse dates, 7-day usage, travel and streak |
+| `schedules` | Show or switch schedules (`enabled` for China, `intlEnabled` for WorkBuddy AI); edit times in the web panel |
+| `board` | Credit balances, package expiry, 7-day usage, travel and streak |
 
-In the source or install folder you can also use the terminal:
+You can also run these commands from the source or installation folder:
 
 ```sh
 bun cli.mjs status
@@ -233,80 +324,180 @@ bun cli.mjs pause
 bun cli.mjs resume
 ```
 
-`run` also takes `activity`, `tasks`, `sweep`, `task`, `travel`, `buddy`, `bonus`, `compensation`, `night` and `inspect`. `buddy` reads the quota and opens the smaller of "affordable" and the single-open cap, spending growth energy; `compensation` checks the campaign status and claims only an active, unclaimed grant with credit. `task` also needs the task code (`{"actions":["task"],"accounts":["cn:…"],"task":"chat_5"}`) and runs just that task. Each returns a run id; check the result in the panel or with `status`.
+<details>
+<summary>More actions and arguments</summary>
+
+| Action | Command or argument |
+| --- | --- |
+| Activity and growth | `activity`, `tasks` |
+| Claim-only, travel and rewards | `sweep`, `travel`, `bonus` |
+| Night-owl and inspection | `night`, `inspect` |
+| Single task | `task` needs a task code, e.g. `{"actions":["task"],"accounts":["cn:…"],"task":"chat_5"}`. |
+| Buddy blind boxes | `buddy` opens the smaller of the available quota and single-open cap; it spends growth energy. |
+| Official compensation | `compensation` reads first and claims only active, unclaimed compensation with quota. |
+
+Use the returned run ID to check the result in the panel or through `status`.
+
+</details>
 
 <details>
-<summary><b>How the Magpie page works</b></summary>
+<summary>How the Magpie page works</summary>
 
-Magpie runs plugin pages in a sandbox with no network, so the page reads `page/data.js`, which the service writes (balances, usage and travel only, no credentials), and reloads it every 15 seconds; after a plugin update an open page loads the new version by itself. The page's buttons submit requests by saving them into the plugin's options, which makes Magpie reload the plugin once and hand the request to the service; each request runs once, and one older than 10 minutes is refused. The page says so when its data is more than 25 minutes old.
+| Area | Details |
+| --- | --- |
+| Snapshot and refresh | The sandbox cannot access the network. It reloads the service-written `page/data.js` every 15 seconds. The snapshot has no credentials; a warning appears when it is over 25 minutes old. |
+| Requests | Controls submit requests through plugin options. Magpie reloads the plugin to pass them to the service; each runs once and requests older than 10 minutes are rejected. |
+| Plugin updates | The open page loads the new version after an update. |
 
 </details>
 
 ## Queue, run history and logs
 
-The “定时与记录” page keeps Today's Schedule at the top. Below it, switch between Queue, Run History and Logs, with Task Settings on the right; narrow windows stack the panels. Account cards show running, queued, paused and finished states. Progress counts the actions completed in the current round.
+Schedule & Logs has the queue, run history and logs. The queue shows running, queued, paused and completed work by account; panels stack in narrow windows.
 
 <img src="docs/images/queue.png" alt="Schedule page: queue and task settings" width="880">
 
-- **Account concurrency**: `concurrency` accepts 1–3, default 1, across all jobs. Actions within each account remain sequential. Lowering the limit lets active accounts finish before applying the new limit.
-- **Retries**: expand a record for actual request times, HTTP statuses and waits. Without `Retry-After`, HTTP 429 waits 5 seconds, then 20 seconds, for at most three requests. Scheduled retries wait at least 15 minutes, for at most three rounds. Manual Retry targets only failed accounts/actions. Stop also cancels queued work.
-- **Log channels**: Task, Conversation and System, with a failure filter. Conversation logs contain outcomes, never prompts. Older records remain readable; missing historical retry details are never invented.
-- **Cache**: `tasksCacheTtl` defaults to 20 seconds (0–120), isolated by account, site and client channel and invalidated after accepts, reports or claims. `progressCacheHours` defaults to 6 hours (0–24); only failed reads use this persisted display snapshot, marked with its timestamp and the read error. Execution never uses that snapshot. Set either to 0 to disable it.
-- **Accounts & health**: switch between all accounts, China personal, WorkBuddy AI personal, enterprise, and abnormal accounts. Each filter shows a count, and each account name has its type underneath. The abnormal filter includes paused accounts. A full-width three-column table shows the account, health and next schedule, and pause controls; last success, consecutive failures and request cooldown sit under health. Expand an account for diagnostics, its recent failure retry chain and a direct failed-operation retry. Each account can pause or resume tasks. Selection raises exactly three equal-width actions in one row: Refresh balance, Pause account tasks and Clear selection. Check-in, growth and travel stay on the board, and Magpie still owns sign-in and renewal.
+- **Concurrency:** One account at a time by default, up to three. Actions for the same account stay sequential.
+- **Retry and stop:** Expand a record for request time, status and wait. Retry only re-runs failed accounts and actions; Stop also clears queued work.
+- **Logs:** Filter task, conversation or system logs for failures. Conversation logs record outcomes, not prompts.
 
-The Tasks page's compensation panel supports individual and bulk claims, always queries first, marks deadlines within 48 hours red and adds a footer reminder. Query failures remain separate from “no compensation.” “Run all” and the Buddy panel's “Open all” use primary buttons; the claim-only sweep stays secondary. When no boxes are available the header stays as a disabled “Open all” without a number and each row shows a disabled “Open blind box” and “no boxes to open”; when nothing is claimable the bulk and per-account claim buttons stay visible but disabled, while failed rows keep “Re-query”. The Buddy panel shows available boxes per account; manual opening spends energy. `buddyAuto` is off by default. When enabled, idle/returned trips open boxes, re-read travel state and then depart. China's read-only check-in comparison uses the newer same-day observation from upstream or Magpie; yesterday's or undated snapshots cannot count as today's check-in. Buddy check-in and growth-plan streaks are shown separately.
+<details>
+<summary>Queue, account health and task details</summary>
 
-The compensation, blind-box, dynamic-expert and check-in protocols still **need live-account verification**. No verified fields for the check-in campaign's start/end dates are available yet; the UI shows its open/closed status and check-in streak without inventing a date range.
+| Area | Details |
+| --- | --- |
+| Changing concurrency | Limit covers all batches. Lowering it lets active accounts finish before the new limit is applied. |
+| Rate-limit retries | Without `Retry-After`, HTTP 429 waits 5 seconds then 20 seconds, up to three requests. See [Default schedule](#default-schedule) for scheduled retries. Missing older retry details are not invented. |
+
+**Accounts & health**
+
+| Area | Details |
+| --- | --- |
+| Filters | Counts for all accounts, China personal, WorkBuddy AI personal, enterprise and abnormal. Paused accounts are included under abnormal. Type is shown under the account name. |
+| Health | Three columns show the account, health and next schedule, and pause controls. Health shows last success, consecutive failures and cooldown. |
+| Individual actions | Expand for diagnostics and the recent retry chain; pause or resume tasks for one account. |
+| Batch actions | Three equal-width buttons: Refresh balance, Pause account tasks and Clear selection. |
+| Other account features | Check-in, growth and travel stay on the board; sign-in and renewal belong to Magpie. |
+
+**Tasks and check-in**
+
+| Area | Details |
+| --- | --- |
+| Official compensation | Queries before individual or bulk claiming; warns at 48 hours remaining and in board alerts. A failed query is reported separately. |
+| Main actions | Run all and Open all are primary; Claim pending rewards remains secondary. |
+| No boxes | Disabled Open all has no number, and a disabled Open blind box appears for each row. Counts appear only when boxes are available. |
+| Nothing to claim | Claim all and Claim stay visible but disabled. Failed status reads still offer Re-query. |
+| Opening boxes | Manual opening spends energy. `buddyAuto` is off by default. When enabled, it opens while idle or after claiming a travel reward, then checks travel state again before departure. |
+| China check-in | Reads the newer same-day record from upstream or Magpie; neither yesterday's nor undated data counts. Buddy check-in and growth-plan streaks are shown separately. |
+
+Compensation, blind-box, dynamic-expert and check-in protocol changes still **need live-account verification**. The Buddy check-in campaign shows its official status and streak, not an inferred date range.
+
+</details>
 
 ## Settings and data
 
 | Location | Contents |
 | --- | --- |
-| `~/.config/workbuddy-plus/config.json` | China's schedule switch and times (`enabled`, `schedules`), WorkBuddy AI's (`intlEnabled`, `intlSchedules`), the random offset in minutes (`spread`), account switches (`disabledAccounts`), accounts whose tasks are paused (`pausedAccounts`; the board keeps updating), WorkBuddy AI's daily web conversation and its model (`intlWeb`, `intlWebModel`; `auto` picks a free one), automatic skill sharing (`skillShare`), the campaign App conversation (`campaignApp`, off by default), travel-time blind-box opening (`buddyAuto`, off by default) account concurrency (`concurrency`), task-list and display-progress cache (`tasksCacheTtl`, `progressCacheHours`) and HTTP proxy (`proxy` is the default; `intlProxy` is WorkBuddy AI's; empty follows the default, `direct` goes without one) |
-| `~/.config/workbuddy-plus/state.json` | Run history, de-duplication state and paused tasks |
+| `~/.config/workbuddy-plus/config.json` | Schedule, account, task and network settings |
+| `~/.config/workbuddy-plus/state.json` | Run history, de-duplication and paused tasks |
 | `~/.config/workbuddy-plus/service.log` | Service log |
-| `page/data.js` in the plugin folder | The board snapshot for Magpie's page, rewritten by the service |
-| `~/Library/LaunchAgents/io.github.sabercomo.magpie-workbuddy-plus.plist` | macOS background start (optional install) |
+| `page/data.js` in the plugin | Board snapshot for Magpie, updated by the service |
+| `~/Library/LaunchAgents/io.github.sabercomo.magpie-workbuddy-plus.plist` | Optional macOS background launch |
 
-When started by Magpie, the plugin reads `plugin-auth.json` from Magpie's active data directory, including portable and relocated installations. Standalone mode defaults to `~/.config/magpie`, honors `XDG_CONFIG_HOME`, and supports `WORKBUDDY_PLUS_MAGPIE_DIR` as an override; `WORKBUDDY_PLUS_DIR` sets this plugin's data folder. If Add account still cannot find Magpie on Windows, sign in from Magpie's Providers page or add the Magpie install folder to PATH and restart Magpie.
-
-**Port**: the service listens on `127.0.0.1:3439`. When it runs from Magpie, change it with the plugin option:
+**Port:** Defaults to local-only `127.0.0.1:3439`. In Magpie, find the name with `magpie plugin list`, then change the port:
 
 ```sh
 magpie plugin options <plugin name> '{"port":4389}'
 ```
 
-The plugin name is the one `magpie plugin list` shows. When you start the service without Magpie, use the `WORKBUDDY_PLUS_PORT` environment variable; the macOS background install reads it when you run `bun install.mjs`, so to change the port later, install again with the new value and keep the plugin option on the same port. A port taken by another program or reserved by the system doesn't make the service wait: it writes the reason and exits. Only when a WorkBuddy Plus is already running on that port does a new service wait to take over.
+- Standalone runs use `WORKBUDDY_PLUS_PORT`. For the macOS background service, reinstall with the new value and set the Magpie plugin to the same port.
+- A reserved port or one held by another program is logged and the service exits. It waits for handoff only if WorkBuddy Plus already holds that port.
 
 <details>
-<summary><b>What the board reads</b></summary>
+<summary>Configuration keys and data directories</summary>
 
-The board only reads `get-user-resource` (credit packages; `get-enterprise-user-usage` for an enterprise account's monthly allowance), `get-user-request-usage` (official usage: credits, requests and models, plus the time, credit, model and client of the 50 most recent charged requests as the deductions list; request contents are not kept), the growth center's tasks, energy, Buddy collection and blind-box quota (`buddy/quota`), draw count, travel and streak state, and the official compensation status (`compensation-status`). It claims nothing. It sends no probe; only WorkBuddy AI's daily web conversation is a real chat (see above), carrying none of your conversations. Enterprise accounts show only their allowance and usage. China's daily check-in result is read from Magpie's own `plugin-checkin.json` and its switch, and `checkin-activity-status` is read only to verify it; this plugin never calls China's check-in endpoint. For WorkBuddy AI it reads `checkin-activity-status` and calls `daily-checkin` when a campaign runs and today isn't claimed yet.
+| Setting | Keys |
+| --- | --- |
+| Schedules | `enabled` and `schedules` (China), `intlEnabled` and `intlSchedules` (WorkBuddy AI), `spread` (random offset in minutes) |
+| Accounts | `disabledAccounts`, `pausedAccounts` (pauses tasks, keeps the board updating) |
+| WorkBuddy AI web chat | `intlWeb`, `intlWebModel` (`auto` prefers a free model) |
+| Automatic tasks | `skillShare`, `campaignApp`, `buddyAuto`; campaign App chat and automatic box opening are off by default |
+| Concurrency and caching | `concurrency`, `tasksCacheTtl`, `progressCacheHours` |
+| Network | `proxy`, `intlProxy` |
 
-The Models view reads both builds' `/v3/config` (the WorkBuddy client's own model config: models, multipliers, the Pro Only and subscriber-priority tiers, promotions) and `get-user-resource-summary` (the account's plan). It calls no model and spends no credits. The China list is read with the first personal account, the enterprise list with the first enterprise account, the WorkBuddy AI list only with the `workbuddy-ai` account signed in to Magpie.
+| Area | Details |
+| --- | --- |
+| Task list cache | `tasksCacheTtl`: 20 seconds by default (0–120), separated by account, site and client. Accepting, reporting or claiming invalidates it. |
+| Progress cache | `progressCacheHours`: 6 hours by default (0–24). Used only to display a failed read with its time and error; never used to execute tasks. Set either cache to 0 to disable it. |
+| Magpie launch | Reads `plugin-auth.json` from Magpie's active data directory, including portable and relocated installations. |
+| Standalone launch | Defaults to `~/.config/magpie` and follows `XDG_CONFIG_HOME`. Override it with `WORKBUDDY_PLUS_MAGPIE_DIR`; set this plugin's directory with `WORKBUDDY_PLUS_DIR`. |
+| Windows sign-in | If Add account cannot find Magpie, sign in from Providers or put the Magpie installation directory on PATH and restart Magpie. |
+| Sign-in and renewal | Magpie owns both. Sign-in state is read-only; keep the Magpie gateway running if you rely on schedules. |
+| Old renewal slots | Upgrades remove renewal slots for both versions; other slots stay as set. |
+| Storage and privacy | Magpie storage changes may require an update here. Released source does not include personal account files, settings or run history. |
 
-The plugin reads the sign-ins saved by Magpie. Magpie handles sign-in and renewal. Keep the Magpie gateway running when you rely on scheduled tasks. The upgrade removes the old renewal times for both builds and preserves other schedule times. A change in Magpie's storage format may need an update here. Released source contains no personal account files, settings or run history.
+</details>
 
-The service listens on `127.0.0.1` only. A default HTTP proxy and a WorkBuddy AI proxy can be set in the panel; proxied requests need Bun. Node.js 22+ can run the tests, or the service without a proxy. The default proxy serves China and left empty means China goes direct; WorkBuddy AI follows it when its own field is empty, `direct` means no proxy for WorkBuddy AI, and an address applies to WorkBuddy AI only. If it reports 「代理 … 连不上，检查代理设置或清空代理」 (the proxy cannot be reached), check that the address and port are listening; if a direct connection works, clear that proxy, save and refresh. If the proxy reports `503 Service Unavailable`, check whether it can reach the WorkBuddy hostname in the error. In Docker or on a NAS, the proxy must be reachable from the environment running Magpie. The service launched by Magpie or the macOS installer ignores inherited `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY`. When starting `server.mjs` manually on Bun older than 1.4.3, unset those variables, including lowercase variants, before launch.
+<details>
+<summary>Proxy settings and troubleshooting</summary>
+
+| Area | Details |
+| --- | --- |
+| Proxy address | Default HTTP proxy applies to China; empty means direct. WorkBuddy AI inherits it if blank, goes direct with `direct`, or uses its own address. |
+| Runtime | Proxied requests need Bun. Node.js 22+ can run tests or a service without a proxy. |
+| Environment variables | Magpie and the macOS installer isolate `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY`. On Bun older than 1.4.3, unset all variants, including lowercase, before a manual launch. |
+| Connection error | Check that the address and port are listening. If direct works, clear the relevant proxy, save and refresh. |
+| 503 or container deployment | For `503 Service Unavailable`, check access to the hostname in the error. Docker and NAS deployments must reach the proxy from Magpie's own environment. |
+
+</details>
+
+<details>
+<summary>What the board reads</summary>
+
+| Data | Source and boundary |
+| --- | --- |
+| Personal credits and enterprise allowance | `get-user-resource` for grants; `get-enterprise-user-usage` and `get-user-daily-usage` for enterprise monthly allowance and daily usage. |
+| Request usage | `get-user-request-usage` provides credit, counts and models. Only the time, credits, model and client of the most recent 50 charged requests are kept, not request contents. |
+| Growth Center and compensation | Reads tasks, energy, Buddy collection, box quota (`buddy/quota`), draws, travel, streak and `compensation-status`. The board is read-only and does not claim. |
+| China check-in | Reads Magpie's `plugin-checkin.json` and switch. Reads `checkin-activity-status` for verification; never calls China's check-in endpoint. |
+| WorkBuddy AI check-in | Reads `checkin-activity-status`. The check-in job calls `daily-checkin` only if a campaign runs and the day isn't already claimed. |
+| Models and plan | Reads `/v3/config` and `get-user-resource-summary` for models, multipliers, subscription tiers and offers. No model calls, no credit spent. |
+| Account used for model lookups | The first China personal account, the first enterprise account, or a signed-in `workbuddy-ai` account, respectively. |
+| Web conversation and probes | No active quota probes. The daily WorkBuddy AI web conversation sends one real chat and none of your conversation content. |
 
 </details>
 
 ## Updating and stopping
 
-v0.8.0 fixes proxy credentials appearing in local status and configuration responses. The panel, Magpie tools, and CLI now show masked proxy addresses. The background service merges changed settings into the latest configuration, preserving settings saved elsewhere and stored proxy credentials. You can still replace a proxy, leave the international proxy blank to inherit the default, or set it to `direct`.
+**Installed through Magpie:** Run `magpie plugin update`.
 
-Click anywhere on the board's reminder summary to expand or collapse it, just like the model quota summary. The board keeps reminders expanded when it refreshes.
-
-Installed from Magpie: run `magpie plugin update`. If you installed a pinned version (`magpie plugin list` shows a suffix like `#v0.4.0`), remove it with `magpie plugin rm` and `magpie plugin add` the unpinned address again; plugin options such as the port need setting again. From 0.5.5 on, when Magpie loads the updated plugin it finds the older service, asks it to exit and starts the new version, so no restart is needed (with a job running it waits for it, asking again each minute). Coming from 0.5.4 or earlier, the old service doesn't know that request yet: end it one last time (or log out, restart, or restart the container).
-
-The macOS background install: update the source folder and install again; settings and history are kept.
+**macOS background service:** Update in the source folder and reinstall. Settings and history stay in place.
 
 ```sh
 git pull --ff-only
 bun install.mjs
 ```
 
-Turning the plugin off in Magpie only turns off its tools. **To stop automatic tasks, switch off both the China and the WorkBuddy AI rows in 「今日定时」 first**, or run `bun cli.mjs pause` (pauses both).
+Turning off the plugin in Magpie only disables its tools. **To stop automatic tasks, turn off both Today's Schedule switches first**, or run `bun cli.mjs pause` to pause both.
+
+<details>
+<summary>Pinned versions, older upgrades and v0.8.0 changes</summary>
+
+| Case | What to do |
+| --- | --- |
+| Pinned install | If `magpie plugin list` shows a suffix such as `#v0.4.0`, remove it with `magpie plugin rm` and add the unpinned address. Set plugin options such as the port again. |
+| From 0.5.5 onward | Magpie asks the old service to hand off when loading an update. It waits until the current job finishes, retrying each minute. |
+| 0.5.4 or earlier | Stop the old service once, or log out, restart the computer or restart the container. |
+
+**v0.8.0 changes**
+
+| Area | Change |
+| --- | --- |
+| Credentials | Fixes credentials appearing in local status and config replies. The panel, Magpie tools and CLI now mask proxy addresses. |
+| Saving settings | Merges changes into the latest configuration and preserves concurrent settings and stored proxy credentials. The international proxy can still inherit when blank or bypass proxying with `direct`. |
+| Board alerts | The entire summary toggles expansion, like Model quota. The board keeps the expanded state on refresh. |
+
+</details>
 
 <details>
 <summary><b>Removing the macOS background install completely</b></summary>
@@ -316,23 +507,88 @@ launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/io.github.sabercomo
 magpie plugin rm "$HOME/Applications/Magpie-WorkBuddy-Plus"
 ```
 
-Then delete the install folder and the plist above. Settings and history in `~/.config/workbuddy-plus` can stay. If you also installed the plugin by its repository address, remove that entry from Magpie's installed list too.
+Then delete the install folder and plist. You can keep settings and history in `~/.config/workbuddy-plus`. Remove any separate repository-address installation from Magpie's plugin list.
 
 </details>
 
 ## Development
 
-No npm dependencies to install. Tests use mock accounts and a mock upstream, and never touch a personal account or a real reward endpoint.
+No npm dependencies to install. Tests use mock accounts and upstream responses and do not reach personal accounts or real reward services.
 
 ```sh
 npm test
 ```
 
-The tests cover China and WorkBuddy AI account selection, official compensation queried before claiming (no campaign/already claimed never claim, a failed query stays an error), blind-box quota and the single-open cap, travel-time blind-box opening off by default, the per-account task list, filters/grouping, account and card reordering, zero-state disabled buttons without a “0” count, travel/campaign cards and compensation/Blind-box panels on the Tasks page, personal-versus-enterprise credit separation, manual todo counts, pill-switch persistence, the three-column Accounts & health table, WorkBuddy AI personal and enterprise filters, diagnostic retry chains and three equal-width batch actions, dynamic expert `jump_url` parsing, the later of upstream and Magpie check-in records, each build's own schedule switch and times (with settings from older versions), the claim-only sweep (accepting pending tasks, claiming reached growth-task and campaign rewards, and sending no behavior event), the task center's cross-account scan and single-task run, the event shapes and claims of mini-program `Sequential_Tasks_4` to `7`, the campaign App cloud conversation and rejection of an untrusted boxUrl, the web conversation's model choice and fallback, WorkBuddy AI tasks and check-in, credentials kept out of status replies, run-all never calling the daily check-in, growth task progress, travel rewards, package merging and lapse dates, task categories, usage paging and deductions, campaign task reads, execution and claims (only what is ready, 12304 is not a failure), the campaign App conversation off by default and the explicit opt-in, campaign status on the board and manual-item alerts, the minute-01 schedule defaults with custom times left alone, skill-share channels and their daily reuse, the automatic-share switch and single-task override, the three-day format-failure pause and its manual release, network failures stopping a round, consecutive network failures pausing scheduled runs until a manual success, the daily pause after an upstream restriction, model limits and queues (reset parsing, queue detection and display from real 429s), the service handoff after an update, settings saved from Magpie's page, WorkBuddy AI's web conversation and daily reward, board snapshots without credentials, page request de-duplication, rate-limit retries, the add-account flow, read-only sign-ins and migration of old renewal slots, schedule de-duplication, the panel and the local HTTP boundary, the model catalog, and the service port.
+Tests cover accounts and schedules, tasks and claims, the board and models, and security and failure handling.
 
-The README screenshots come from `sh docs/screenshots.sh`: `docs/demo-data.mjs` writes made-up accounts and headless Chrome renders the page in Magpie's theme.
+<details>
+<summary>Full test coverage</summary>
 
-The repository carries the `magpie-plugin` GitHub topic so Magpie's unofficial Discover section can find it; that doesn't mean Magpie's maintainers reviewed or recommend it.
+**Accounts, schedules and migration**
+
+| Area | Coverage |
+| --- | --- |
+| Account selection | China and WorkBuddy AI account reads |
+| Schedule settings | Independent switches and slots, including older config migration<br>Minute-01 defaults without overwriting custom times |
+| Service handoff | Service replacement after an update |
+| Sign-in and data | Add-account flow<br>Read-only account files and migration of old renewal slots |
+| Schedule de-duplication | Scheduled work does not run twice |
+
+**Tasks, campaigns and claims**
+
+| Area | Coverage |
+| --- | --- |
+| Claim-only sweep | Accepts pending tasks and claims reached growth and campaign rewards without sending behavior events |
+| Mini-program | Event formats and rewards for `Sequential_Tasks_4` to `7` |
+| App and web sessions | Campaign App cloud chat and untrusted box URL rejection<br>WorkBuddy AI web model choice and fallback |
+| International check-in | WorkBuddy AI tasks and check-in |
+| Client channels | Desktop, web and mini-program event reporting and claims, including ordered unlocks and temporarily unavailable acceptance |
+| Campaigns | Reads, runs and claims reached tasks only; 12304 is not a failure<br>Campaign App chat defaults off and requires opt-in |
+| Official compensation | Reads before claiming; no campaign and already-claimed states never claim, and read failures remain errors |
+| Buddy blind boxes | Quota and per-open cap<br>Opening after travel defaults off |
+| Expert tasks | Dynamic expert `jump_url` parsing |
+| Check-in records | Later of the upstream and Magpie records |
+| Skill sharing | Share channels and daily reuse<br>Automatic-share switch and single-task execution |
+| Task availability | Unsupported tasks are hidden |
+| Run all | Never calls China's daily check-in |
+| Growth and travel | Growth progress<br>Travel rewards<br>Growth task categories |
+| WorkBuddy AI reward | Web conversation and daily activity reward |
+
+**Board, interface and models**
+
+| Area | Coverage |
+| --- | --- |
+| Board and task list | Account board<br>Per-account task list |
+| List operations | Filters and grouping<br>Reordering accounts and the four action cards |
+| Empty states | Unavailable boxes or compensation disable buttons without a zero count |
+| Work cards | Buddy travel, campaigns, compensation and blind boxes |
+| Credit totals and to-dos | Personal totals separate from enterprise allowances<br>Manual to-do counts |
+| Switches | Pill-switch settings persist |
+| Accounts & health | Three-column table<br>WorkBuddy AI personal and enterprise filters |
+| Diagnostics and batch actions | Retry chains and three equal-width batch buttons |
+| Navigation | Horizontal tabs and sidebar switch |
+| Campaign alerts | Board campaign status and manual-item alerts |
+| Credits and usage | Package merging and expiry dates<br>Usage paging and charge details |
+| Model quota | 429 reset parsing, queue detection and display |
+| Saving in Magpie | Saving settings and showing save failures on the Magpie page |
+| Panel and catalog | Panel operations<br>Model catalog including reasoning levels and the enterprise list |
+
+**Security, failures and local service**
+
+| Area | Coverage |
+| --- | --- |
+| Format errors | Three-day pause and manual recovery |
+| Network errors | Transport failures stop the current round<br>Consecutive failures pause schedules and allow manual recovery |
+| Account restrictions | Upstream restrictions pause scheduled work for the day |
+| Credentials | Status responses contain no credentials<br>Board snapshots contain no credentials |
+| Request protection | Page request de-duplication<br>Rate-limit retries |
+| Local service | Local HTTP boundary<br>Service port |
+
+</details>
+
+Generate README screenshots with `sh docs/screenshots.sh`. `docs/demo-data.mjs` writes mock accounts and headless Chrome renders the Magpie theme.
+
+The `magpie-plugin` GitHub topic makes the repository discoverable in Magpie's unofficial catalog; it does not imply review or endorsement.
 
 ## License and credits
 
