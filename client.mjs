@@ -35,9 +35,13 @@ export class UpstreamError extends Error {
 // accepted with these codes/messages. Retrying the same account only makes it
 // worse, so the scheduler stops automatic runs for the rest of the day.
 export function isRestricted(status, payload = {}) {
-  const code = Number(payload?.code);
+  // 11140 is shared by account restrictions and model/provider refusals.
+  if (status === 429) return false;
+  const code = String(payload?.code ?? "");
   const message = String(payload?.msg || payload?.message || "");
-  return code === 11140 || /(?:11-128|unapproved channel|request illegal|account (?:is )?restricted|风控|封禁|账号受限)/i.test(message);
+  if (code === "11-128" || /(?:\b11-128\b|\bunapproved channel\b)/i.test(message)) return true;
+  if (/(?:\baccount (?:is |has been )?(?:restricted|blocked|suspended|banned)\b|账号(?:存在异常行为|受限|已被限制|已被封禁))/i.test(message)) return true;
+  return code.trim() === "11140" && /\b(?:request illegal|unusual activity)\b/i.test(message);
 }
 
 // Too many requests: the upstream turned the call away without acting on it,

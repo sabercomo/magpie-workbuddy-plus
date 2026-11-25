@@ -31,7 +31,8 @@ If you find it useful, a ⭐ Star helps others find it too.
 | **Which models you can use** | The Models view (「模型」) lists both builds' models (and an enterprise's, when an enterprise account is added) with their ids, native reasoning levels, context and credit multipliers, sets WorkBuddy AI's Pro-only models apart, and marks subscriber priority and running promotions. |
 | **WorkBuddy AI too** | With a WorkBuddy AI login in Magpie, that account is kept active daily, its streak tiers are redeemed, and it checks in whenever a campaign runs. It has its own schedule switch and times, apart from China's. |
 | **What needs you** | Credits about to lapse, enterprise allowance resets and logins about to expire, gathered at the bottom of the board; exhausted or queued models get their own model-quota card. |
-| **Add accounts** | A button opens WorkBuddy's official browser sign-in; this plugin never handles a token. |
+| **Add accounts** | Open WorkBuddy's official browser sign-in for China or WorkBuddy AI. Magpie still handles sign-in and renewal. |
+| **Account sync across devices (trial)** | In Magpie, open WorkBuddy Plus → Settings → Account sync (「账号同步」) to choose a master or follower. Share selected personal accounts through Magpie's private GitHub repository. Off by default. |
 
 ## Screenshots
 
@@ -127,7 +128,7 @@ Keep it running and start the schedules in the panel. Starting it at boot is up 
 <details>
 <summary>Full feature reference</summary>
 
-- Following the official WeChat account and making donations must be done manually. Skill sharing creates a real link and reports the copy action. Completed tasks can still be claimed automatically.
+- Following the official WeChat account and making donations must be done manually. Skill sharing creates a real channel and reports the result without sending a WeChat message. Rewards are claimed only after the service confirms completion.
 - Desktop, web and mini-program event formats follow [workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel).
 
 ```mermaid
@@ -159,7 +160,7 @@ flowchart LR
 | Mini-program tasks | `Sequential_Tasks_1` to `7` cover chats, an expert, GLM5.2, creating a scheduled task, ten chats and the PC playbook task. One unlocks per day after the previous reward is claimed. |
 | Mini-program chats | Roughly 45 seconds between reports; WorkBuddy rolls back bursts. |
 | New expert tasks | Reads the task's `jump_url` for an `expertId`, including `deeplink` and `expert_use_<slug>`. Unrecognized tasks are marked manual on the account's task card. |
-| Skill sharing | Creates a real share channel and reports the link copy. The same account reuses its channel that day. Turning off automatic sharing skips it in bulk runs; individual runs still work. |
+| Skill sharing | Creates a real share channel and reports using its channel ID. Reuses the same account's channel that day; claims only after the service confirms completion. Turning off automatic sharing skips it in bulk runs; individual runs still work. |
 | Campaigns | Reads progress for events such as Starbucks and Reporter's Day. Runs supported chat, expert, skill and desktop tasks and claims rewards once reached. Invitations are manual; ended campaigns are skipped. |
 | Campaign App chat | Runs one real cloud App chat before claiming and **may spend credits**. Off by default; scheduled and run-all jobs skip it, Tasks shows 「设置已关闭」, and other tasks still run. |
 | Manual tasks | Following the official account and donating are not shown or counted. Rewards are claimed once WorkBuddy confirms completion; following requires 24 hours according to WorkBuddy's progress. |
@@ -501,6 +502,11 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 | From 0.5.5 onward | Magpie asks the old service to hand off when loading an update. It waits until the current job finishes, retrying each minute. |
 | 0.5.4 or earlier | Stop the old service once, or log out, restart the computer or restart the container. |
 
+**v0.8.2 changes**
+
+- Skill sharing now reports using the share channel ID. An incomplete receipt triggers neither reporting nor claiming. Task credit still needs verification with a real account.
+- A model restriction or temporary rate limit does not pause an account's schedules for the day solely because its code is `11140`. Explicit account restrictions still pause them.
+
 **v0.8.1 changes**
 
 Adds Settings → Account sync, off by default. Updating does not start account sync or change schedules. To try it, follow “Share WorkBuddy accounts across devices” above. If you use the standalone WorkBuddy Sync plugin, disable it first.
@@ -608,9 +614,11 @@ The `magpie-plugin` GitHub topic makes the repository discoverable in Magpie's u
 
 ## License and credits
 
-MIT. Credit package merging and usage paging are adapted from [zseeu1/wbkit](https://github.com/zseeu1/wbkit) (MIT); reading the enterprise allowance follows Magpie's WorkBuddy plugin. Task and campaign work also references:
+MIT. Account sync reuses the encryption module from [NotoChen's Magpie WorkBuddy Sync](https://github.com/NotoChen/magpie-workbuddy-sync) and adapts its GitHub sync client, file locks and master lease logic. Thanks to NotoChen for sharing the implementation in [#20](https://github.com/sabercomo/magpie-workbuddy-plus/issues/20).
 
-- [ardeyouxipianyi/workbuddy2api-hub](https://github.com/ardeyouxipianyi/workbuddy2api-hub): growth-task codes and event shapes, travel/streak, check-in results and skill-share channels; the community fork's Buddy blind boxes, expert-task `jump_url` resolution and the later-of-two check-in rule.
+Credit package merging and usage paging are adapted from [zseeu1/wbkit](https://github.com/zseeu1/wbkit) (MIT); reading the enterprise allowance follows Magpie's WorkBuddy plugin. Task and campaign work also references:
+
+- `ardeyouxipianyi/workbuddy2api-hub`: growth-task codes and event shapes, travel/streak, check-in results and skill-share channels. The original repo is currently unavailable. [M-strange's community fork](https://github.com/M-strange/workbuddy2api-hub) informed Buddy blind boxes, expert-task `jump_url` resolution and the later-of-two check-in rule.
 - [jichie/magpie-workbuddy-tasks](https://github.com/jichie/magpie-workbuddy-tasks): the Buddy blind-box quota/open flow and its default-off schedule.
 - [misakano7545/workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel): desktop, web and mini-program report channels, the task center, claim-only sweep, and campaign and skill-share flows; official compensation status semantics from [linguo2625469/workbuddy2api-panel](https://github.com/linguo2625469/workbuddy2api-panel).
 - [L0NE-6/WorkBuddy-Daily](https://github.com/L0NE-6/WorkBuddy-Daily): the event shapes for `Sequential_Tasks_4` to `7`, and the App campaign conversation flow.

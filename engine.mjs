@@ -57,11 +57,11 @@ export async function perform(action, client, context) {
   };
   const completed = task => task.accept_status === "completed" || (task.progress?.target > 0 && task.progress.current >= task.progress.target);
   // Sharing a skill is counted only after a real share channel exists. Keep
-  // that channel for the day so a retry reports the same link, not a new one.
+  // that channel for the day so a retry reports the same receipt, not a new channel.
   const shareSkill = async task => {
     const key = `${account.id}:skill_share:${today()}`;
     let share = state.shares?.[key];
-    if (!share) {
+    if (!share?.channelId) {
       share = await createSkillShare(client, account);
       state.shares ||= {};
       state.shares[key] = share;

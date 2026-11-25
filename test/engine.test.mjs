@@ -513,7 +513,7 @@ test("a 10034 from the fallback model also pauses the web turn for the day", asy
   assert.equal(p.seen.length, 0);
 });
 
-// Sharing a skill is a real share channel plus two channel actions; the task
+// Sharing a skill uses an actual share channel; the task
 // has no progress until the channel exists. The channel is reused on a retry.
 test("skill_share creates one real share channel, reports its actions and claims", async t => {
   let accepted = false, reported = false, claimed = false, channels = 0;
@@ -525,20 +525,24 @@ test("skill_share creates one real share channel, reports its actions and claims
     }] });
     if (path === "/v2/activity/growth/tasks/accept") { accepted = true; return ok({ results: [{ task_code: "skill_share", status: "accepted" }] }); }
     if (path === "/v2/operation-platform/market/skill/list") return ok({ skills: [{ skill_id: "skill_2097350077599879168", name: "pptx" }] });
-    if (path === "/api/v2/open-platform/asset-shares/c2c/channels") { channels++; return ok({ share_code: "share-1" }); }
+    if (path === "/api/v2/open-platform/asset-shares/c2c/channels") {
+      channels++;
+      return ok({ channel_id: "channel-1", share_code: "share-1", ways: [{ share_way: "link", resource_ref: "https://example.test/share" }] });
+    }
     if (path === "/v2/report") { reported = true; return ok({}); }
     if (path === "/activity/growth/tasks/skill_share/claim") { claimed = true; return ok({ credit: 50 }); }
     if (path === "/portal/activity/config") return ok({ config: { in_period: false } });
     throw new Error("unexpected " + path);
   });
-  p.state.shares = { "cn:u1:skill_share": { shareCode: "stale", skillId: "stale", skillName: "stale" } };
+  const key = `cn:u1:skill_share:${calendar(new Date(), p.context.config.timezone).day}`;
+  p.state.shares = { [key]: { shareCode: "legacy-only", skillId: "stale", skillName: "stale" } };
   await p.run("tasks");
   const market = p.seen.find(r => r.path === "/v2/operation-platform/market/skill/list");
   const channel = p.seen.find(r => r.path === "/api/v2/open-platform/asset-shares/c2c/channels");
   const report = p.seen.find(r => r.path === "/v2/report");
   assert.deepEqual([market.host, channel.host, report.host], ["www.codebuddy.cn", "open.workbuddy.cn", "copilot.tencent.com"]);
-  assert.equal(report.body.length, 2);
-  assert.deepEqual(report.body.map(e => [e.eventCode, e.id, e.skillId]), [["skill_share_channel_action", "share-1", "skill_2097350077599879168"], ["skill_share_channel_action", "share-1", "skill_2097350077599879168"]]);
+  assert.deepEqual(report.body.map(e => [e.eventCode, e.id, e.skillId, e.action, e.panelAction, e.panelType, e.skillSource, e.entry, e.status, e.actionSuccessful]),
+    [["skill_share_channel_action", "channel-1", "skill_2097350077599879168", "wechat", "success", "mini_program_card", "market", "skill_detail", "safe", true]]);
   assert.ok(p.seen.some(r => r.path === "/activity/growth/tasks/skill_share/claim"));
   assert.equal(channels, 1);
 
@@ -554,6 +558,40 @@ test("skill_share creates one real share channel, reports its actions and claims
   p.context.task = "skill_share";
   assert.deepEqual(await p.run("task"), { task: "skill_share", outcome: "claimed" });
   assert.equal(channels, 1);
+});
+
+test("skill_share neither reports nor claims without a share channel id and link", async t => {
+  for (const payload of [
+    { share_code: "link-only", ways: [{ share_way: "link", resource_ref: "https://example.test/share" }] },
+    { share_code: "link-only", channel_id: "channel-1", ways: [{ share_way: "wxacode", resource_ref: "example-code" }] }
+  ]) {
+    const p = fixture(t, path => {
+      if (path === "/v2/activity/growth/tasks") return ok({ tasks: [{ task_code: "skill_share", accept_status: "accepted", progress: null }] });
+      if (path === "/v2/operation-platform/market/skill/list") return ok({ skills: [{ skill_id: "fixture", name: "demo" }] });
+      if (path === "/api/v2/open-platform/asset-shares/c2c/channels") return ok(payload);
+      throw new Error("unexpected " + path);
+    });
+    p.context.task = "skill_share";
+    await assert.rejects(p.run("task"), /分享渠道回执缺少/);
+    assert.equal(p.seen.filter(r => r.path.includes("asset-shares")).length, 1);
+    assert(!p.seen.some(r => r.path === "/v2/report" || r.path.endsWith("/claim")));
+    assert.deepEqual(p.state.shares || {}, {});
+  }
+});
+
+test("skill_share reuses a channel but never claims on an accepted report without upstream progress", async t => {
+  const p = fixture(t, path => {
+    if (path === "/v2/activity/growth/tasks") return ok({ tasks: [{ task_code: "skill_share", accept_status: "accepted", progress: { current: 0, target: 1 } }] });
+    if (path === "/v2/operation-platform/market/skill/list") return ok({ skills: [{ skill_id: "fixture", name: "demo" }] });
+    if (path === "/api/v2/open-platform/asset-shares/c2c/channels") return ok({ share_code: "link-only", channel_id: "channel-1", ways: [{ share_way: "link", resource_ref: "https://example.test/share" }] });
+    if (path === "/v2/report") return ok({});
+    throw new Error("unexpected " + path);
+  });
+  p.context.task = "skill_share";
+  for (let i = 0; i < 2; i++) assert.deepEqual(await p.run("task"), { task: "skill_share", outcome: "open" });
+  assert.equal(p.seen.filter(r => r.path.includes("asset-shares")).length, 1);
+  assert.deepEqual(p.seen.filter(r => r.path === "/v2/report").map(r => r.body.map(e => e.id)), [["channel-1"], ["channel-1"]]);
+  assert(!p.seen.some(r => r.path.endsWith("/claim")));
 });
 
 test("turning automatic skill sharing off leaves the task untouched in a task round", async t => {

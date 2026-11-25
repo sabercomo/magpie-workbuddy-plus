@@ -361,6 +361,8 @@ test("a rate limit is retried, then defers the slot instead of failing it", asyn
 
 test("an upstream restriction pauses that account's automatic runs for the day", async t => {
   assert.ok(isRestricted(403, { code: 11140, msg: "request illegal" }));
+  assert.ok(isRestricted(403, { code: "11140", msg: "账号存在异常行为，已被限制使用" }));
+  assert.ok(isRestricted(403, { code: 11140, msg: "Your account shows unusual activity." }));
   assert.ok(isRestricted(400, { msg: "11-128 Illegal API invocation from an unapproved channel" }));
   assert.ok(!isRestricted(403, { msg: "permission denied" }));
 
@@ -380,6 +382,33 @@ test("an upstream restriction pauses that account's automatic runs for the day",
   runner.clientOptions = { gap: 0, fetcher: async () => Response.json({ code: 0, data: { tasks: [] } }) };
   runner.submit(["tasks"], ["cn:u1"], "manual"); await settled(runner);
   assert.equal(runner.state.restricted["cn:u1"], undefined);
+});
+
+test("provider or model-only 11140 does not pause an account for the day", async t => {
+  assert.equal(isRestricted(429, { code: 11140, msg: "The model provider is rate-limiting requests." }), false);
+  assert.equal(isRestricted(403, { code: 10001, msg: "request illegal" }), false);
+  const p = fixture(t), config = p.config();
+  config.enabled = true;
+  config.schedules.tasks = ["09:10", "21:10"];
+  writeJSON(join(p.dir, "config.json"), config);
+  let denied = true, calls = 0;
+  const fetcher = async () => {
+    calls++;
+    return denied ? Response.json({ code: 11140, msg: "该模型已被限制使用，请稍后再试" }, { status: 403 }) : Response.json({ code: 0, data: { tasks: [] } });
+  };
+  const runner = new Runner(p.dir, { gap: 0, fetcher });
+  runner.tick(new Date("2026-10-29T01:10:00Z")); await settled(runner);
+  assert.equal(calls, 1);
+  const first = runner.state.jobs[0];
+  assert.equal(first.status, "failed");
+  assert.equal(runner.state.restricted?.["cn:u1"], undefined);
+  assert.doesNotMatch(first.logs.map(log => log.message).join("\n"), /暂停这个账号的自动任务/);
+  runner.state.slots["2026-10-29:tasks:09:10"].attempts = 3;
+  denied = false;
+  runner.tick(new Date("2026-10-29T13:10:00Z")); await settled(runner);
+  assert.ok(calls > 1);
+  assert.equal(runner.state.jobs[0].status, "succeeded");
+  assert.equal(runner.state.jobs[0].trigger, "schedule:tasks:21:10");
 });
 
 test("a one-task job carries its code to the engine and rejects a missing task", async t => {

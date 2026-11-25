@@ -1,7 +1,6 @@
 // The growth task "share a skill with a friend" is counted only after a real
-// share channel exists. The market list and the channel API are the same ones
-// workbuddy2api-hub uses; the events below are the channel actions the desktop
-// client reports after copying its link.
+// share channel exists. The market and channel APIs follow workbuddy2api-hub;
+// the single desktop success receipt follows WorkBuddy-Daily v3.51.
 import { channel } from "./events.mjs";
 
 const market = "https://www.codebuddy.cn";
@@ -33,16 +32,18 @@ export async function createSkillShare(client, account) {
     },
     headers
   });
+  const channelId = String(data?.channel_id || "").trim();
   const shareCode = String(data?.share_code || "").trim();
-  if (!shareCode) throw new Error("分享接口没有返回 share_code");
-  return { shareCode, skillId, skillName };
+  const link = Array.isArray(data?.ways) && data.ways.find(way => way?.share_way === "link" &&
+    typeof way.resource_ref === "string" && way.resource_ref.trim());
+  if (!channelId || !shareCode || !link) throw new Error("分享渠道回执缺少渠道编号、分享码或链接");
+  return { channelId, skillId, skillName };
 }
 
-export function skillShareEvents({ shareCode, skillId, skillName }) {
-  const common = { skillId, skillName, skillType: "market" };
-  const at = Date.now();
-  return [
-    { ...common, eventCode: "skill_share_channel_action", action: "link", panelAction: "click", panelType: "clipboard", isSuccessful: true, cost: 0, id: shareCode, actionAt: at },
-    { ...common, eventCode: "skill_share_channel_action", action: "link", panelAction: "success", panelType: "clipboard", isSuccessful: true, cost: 0, id: shareCode, actionAt: at }
-  ];
+export function skillShareEvents({ channelId, skillId, skillName }) {
+  return [{
+    eventCode: "skill_share_channel_action", skillId, skillName, skillType: "market", skillSource: "market",
+    action: "wechat", panelAction: "success", panelType: "mini_program_card", isSuccessful: true, cost: 0,
+    id: channelId, actionAt: Date.now(), entry: "skill_detail", status: "safe", actionSuccessful: true
+  }];
 }
