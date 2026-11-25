@@ -170,13 +170,14 @@
   const kinds = { daily: "活跃 · 旅行 · 福利", tasks: "成长任务", sweep: "补领清扫", night: "夜猫子", "intl-daily": "活跃 · 签到 · 福利", "intl-web": "网页会话" };
   const slotStates = { succeeded: ["完成", "ok"], partial: ["部分失败", "warn"], failed: ["失败", "urgent"], deferred: ["稍后重试", "warn"], running: ["执行中", "go"], queued: ["排队中", "go"], interrupted: ["中断", "warn"], cancelled: ["已停止", ""], upcoming: ["待执行", ""], pending: ["等待补跑", "warn"], missed: ["已错过", ""] };
 
-  function scheduleSwitch(name, intl, on) {
+  function scheduleSwitch(name, intl, on, pausedBySync) {
     const b = el("button", "wb-switch"), state = el("span", "wb-switch-state", on ? "运行中" : "已暂停");
     b.type = "button";
     b.setAttribute("role", "switch");
     b.setAttribute("aria-checked", String(on));
     b.setAttribute("aria-label", `${name}定时`);
     b.title = on ? `暂停${name}的定时，手动执行不受影响` : `开启${name}的定时`;
+    if (pausedBySync) { b.disabled = true; b.title = pausedBySync; }
     b.append(state, el("span", "wb-knob"));
     b.onclick = () => {
       const next = b.getAttribute("aria-checked") !== "true";
@@ -195,7 +196,8 @@
     const kind = k => `${groups.length > 1 ? `${k.startsWith("intl-") ? "国际版" : "国内版"} ` : ""}${kinds[k] || k}`;
     box.setAttribute("aria-label", "今日定时");
     const headRight = el("span", "wb-sched-head-r");
-    headRight.append(el("span", "wb-sub", t.slots.length && t.slots.every(s => s.paused) ? "定时已暂停" : next ? `下一次 ${next.runAt || next.at} ${kind(next.kind)}` : "今天的时段都已过"));
+    const pausedBySync = view.sync?.paused ? view.sync.role === "follower" ? "从机不运行定时" : "账号同步未确认主机，定时已暂停" : "";
+    headRight.append(el("span", "wb-sub", pausedBySync || (t.slots.length && t.slots.every(s => s.paused) ? "定时已暂停" : next ? `下一次 ${next.runAt || next.at} ${kind(next.kind)}` : "今天的时段都已过")));
     if (hooks.onOpenSettings) {
       const adj = el("button", "wb-link-btn", "调整时段与错开");
       adj.type = "button";
@@ -205,7 +207,7 @@
     box.append(line(el("span", "wb-label", `今日定时 · 每天 ${t.slots.length} 次`), headRight));
     for (const [name, list] of groups) {
       const intl = name === "国际版", on = intl ? view.intlEnabled !== false : view.enabled !== false;
-      if (groups.length > 1 || hooks.onSchedule) box.append(line(el("span", "wb-sched-realm", name), hooks.onSchedule ? scheduleSwitch(name, intl, on) : el("span", "wb-sub", on ? "" : "定时已暂停")));
+      if (groups.length > 1 || hooks.onSchedule) box.append(line(el("span", "wb-sched-realm", name), hooks.onSchedule ? scheduleSwitch(name, intl, on, pausedBySync) : el("span", "wb-sub", on ? "" : "定时已暂停")));
       const row = el("div", on ? "wb-slots" : "wb-slots wb-paused");
       const mine = list.find(s => s.status === "upcoming" && !s.paused);
       for (const s of list) {

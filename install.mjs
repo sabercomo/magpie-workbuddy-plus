@@ -12,7 +12,9 @@ const destination = join(homedir(), "Applications", "Magpie-WorkBuddy-Plus");
 initialize();
 mkdirSync(destination, { recursive: true });
 if (source !== destination) for (const file of readdirSync(source)) {
-  if (file.endsWith(".mjs") || ["package.json", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "public", "page"].includes(file)) cpSync(join(source, file), join(destination, file), { recursive: true });
+  if (file.endsWith(".mjs") || ["package.json", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "public", "page", "sync"].includes(file)) {
+    cpSync(join(source, file), join(destination, file), { recursive: true, filter: path => path !== join(source, "page", "data.js") });
+  }
 }
 const label = "io.github.sabercomo.magpie-workbuddy-plus";
 const plist = join(homedir(), "Library", "LaunchAgents", `${label}.plist`);

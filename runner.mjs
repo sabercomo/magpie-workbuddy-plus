@@ -13,6 +13,7 @@ import { ledger } from "./history.mjs";
 import { routingRefusals } from "./limits.mjs";
 import { chinaModels, enterpriseModels, intlModels } from "./models.mjs";
 import { dropped } from "./network.mjs";
+import { syncChoices, syncView } from "./sync/view.mjs";
 
 const NETWORK_FAILURES = 3, NETWORK_PAUSE_MS = 10 * 60_000;
 const actionNames = { all: "全部任务", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "单项任务", travel: "猫猫旅行", buddy: "Buddy 盲盒", compensation: "官方补偿", bonus: "连登福利", night: "夜猫子", web: "网页会话", inspect: "状态查询" };
@@ -159,7 +160,7 @@ export class Runner {
   list() { return accounts(this.config(), this.dir); }
   status() {
     const config = this.config();
-    return { version, config: publicConfig(config), intlSchedules: intlSchedules(config), intlModels: (this.board.models?.intl?.models || []).map(({ id, name, rate, promo, tier }) => ({ id, name, rate, promo, tier })), accounts: this.list().map(publicAccount), jobs: this.state.jobs.filter(visibleJob), daily: this.state.daily, slots: this.state.slots };
+    return { version, config: publicConfig(config), syncPaused: syncView(config.magpieDir)?.paused === true, intlSchedules: intlSchedules(config), intlModels: (this.board.models?.intl?.models || []).map(({ id, name, rate, promo, tier }) => ({ id, name, rate, promo, tier })), accounts: this.list().map(publicAccount), jobs: this.state.jobs.filter(visibleJob), daily: this.state.daily, slots: this.state.slots };
   }
   // A job queued or running: the service must not be swapped out under it.
   working() { return this.controllers.size > 0 || this.state.jobs.some(j => ["running", "queued"].includes(j.status)); }
@@ -167,6 +168,10 @@ export class Runner {
   // between board refreshes.
   boardView() {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
+    const sync = syncView(config.magpieDir), syncPaused = sync?.paused === true;
+    if (sync?.target) {
+      try { sync.choices = syncChoices(this.list()); } catch { sync.choices = []; }
+    }
     const onDay = value => value && calendar(new Date(value), config.timezone).day === day;
     const network = this.state.network;
     const jobs = [], prizeReminders = [], pastPrizeJobs = [];
@@ -186,7 +191,7 @@ export class Runner {
       (today ? jobs : pastPrizeJobs).push({ id: job.id, actions: job.actions, ...(job.task ? { task: job.task } : {}), status: ["queued", "running", "interrupted"].includes(job.status) ? job.status : outcome.status, accounts: job.accounts, queue: job.queue, retries: job.retries, retryOf: job.retryOf, attempt: job.attempt, counts: outcome.counts, trigger: job.trigger, created: job.created, started: job.started, finished: job.finished, logs: job.logs });
     }
     return {
-      generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled, intlEnabled: config.intlEnabled, schedules: config.schedules, intlSchedules: intlSchedules(config),
+      generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled && !syncPaused, intlEnabled: config.intlEnabled && !syncPaused, schedules: config.schedules, intlSchedules: intlSchedules(config), sync,
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
       settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlProxy: maskProxy(config.intlProxy || ""), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false, campaignApp: config.campaignApp === true, skillShare: config.skillShare, buddyAuto: config.buddyAuto === true, concurrency: config.concurrency, tasksCacheTtl: config.tasksCacheTtl, progressCacheHours: config.progressCacheHours },
       accounts: this.board.accounts.map(({ key, ...a }) => {
@@ -201,7 +206,7 @@ export class Runner {
           ...(webPaused?.day === day ? { webPaused: { at: webPaused.at, message: webPaused.message } } : {})
         };
       }), models: this.board.models || null,
-      intl: { enabled: config.intlEnabled, web: config.intlWeb !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config), signin: this.signin,
+      intl: { enabled: config.intlEnabled && !syncPaused, web: config.intlWeb !== false, accounts: this.board.accounts.filter(a => a.realm === "intl").length }, request: this.state.pageRequest || null, today: this.today(config, new Date(), syncPaused), signin: this.signin,
       networkPaused: network?.pausedUntil > Date.now() ? { until: network.pausedUntil, at: network.last?.at, message: network.last?.message } : null,
       jobs, prizeReminders, pastPrizeJobs
     };
@@ -270,13 +275,13 @@ export class Runner {
 
   // Today's slots in time order, each with the job tick() gave it, if any,
   // and runAt, the moment it runs today.
-  today(config = this.config(), now = new Date()) {
+  today(config = this.config(), now = new Date(), syncPaused = syncView(config.magpieDir, +now)?.paused === true) {
     const { day, time } = calendar(now, config.timezone);
     const slots = plan(config).flatMap(({ kind, times, on }) => times.map(at => {
       const record = this.state.slots[`${day}:${kind}:${at}`], job = record && this.state.jobs.find(j => j.id === record.job), runAt = shifted(day, kind, at, this.spread(config), this.salt());
       // The night task only counts 23:00–08:00; past that window a missed slot is gone.
       const status = job ? job.status : runAt > time ? "upcoming" : kind === "night" && time >= "08:00" ? "missed" : "pending";
-      return { kind, at, runAt, status, attempts: record?.attempts || 0, ...(on ? {} : { paused: true }) };
+      return { kind, at, runAt, status, attempts: record?.attempts || 0, ...(on && !syncPaused ? {} : { paused: true }) };
     })).sort((a, b) => a.at.localeCompare(b.at) || a.kind.localeCompare(b.kind));
     return { timezone: config.timezone, spread: this.spread(config), slots, next: slots.find(s => s.status === "upcoming" && !s.paused) || null };
   }
@@ -544,6 +549,8 @@ export class Runner {
     try {
       if (controller.signal.aborted || round.stop) { row.status = controller.signal.aborted ? "cancelled" : "interrupted"; return; }
       const config = this.config();
+      const scheduled = job.trigger.startsWith("schedule:");
+      if (scheduled && syncView(config.magpieDir)?.paused) { row.status = "interrupted"; return; }
       const account = this.list().find(a => a.id === snapshot.id);
       if (!account || !account.enabled || account.paused) { row.status = account?.paused ? "paused" : "skipped"; return; }
       if (this.state.taskSnapshots) delete this.state.taskSnapshots[account.id];
@@ -570,6 +577,7 @@ export class Runner {
       const context = { account, config, state: this.state, trigger: job.trigger, task: job.task, log, checkpoint: () => this.save(), signal: controller.signal, ...(account.realm === "intl" ? { models: this.board.models?.intl } : {}) };
       for (const action of row.actions) {
         if (controller.signal.aborted) break;
+        if (scheduled && syncView(config.magpieDir)?.paused) { row.status = "paused"; log("账号同步已暂停定时，跳过后续操作"); break; }
         if (this.list().find(a => a.id === account.id)?.paused) { row.status = "paused"; log("任务已暂停，跳过后续操作"); break; }
         row.action = action; row.retryAt = 0;
         log(`开始${actionNames[action]}`);
@@ -643,6 +651,7 @@ export class Runner {
   }
   tick(now = new Date()) {
     const config = this.config();
+    if (syncView(config.magpieDir, +now)?.paused) return;
     const { day, time } = calendar(now, config.timezone);
     if (this.state.network?.pausedUntil > now.getTime()) return;
     if (this.state.network?.pausedUntil) {

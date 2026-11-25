@@ -21,12 +21,12 @@ WorkBuddy Plus 是 Magpie 的非官方 WorkBuddy 补充插件，同时支持国�
   - **上游客户端与任务引擎**：`client.mjs`（`WorkBuddyClient`：统一请求头、节流、429 退避、风控识别 `isRestricted`）、`engine.mjs`（`perform` 与 `actions` 调度）、`events.mjs`（事件形态 `specs`、`unreachable`、`channel`、`buildEvents`、`buildEvent`、`growthTasks`）、`campaign.mjs`（运营活动执行与只读状态 `campaignStatus`）、`skills.mjs`（技能分享渠道创建与事件上报）、`webagent.mjs`（国际版每日网页会话 ACP 流程与 `pickModel`）。
   - **只读看板与模型目录**：`board.mjs`（只读采集 `collect`、积分包/批次到期 `summarize`、企业额度 `allowance`、用量分页 `usage` / `usageSince`、任务中心视图 `taskBoard`、快照指纹 `pageBuild` 与 `writePage`）、`history.mjs`（7 天积分流水溯源 `ledger`）、`models.mjs`（`/v3/config` 解析与推理档位/优惠/等级）、`limits.mjs`（真实 6004/6020 限额与排队解析、Magpie `routing/` 日志解析 `routingRefusals`）。
   - **双端界面**：`page/`（Magpie 无网络沙箱页，通过 `page/data.js` 读快照、经 `magpie.options.set` 传请求；其中 `board.js`、`board.css`、`icon.svg` 与本机面板共用）和 `public/`（本机 HTTP 面板，直接调用 `/api/*`）。
-  - **分发白名单**：`package.json` 的 `"files"`（`["*.mjs", "public", "page", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"]`）与 `install.mjs` 的复制列表决定了运行时实际分发的文件；调整或新增模块时必须同步检查这两处。
+  - **分发白名单**：遵循 `package.json` 的 `"files"` 与 `install.mjs` 的复制列表。同步模块和原始许可均须分发；运行时生成的 `page/data.js` 不得随包或源码安装器复制。调整模块时同步检查两处。
 - **核心原则（违反即返工）**：
-  1. **零凭据外泄与职责边界**：绝不把 `access` / `refresh` token、完整带密代理 URL（页面只拿 `maskProxy` 脱敏值）或请求正文文本（`input` / `inputTrunc`）写入 `page/data.js`、`/api/status`、`/api/board`、日志或测试之外的文件。不调用国内版每日签到接口，不取代 Magpie 的账号登录管理。
+  1. **零凭据外泄与职责边界**：`page/data.js`、`/api/status`、`/api/board`、日志和普通插件文件不得包含 `access` / `refresh` token、完整带密代理 URL（页面只拿 `maskProxy` 脱敏值）或请求正文文本（`input` / `inputTrunc`）。账号同步唯一允许的凭据写入见第 4 条。不调用国内版每日签到接口，不取代 Magpie 的账号登录管理。
   2. **双版本与企业号严格隔离**：国内版（`cn`）与国际版（`intl`）各自保留独立开关（`enabled` / `intlEnabled`）、时段（`schedules` / `intlSchedules`）与站点域；企业账号（`enterprise`）只接入企业只读看板，不执行个人成长/旅行/签到/领奖，也不读个人补偿与盲盒配额；任务页只列国内个人账号。国际版不请求猫猫旅行，不模拟客户端成长任务。
   3. **真实消费操作默认保守**：会调用大模型、消耗积分或消耗成长能量的新操作（如 `campaignApp` 活动 App 对话、`buddyAuto` 旅行后自动开盲盒）必须默认关闭（opt-in）；国际版网页会话优先当前免费模型；`limits.mjs` 只记录真实请求拒绝与 Magpie 路由日志，绝不主动发 `"Hi"` 探测模型限额。
-  4. **账号文件只读与原子写入**：Magpie `plugin-auth.json` 只读，由 Magpie 登录与续期；所有插件本地 JSON 与 `page/data.js` 写入均采用同目录临时文件 + `renameSync`。
+  4. **账号文件默认只读与原子写入**：Plus 后台只读 Magpie 的 `plugin-auth.json`，登录与续期仍归 Magpie。唯一写入例外是默认关闭、只在 Magpie 插件宿主运行的 `sync/`：主机仅把获选个人账号的 access token 和必要元数据加密上传到已校验的 GitHub 私有仓库，不同步 refresh token 或 API Key；从机在 Magpie 的锁下原子更新本模块管理的 access-only 条目，不覆盖本机登录，不写备份或其他 Magpie 文件。GitHub 凭据与同步口令只在同步模块内使用。所有插件本地 JSON 与 `page/data.js` 采用同目录临时文件 + 原子替换。
   5. **只读看板与执行隔离**：`board.mjs`、`campaignStatus`、`models.mjs`、`history.mjs`、`limits.mjs` 必须保持无副作用只读语义；插件更新交接 `handoff` 在 `runner.working()` 为真时不得强行退出正在执行任务的后台服务。
   6. **网络与界面安全边界**：本机服务只绑 `127.0.0.1`，校验 `Host`、`Origin`、`X-WorkBuddy-Plus: 1`、64KB 请求体上限与严格 CSP；任何从上游返回的动态跳转 URL（如 `boxUrl`）必须经过 `https:` + 域名白名单 + `redirect: "error"` 校验；前端严禁将动态或上游文本传入 `innerHTML`。
   7. **配置向后兼容**：新增或调整配置项时必须在 `storage.mjs`（`settle` / `migrateSchedules` / `validateConfig`）保持旧配置无损迁移，不得覆盖用户已修改的时段或开关。

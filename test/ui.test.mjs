@@ -490,7 +490,7 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
     },
     magpie: { options: { get: async () => ({}), set: async opts => { requests.push(opts.request); } } },
     document: { body: bodyEl, getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: () => [], querySelector: () => null, addEventListener() {} },
-    setInterval() {}, setTimeout() {}, console
+    setInterval() {}, setTimeout() {}, clearTimeout() {}, console
   });
   context.globalThis = context;
   for (const file of ["../page/board.js", "../page/app.js"]) vm.runInContext(readFileSync(new URL(file, import.meta.url), "utf8"), context);

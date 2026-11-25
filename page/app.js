@@ -4,6 +4,7 @@
 const $ = id => document.getElementById(id);
 const names = { all: "执行所有任务", "pause-tasks": "暂停任务", "resume-tasks": "恢复任务", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "执行单任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", inspect: "查询状态", web: "国际版网页会话", refresh: "刷新余额", login: "添加国内版账号", "login-intl": "添加国际版账号", pause: "暂停国内版定时", resume: "开启国内版定时", "intl-on": "开启国际版定时", "intl-off": "暂停国际版定时", retry: "重试失败任务", cancel: "停止执行", config: "保存设置" };
 let pending = null;
+let syncPending, syncEdited = false, syncChoicesKey;
 const build = globalThis.WBPLUS?.build;
 
 function note(text, bad) { $("note").textContent = text; $("note").className = bad ? "note bad" : "note"; $("note").hidden = !text; }
@@ -51,12 +52,87 @@ function paint() {
   });
 
   fill(view);
+  fillSync(view?.sync);
   const done = view?.request;
   if (pending && done?.id === pending) {
     pending = null;
     note(done.ok ? `${names[done.action] || done.action}：已交给后台服务` : `${names[done.action] || done.action}：${done.error}`, !done.ok);
   }
 }
+
+const syncHints = {
+  off: "本机不发布或接收账号。定时按原设置运行。",
+  master: "发布所选账号。登录和续期仍由 Magpie 负责。",
+  follower: "接收主机共享的账号，不覆盖本机登录。同步来的账号不在本机续期。Plus 的国内版和国际版定时暂停。",
+  unavailable: "无法读取本机的同步设置。"
+};
+const syncSection = $("sync-settings"), syncForm = $("settings-form");
+const syncRoles = syncSection?.querySelectorAll('input[name="sync-role"]') || [];
+const syncRole = () => [...syncRoles].find(input => input.checked)?.value;
+const syncPicks = () => [...($("sync-accounts")?.querySelectorAll("input:checked") || [])].map(input => input.value);
+function paintSyncRole(role) {
+  $("sync-role-hint").textContent = syncHints[role] || syncHints.unavailable;
+  $("sync-account-row").hidden = role !== "master";
+}
+
+function fillSync(sync) {
+  if (!syncSection) return;
+  syncSection.hidden = !sync;
+  if (!sync) return;
+  const ack = sync.reply;
+  if (syncPending?.id && ack?.id === syncPending.id) {
+    syncPending = null;
+    syncEdited = false;
+    edited = false;
+    saveNote(ack.error === "empty" ? "请至少选择一个要共享的账号。" : ack.error ? "无法保存账号同步设置，请刷新账号后重试。" : "已保存账号同步设置。", !!ack.error);
+  }
+  for (const input of syncRoles) {
+    input.disabled = !sync.target;
+    if (!syncEdited) input.checked = input.value === sync.role;
+  }
+  const list = $("sync-accounts"), choices = sync.choices || [], key = JSON.stringify([choices, sync.picks]);
+  if (!syncEdited && syncChoicesKey !== key) {
+    syncChoicesKey = key;
+    list.replaceChildren(...choices.map(account => {
+      const label = document.createElement("label"), input = document.createElement("input"), name = document.createElement("span"), type = document.createElement("small");
+      label.className = "sync-account";
+      input.type = "checkbox";
+      input.value = account.id;
+      input.checked = sync.picks.includes(account.id);
+      name.textContent = account.name;
+      type.textContent = account.realm === "intl" ? "国际版" : "国内版";
+      label.append(input, name, type);
+      return label;
+    }));
+    if (!choices.length) {
+      const empty = document.createElement("p");
+      empty.className = "hint";
+      empty.textContent = "没有可共享的账号。请在 Magpie 用浏览器登录 WorkBuddy。";
+      list.append(empty);
+    }
+  }
+  paintSyncRole(syncRole());
+  const code = sync.code;
+  const [title, hint, tone] = ({
+    off: ["未启用", "", ""],
+    unavailable: ["无法读取同步设置", "", "warn"],
+    waiting: sync.role === "follower" ? ["等候主机发布", "主机发布后，本机会自动接收账号。", ""] : ["正在等候发布", "", ""],
+    published: [`已发布 ${sync.count} 个账号`, "", "ok"],
+    received: [`已接收 ${sync.count} 个账号${sync.skipped ? `，跳过 ${sync.skipped} 个` : ""}`, sync.skipped ? "已在本机登录的账号未被覆盖。" : "", sync.skipped ? "warn" : "ok"],
+    unconfigured: ["未配置 GitHub 同步", "请先在 Magpie 的同步设置中配置 GitHub。", "warn"],
+    missing: ["找不到要共享的账号", "请检查主机登录状态，或重新选择共享账号。", "warn"],
+    "other-master": ["已有其他主机", "请先在原主机关闭同步，等候旧主机停止发布后再试。", "warn"],
+    failed: ["同步失败", "请检查 Magpie 的 GitHub 同步配置与网络；本机会重试。", "warn"]
+  })[code] || ["未启用", "", ""];
+  $("sync-result").dataset.tone = tone;
+  $("sync-result-title").textContent = title;
+  $("sync-result-hint").textContent = hint;
+  $("sync-result-hint").hidden = !hint;
+  const time = $("sync-result-time");
+  time.hidden = !sync.at;
+  if (sync.at) { time.dateTime = new Date(sync.at).toISOString(); time.textContent = WBBoard.when(sync.at); }
+}
+if (syncSection) syncSection.addEventListener("change", () => { syncEdited = true; paintSyncRole(syncRole()); });
 
 const kinds = ["daily", "tasks", "sweep", "night"], intlKinds = ["daily", "web"];
 let edited = false, initialSettings;
@@ -85,20 +161,29 @@ $("settings-form").oninput = $("settings-form").onchange = () => { edited = true
 function settings(open) {
   document.body.classList.toggle("in-settings", open);
   $("settings").hidden = !open;
-  if (!open) { if (edited) { edited = false; fill(globalThis.WBPLUS); } saveNote(""); }
+  if (!open) {
+    if (edited) { edited = false; fill(globalThis.WBPLUS); }
+    if (syncEdited && !syncPending) { syncEdited = false; syncChoicesKey = undefined; fillSync(globalThis.WBPLUS?.sync); }
+    saveNote("");
+  }
   (open ? $("close-settings") : $("open-settings")).focus();
 }
 $("open-settings").onclick = () => settings(true);
 $("close-settings").onclick = () => settings(false);
 if ($("sched-pill")) $("sched-pill").onclick = () => { settings(false); WBBoard.goTab("schedule"); };
 
+async function sendOptions(changes) {
+  let timer;
+  const guard = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Magpie 没有响应，请重试")), 10_000); });
+  try { await Promise.race([(async () => {
+    const options = (await magpie.options.get()) || {};
+    await magpie.options.set({ ...options, ...changes });
+  })(), guard]); } finally { clearTimeout(timer); }
+}
+
 async function ask(action, extra = {}) {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const guard = new Promise((_, reject) => setTimeout(() => reject(new Error("Magpie 没有响应，请重试")), 10_000));
-  await Promise.race([(async () => {
-    const options = (await magpie.options.get()) || {};
-    await magpie.options.set({ ...options, request: { id, action, at: Date.now(), ...extra } });
-  })(), guard]);
+  await sendOptions({ request: { id, action, at: Date.now(), ...extra } });
   pending = id;
   note(`${names[action]}：已提交，等待 Magpie 重载插件…`);
   setTimeout(reload, 2000);
@@ -118,16 +203,38 @@ function readSettings(form) {
 
 // Magpie's iframe allows scripts but blocks native form submission.
 $("save-settings").onclick = async event => {
-  const form = $("settings-form"), button = event.currentTarget;
+  const form = syncForm, button = event.currentTarget;
+  if (syncPending) return;
   if (!form.reportValidity()) return;
   const config = readSettings(form);
   const bad = [...Object.values(config.schedules), ...Object.values(config.intlSchedules)].flat().find(t => !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t));
   if (bad) return saveNote(`时间「${bad}」不对，应为 HH:MM，例如 09:00`, true);
   if (config.intlProxy && config.intlProxy !== "direct" && !/^https?:\/\//.test(config.intlProxy)) return saveNote("国际版代理需要 http:// 或 https:// 地址，或留空 / direct", true);
+  const sync = globalThis.WBPLUS?.sync, role = syncRole(), picks = role === "master" ? syncPicks() : [];
+  const syncChanged = syncEdited && sync?.target && (role !== sync.role || picks.slice().sort().join("\0") !== sync.picks.slice().sort().join("\0"));
+  if (syncChanged && role === "master" && !picks.length) return saveNote("请至少选择一个要共享的账号。", true);
+  const changes = WBBoard.settingsChanges(initialSettings, config);
   button.disabled = true;
   saveNote("正在保存…");
-  try { await ask("config", { config: WBBoard.settingsChanges(initialSettings, config) }); initialSettings = config; edited = false; settings(false); }
-  catch (e) { saveNote(`提交失败：${e.message}`, true); }
+  try {
+    if (syncChanged) {
+      // getRandomValues is available even if the host's sandbox is not a secure context.
+      const hex = Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, "0")).join("");
+      const id = hex.replace(/^(........)(....)(....)(....)/, "$1-$2-$3-$4-"), at = Date.now();
+      syncPending = { id };
+      await sendOptions({ ...(Object.keys(changes).length ? { request: { id, action: "config", at, config: changes } } : {}), syncRequest: { id, at, target: sync.target, role, picks } });
+      setTimeout(reload, 2000);
+      setTimeout(() => {
+        if (syncPending?.id === id) { syncPending = null; saveNote("还没收到 Magpie 的保存结果，可以重试。", true); }
+      }, 120_000);
+    } else {
+      await ask("config", { config: changes });
+      initialSettings = config;
+      edited = false;
+      settings(false);
+    }
+  }
+  catch (e) { syncPending = null; saveNote(`提交失败：${e.message}`, true); }
   finally { setTimeout(() => { button.disabled = false; }, 3000); }
 };
 

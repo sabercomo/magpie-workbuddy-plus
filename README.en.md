@@ -429,12 +429,24 @@ magpie plugin options <plugin name> '{"port":4389}'
 | --- | --- |
 | Task list cache | `tasksCacheTtl`: 20 seconds by default (0–120), separated by account, site and client. Accepting, reporting or claiming invalidates it. |
 | Progress cache | `progressCacheHours`: 6 hours by default (0–24). Used only to display a failed read with its time and error; never used to execute tasks. Set either cache to 0 to disable it. |
-| Magpie launch | Reads `plugin-auth.json` from Magpie's active data directory, including portable and relocated installations. |
+| Magpie launch | The service reads `plugin-auth.json` from Magpie's active data directory, including portable and relocated installations. |
 | Standalone launch | Defaults to `~/.config/magpie` and follows `XDG_CONFIG_HOME`. Override it with `WORKBUDDY_PLUS_MAGPIE_DIR`; set this plugin's directory with `WORKBUDDY_PLUS_DIR`. |
 | Windows sign-in | If Add account cannot find Magpie, sign in from Providers or put the Magpie installation directory on PATH and restart Magpie. |
-| Sign-in and renewal | Magpie owns both. Sign-in state is read-only; keep the Magpie gateway running if you rely on schedules. |
+| Sign-in and renewal | Magpie owns both. The Plus service always treats sign-in state as read-only. Only the opt-in sync module on a follower can write entries it imported. |
 | Old renewal slots | Upgrades remove renewal slots for both versions; other slots stay as set. |
 | Storage and privacy | Magpie storage changes may require an update here. Released source does not include personal account files, settings or run history. |
+
+</details>
+
+<details>
+<summary>Share WorkBuddy accounts across devices (off by default)</summary>
+
+Set up the same **private GitHub repository**, branch and sync passphrase in Magpie on all devices. In Magpie, open WorkBuddy Plus → Settings → Account sync. Choose 主机 (master) on one device, select the accounts to share and save. Choose 从机 (follower) on the other devices and save. Check 最近同步 (last sync) for the result. This setting is not available in the standalone panel.
+
+- Only browser-signed-in personal OAuth accounts for WorkBuddy China and WorkBuddy AI are supported. The encrypted snapshot carries access tokens and necessary account information, never enterprise accounts, refresh tokens, API keys, desktop sign-ins or schedule settings. Magpie still signs in and renews accounts on the master. Renewal and routing recovery after expiration still need a real two-device test.
+- Followers keep their own sign-ins and skip conflicts. After receiving a new snapshot, followers remove unshared accounts only from the entries this module imported. Plus pauses both automatic schedules on followers without changing the saved switches or times; manual runs and board access continue. A master also pauses automated schedules until it has confirmed its publishing lease.
+- To change masters, turn sync off on the old master first and allow up to 10 minutes for its lease to expire. Turning sync off stops future transfers; it does not delete imported accounts or revoke credentials already sent.
+- If you use the standalone [WorkBuddy Sync](https://github.com/NotoChen/magpie-workbuddy-sync), disable it on all related devices before enabling Plus sync. Plus uses a separate snapshot path, does not read the old snapshot, and does not automatically remove entries the old plugin imported.
 
 </details>
 
@@ -481,13 +493,17 @@ bun install.mjs
 Turning off the plugin in Magpie only disables its tools. **To stop automatic tasks, turn off both Today's Schedule switches first**, or run `bun cli.mjs pause` to pause both.
 
 <details>
-<summary>Pinned versions, older upgrades and v0.8.0 changes</summary>
+<summary>Pinned versions, older upgrades and recent changes</summary>
 
 | Case | What to do |
 | --- | --- |
 | Pinned install | If `magpie plugin list` shows a suffix such as `#v0.4.0`, remove it with `magpie plugin rm` and add the unpinned address. Set plugin options such as the port again. |
 | From 0.5.5 onward | Magpie asks the old service to hand off when loading an update. It waits until the current job finishes, retrying each minute. |
 | 0.5.4 or earlier | Stop the old service once, or log out, restart the computer or restart the container. |
+
+**v0.8.1 changes**
+
+Adds Settings → Account sync, off by default. Updating does not start account sync or change schedules. To try it, follow “Share WorkBuddy accounts across devices” above. If you use the standalone WorkBuddy Sync plugin, disable it first.
 
 **v0.8.0 changes**
 

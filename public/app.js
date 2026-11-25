@@ -43,8 +43,8 @@ async function refresh() {
   current = await api("/api/status");
   const hasIntl = current.accounts.some(a => a.realm === "intl");
   $("intl-fields").hidden = $("intl-conversation").hidden = !hasIntl;
-  $("cn-state").textContent = `· 定时${current.config.enabled ? "已开启" : "已暂停"}`;
-  $("intl-state").textContent = `· 定时${current.config.intlEnabled ? "已开启" : "已暂停"}`;
+  $("cn-state").textContent = `· 定时${current.config.enabled && !current.syncPaused ? "已开启" : "已暂停"}`;
+  $("intl-state").textContent = `· 定时${current.config.intlEnabled && !current.syncPaused ? "已开启" : "已暂停"}`;
   $("accounts").replaceChildren();
   const rank = a => (a.realm === "intl" ? 2 : 0) + (a.enterprise ? 1 : 0), accounts = [...current.accounts].sort((a, b) => rank(a) - rank(b));
   for (const account of accounts) {

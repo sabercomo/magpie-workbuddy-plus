@@ -85,6 +85,37 @@
         </div>
         <p class="hint">国内版使用默认代理，留空即直连；国际版留空时跟随默认，填 <code>direct</code> 表示国际版直连。</p>
       </div>
+      <section class="group sync-group" id="sync-settings" aria-labelledby="sync-title" hidden>
+        <div class="sync-heading">
+          <h3 id="sync-title">账号同步</h3>
+          <p class="hint">通过 Magpie 的 GitHub 同步，在多台设备间共享 WorkBuddy 账号。</p>
+        </div>
+        <div class="sync-row">
+          <span id="sync-role-label" class="sync-label">本机角色</span>
+          <div class="sync-field">
+            <div class="wb-segs sync-roles" role="radiogroup" aria-labelledby="sync-role-label" aria-describedby="sync-role-hint">
+              <label><input type="radio" name="sync-role" value="off" checked><span>关闭</span></label>
+              <label><input type="radio" name="sync-role" value="master"><span>主机</span></label>
+              <label><input type="radio" name="sync-role" value="follower"><span>从机</span></label>
+            </div>
+            <p id="sync-role-hint" class="hint"></p>
+          </div>
+        </div>
+        <div class="sync-row" id="sync-account-row" hidden>
+          <span id="sync-account-label" class="sync-label">共享账号</span>
+          <div class="sync-list" id="sync-accounts" role="group" aria-labelledby="sync-account-label"></div>
+        </div>
+        <div class="sync-row">
+          <span class="sync-label">最近同步</span>
+          <div class="sync-field sync-result" id="sync-result">
+            <div class="sync-result-line">
+              <span class="sync-result-title" id="sync-result-title">未启用</span>
+              <time class="hint" id="sync-result-time" hidden></time>
+            </div>
+            <p id="sync-result-hint" class="hint" hidden></p>
+          </div>
+        </div>
+      </section>
       <div class="save"><button type="button" id="save-settings">保存设置</button><span class="muted" id="save-status" role="status">保存后由 Magpie 重载插件交给后台服务。</span></div>
     </form>
   </section>

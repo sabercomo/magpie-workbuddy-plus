@@ -7,6 +7,7 @@ import { dataDir, newer, publicConfig, version } from "./storage.mjs";
 import { proxyEnvironment } from "./network.mjs";
 import { answering, portTaken } from "./server.mjs";
 import { actions } from "./engine.mjs";
+import { startSync } from "./sync/host.mjs";
 
 // The service's port: the plugin option "port" (set with `magpie plugin options`,
 // since Magpie starts plugins with no environment of the user's), else
@@ -102,6 +103,10 @@ export const WorkBuddyPlusPlugin = async (input, options) => {
   hostConfig = input?.magpie && isAbsolute(input.directory || "") ? input.directory : undefined;
   const ready = handoff().then(() => rpc("/api/page-target", { file: pageFile })).catch(e => console.error("[workbuddy-plus]", e.message));
   if (options?.request) ready.then(() => rpc("/api/page", options.request)).catch(e => console.error("[workbuddy-plus]", e.message));
+  if (hostConfig) startSync(hostConfig, options?.syncRequest, async () => {
+    await ready;
+    await rpc("/api/page-target", { file: pageFile }).catch(() => {});
+  });
   return { tool: {
     status: {
       description: "WorkBuddy Plus 的国内版与国际版账号、执行记录、定时设置。成长任务、猫猫旅行、连登福利；本机面板默认 http://127.0.0.1:3439（端口可在插件选项 port 中修改）。不会返回登录密钥。",
