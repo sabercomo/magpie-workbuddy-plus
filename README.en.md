@@ -612,6 +612,10 @@ Generate README screenshots with `sh docs/screenshots.sh`. `docs/demo-data.mjs` 
 
 The `magpie-plugin` GitHub topic makes the repository discoverable in Magpie's unofficial catalog; it does not imply review or endorsement.
 
+## Acknowledgments
+
+Special thanks to [@aiqujuni](https://github.com/aiqujuni) for bringing questions and suggestions to the issue tracker and often helping answer other users' questions. Thanks for helping me look after this project!
+
 ## License and credits
 
 MIT. Account sync reuses the encryption module from [NotoChen's Magpie WorkBuddy Sync](https://github.com/NotoChen/magpie-workbuddy-sync) and adapts its GitHub sync client, file locks and master lease logic. Thanks to NotoChen for sharing the implementation in [#20](https://github.com/sabercomo/magpie-workbuddy-plus/issues/20).
