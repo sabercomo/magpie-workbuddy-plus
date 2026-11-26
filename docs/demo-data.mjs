@@ -4,6 +4,7 @@
 // The optional time sets the board's clock to that time today; the page must
 // then be shown at the same time for travel and expiry to read right.
 import { writePage } from "../board.mjs";
+import { version } from "../storage.mjs";
 import { join } from "node:path";
 
 const clock = process.argv[3]?.split(":").map(Number);
@@ -211,7 +212,7 @@ const prize = "WorkBuddy 纪念杯";
 const draw = job(["bonus"], 55, `成长抽奖 1/1：${prize}（实物奖，请到成长中心填写收件信息）`);
 
 writePage(join(process.argv[2], "data.js"), {
-  generated: new Date(now).toISOString(), at: now - 4 * 60_000, refreshing: false, enabled: true, intlEnabled: true,
+  version, generated: new Date(now).toISOString(), at: now - 4 * 60_000, refreshing: false, enabled: true, intlEnabled: true,
   schedules: { daily: ["09:00", "21:00"], tasks: ["09:10", "21:10"], night: ["01:00"] },
   intlSchedules: { daily: ["09:00", "21:00"], web: ["10:30"] },
   intl: { enabled: true, web: true, accounts: 1 },

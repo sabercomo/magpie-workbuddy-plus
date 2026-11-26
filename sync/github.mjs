@@ -88,6 +88,17 @@ export class GitHubContents {
     };
   }
 
+  async list(dir) {
+    const query = this.branch ? `?ref=${encodeURIComponent(this.branch)}` : "";
+    const response = await this.request("GET", `/contents/${encodePath(dir)}${query}`);
+    if (response.status === 404) return [];
+    if (!response.ok) throw new Error(`GitHub list failed: HTTP ${response.status}`);
+    const value = await response.json();
+    if (!Array.isArray(value)) throw new Error("Invalid GitHub directory response");
+    return value.filter(item => item?.type === "file" && typeof item.name === "string" && Number.isSafeInteger(item.size))
+      .map(({ name, size }) => ({ name, size }));
+  }
+
   // writeIf writes only if the file is still at expectedSha: null for a file
   // that did not exist. A 409/422 is a lost race, not a transport failure.
   async writeIf(file, bytes, message = "workbuddy-sync: publish", expectedSha = null) {

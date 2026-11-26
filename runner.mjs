@@ -170,7 +170,7 @@ export class Runner {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
     const sync = syncView(config.magpieDir), syncPaused = sync?.paused === true;
     if (sync?.target) {
-      try { sync.choices = syncChoices(this.list()); } catch { sync.choices = []; }
+      try { sync.choices = syncChoices(readJSON(join(config.magpieDir, "plugin-auth.json")), sync.target); } catch { sync.choices = []; }
     }
     const onDay = value => value && calendar(new Date(value), config.timezone).day === day;
     const network = this.state.network;
@@ -191,7 +191,7 @@ export class Runner {
       (today ? jobs : pastPrizeJobs).push({ id: job.id, actions: job.actions, ...(job.task ? { task: job.task } : {}), status: ["queued", "running", "interrupted"].includes(job.status) ? job.status : outcome.status, accounts: job.accounts, queue: job.queue, retries: job.retries, retryOf: job.retryOf, attempt: job.attempt, counts: outcome.counts, trigger: job.trigger, created: job.created, started: job.started, finished: job.finished, logs: job.logs });
     }
     return {
-      generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled && !syncPaused, intlEnabled: config.intlEnabled && !syncPaused, schedules: config.schedules, intlSchedules: intlSchedules(config), sync,
+      version, generated: new Date().toISOString(), panel: this.panel, at: this.board.at, refreshing: !!this.boarding, enabled: config.enabled && !syncPaused, intlEnabled: config.intlEnabled && !syncPaused, schedules: config.schedules, intlSchedules: intlSchedules(config), sync,
       // What Magpie's page shows in its settings, for installs whose local panel can't be reached (Docker).
       settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlProxy: maskProxy(config.intlProxy || ""), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false, campaignApp: config.campaignApp === true, skillShare: config.skillShare, buddyAuto: config.buddyAuto === true, concurrency: config.concurrency, tasksCacheTtl: config.tasksCacheTtl, progressCacheHours: config.progressCacheHours },
       accounts: this.board.accounts.map(({ key, ...a }) => {

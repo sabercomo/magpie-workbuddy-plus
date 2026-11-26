@@ -106,6 +106,7 @@ body.in-settings #main-view,body.in-settings footer,body.in-settings .header-act
 .toggle input:focus-visible+.knob{outline:2px solid var(--wb-accent);outline-offset:2px}
 .save{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .save button.primary{font:inherit;font-size:12.5px;padding:6px 16px;border-radius:8px;cursor:pointer;background:var(--wb-accent);border:1px solid var(--wb-accent);color:#fff;font-weight:600}
+.save button.primary:disabled{opacity:.6;cursor:not-allowed}
 #saved{color:var(--wb-accent);font-size:12.5px}
 #saved.bad{color:var(--wb-urgent)}
 footer{padding-top:18px}

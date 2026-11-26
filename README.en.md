@@ -442,11 +442,15 @@ magpie plugin options <plugin name> '{"port":4389}'
 <details>
 <summary>Share WorkBuddy accounts across devices (off by default)</summary>
 
-Set up the same **private GitHub repository**, branch and sync passphrase in Magpie on all devices. In Magpie, open WorkBuddy Plus → Settings → Account sync. Choose 主机 (master) on one device, select the accounts to share and save. Choose 从机 (follower) on the other devices and save. Check 最近同步 (last sync) for the result. This setting is not available in the standalone panel.
+Set up the same **private storage target** and sync passphrase in Magpie on all devices: a private GitHub repository (same branch and folder), WebDAV, or S3. Open WorkBuddy Plus → Settings → Account sync. Choose 主机 (master) on one device, select the accounts to share and save. Choose 从机 (follower) on the other devices and save. Check 状态 (Status) for the result. This setting is not available in the standalone panel.
 
-- Only browser-signed-in personal OAuth accounts for WorkBuddy China and WorkBuddy AI are supported. The encrypted snapshot carries access tokens and necessary account information, never enterprise accounts, refresh tokens, API keys, desktop sign-ins or schedule settings. Magpie still signs in and renews accounts on the master. Renewal and routing recovery after expiration still need a real two-device test.
+- Browser-signed-in personal and enterprise OAuth accounts and explicitly selected API keys are supported. Enterprise accounts stay read-only in Plus; API keys are for Magpie only. Snapshots are encrypted locally and contain no refresh tokens, desktop sign-ins, or schedules. Update Plus on all devices before sharing enterprise accounts or API keys. To revoke a previously shared API key, revoke it in WorkBuddy.
+- WebDAV requires Basic authentication, HTTPS, strong ETags, and exclusive collection locks; S3 requires conditional writes. Plus will not fall back to unconditional overwrites. HTTP is only allowed on loopback for testing. Changing storage changes the sync group: stop the old master before enabling the new destination. Old snapshots are not moved. Real storage and two-device renewal still need testing.
 - Followers keep their own sign-ins and skip conflicts. After receiving a new snapshot, followers remove unshared accounts only from the entries this module imported. Plus pauses both automatic schedules on followers without changing the saved switches or times; manual runs and board access continue. A master also pauses automated schedules until it has confirmed its publishing lease.
-- To change masters, turn sync off on the old master first and allow up to 10 minutes for its lease to expire. Turning sync off stops future transfers; it does not delete imported accounts or revoke credentials already sent.
+- On the master, choose 停止共享并清除从机 under 共享账号 and confirm. Plus publishes a clear-marked empty snapshot; followers delete only the entries this module imported and keep their own sign-ins. The master keeps renewing the empty lease until you turn sync off, so a device that comes back later is cleared too. Older Plus versions ignore the empty snapshot; update every device first. Clearing does not revoke tokens or API keys already issued; revoke a shared API key in WorkBuddy.
+- Status shows the current lease and snapshot generation. Devices are identified by random IDs, not hostnames. A follower that can reach sync storage writes a heartbeat at most once every 10 minutes, even while waiting for a snapshot. It reports the last seen time and applied generation; after 30 minutes without a heartbeat it is shown as offline. Read-only followers can still receive accounts, but cannot send heartbeats.
+- 立即同步 next to 状态 syncs once with the saved role; the Magpie tool `sync_now` does the same. Neither enables an off device or saves unsaved account selections.
+- To change masters, turn sync off on the old master and allow up to 10 minutes for its lease to expire. A new master can select API keys already imported onto that device without re-entering them; browser OAuth still requires a local Magpie sign-in. Turning sync off does not delete imports or revoke previously shared credentials.
 - If you use the standalone [WorkBuddy Sync](https://github.com/NotoChen/magpie-workbuddy-sync), disable it on all related devices before enabling Plus sync. Plus uses a separate snapshot path, does not read the old snapshot, and does not automatically remove entries the old plugin imported.
 
 </details>
@@ -501,6 +505,13 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 | Pinned install | If `magpie plugin list` shows a suffix such as `#v0.4.0`, remove it with `magpie plugin rm` and add the unpinned address. Set plugin options such as the port again. |
 | From 0.5.5 onward | Magpie asks the old service to hand off when loading an update. It waits until the current job finishes, retrying each minute. |
 | 0.5.4 or earlier | Stop the old service once, or log out, restart the computer or restart the container. |
+
+**v0.8.3 changes**
+
+- Fixed the standalone panel error and duplicate schedule fields when an older service keeps running after an update ([#21](https://github.com/sabercomo/magpie-workbuddy-plus/issues/21)). Both pages show upgrade instructions and block settings saves when the service data is incompatible.
+- Account sync expands to explicitly selected API keys, enterprise OAuth, WebDAV and S3, with lease, device heartbeat and master switching details.
+- Account sync adds 停止共享并清除从机: the master publishes a clear-marked empty snapshot, followers remove the entries this module imported and keep their own sign-ins; older followers reject the empty snapshot. Clearing does not revoke credentials already issued.
+- Account sync adds an 立即同步 button next to 状态: it forces one poll with the saved role and does not enable sync on an off device.
 
 **v0.8.2 changes**
 

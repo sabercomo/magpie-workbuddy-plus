@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaults, initialize, readJSON, writeJSON } from "../storage.mjs";
+import { defaults, initialize, readJSON, version, writeJSON } from "../storage.mjs";
 import { WorkBuddyClient } from "../client.mjs";
 import { summarize, usage, usageSince, collect, taskBoard, pageBuild, allowance, dropped, checkin } from "../board.mjs";
 import { note } from "../limits.mjs";
@@ -209,6 +209,7 @@ test("page snapshot carries no credentials and each page request runs once", asy
   await runner.refreshBoard();
   const page = readFileSync(pageFile, "utf8");
   assert.match(page, /globalThis\.WBPLUS = /);
+  assert.ok(page.includes(`"version":"${version}"`), "the running service identifies itself in the snapshot");
   assert.ok(!/private-access|private-refresh/.test(page));
   assert.equal(runner.boardView().accounts[0].expires, magpieExpiry, "the snapshot reports the expiry Magpie saved");
   const build = page.match(/"build":"([0-9a-f]{12})"/)?.[1];

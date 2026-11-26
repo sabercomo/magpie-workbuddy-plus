@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -702,6 +702,34 @@ test("the Magpie run tool advertises every backend action", async t => {
   const { tool } = await WorkBuddyPlusPlugin({}, { port: server.address().port });
   await ready;
   assert.deepEqual(tool.run.args.properties.action.enum, actions);
+  assert.equal(tool.sync_now, undefined, "standalone hosts cannot run account sync");
+});
+
+test("an old service that cannot target the plugin page leaves a diagnostic, not a settings write", { timeout: 5000 }, async t => {
+  const dir = mkdtempSync(join(tmpdir(), "wb-plus-handoff-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const root = new URL("../", import.meta.url);
+  for (const file of readdirSync(root).filter(name => name.endsWith(".mjs") || name === "package.json" || name === "sync")) {
+    cpSync(new URL(file, root), join(dir, file), { recursive: true });
+  }
+  const paths = [];
+  const old = createServer((req, res) => {
+    paths.push(req.url);
+    res.statusCode = req.url === "/api/status" ? 200 : 404;
+    res.end(JSON.stringify(req.url === "/api/status" ? { config: {} } : { error: "未知地址" }));
+  });
+  await new Promise(resolve => old.listen(0, "127.0.0.1", resolve));
+  t.after(() => old.close());
+  const env = { ...process.env, WORKBUDDY_PLUS_DIR: join(dir, "state"), WORKBUDDY_PLUS_MAGPIE_DIR: join(dir, "magpie") };
+  const child = spawn(process.execPath, ["--input-type=module", "-e", `import { WorkBuddyPlusPlugin } from "./index.mjs";
+    await WorkBuddyPlusPlugin({}, { port: ${old.address().port}, request: { action: "config", config: { enabled: false } } });`], { cwd: dir, env });
+  t.after(() => child.kill());
+  let stderr = "";
+  child.stderr.on("data", chunk => { stderr += chunk; });
+  assert.equal(await new Promise(resolve => child.once("close", resolve)), 0);
+  assert.match(stderr, /未能自动交接旧后台/);
+  assert.match(readFileSync(join(dir, "page", "data.js"), "utf8"), /"handoff":"old"/);
+  assert.deepEqual(paths, ["/api/status", "/api/handoff", "/api/page-target", "/api/status"]);
 });
 
 test("only a WorkBuddy Plus answering on the port counts as one running", async () => {

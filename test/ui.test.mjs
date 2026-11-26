@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { setImmediate } from "node:timers/promises";
-import { defaults } from "../storage.mjs";
+import { defaults, version } from "../storage.mjs";
 
 // Exercise the shipped page script with a small DOM fixture. This checks
 // button/account selection, two-level navigation, board views, task center,
@@ -27,11 +27,18 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   const buttons = buttonNames.map(action => { const b = new Element("button"); b.dataset.action = action; return b; });
   for (const id of ["error", "accounts", "jobs", "updated", "config-form", "schedule-fields", "intl-schedule-fields", "intl-fields", "intl-conversation", "intl-model-pick", "cn-state", "intl-state", "saved", "board", "board-state", "board-refresh", "add-menu", "open-settings", "close-settings", "settings", "sched-pill", "run-scope-note", "wb-nav-toggle"]) nodes.set(id, new Element("div"));
   nodes.get("add-menu").contains = () => false;
-  const form = nodes.get("config-form"); form.elements = {};
+  const form = nodes.get("config-form"), saveButton = new Element("button");
+  form.elements = {}; form.querySelector = () => saveButton;
   for (const name of ["timezone", "proxy", "intlProxy", "spread", "intlWeb", "campaignApp", "skillShare"]) form.elements[name] = new Element("input");
-  for (const id of ["schedule-fields", "intl-schedule-fields"]) nodes.get(id).append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };
-  nodes.get("intl-model-pick").append = function (...children) { for (const child of children) if (child.name) form.elements[child.name] = child; this.children.push(...children); };
-  const calls = [], status = { config: { ...structuredClone(defaults), intlProxy: "http://127.0.0.1:1082" }, intlSchedules: structuredClone(defaults.intlSchedules), intlModels: ["hy3", "kimi-k3"], accounts: [
+  for (const id of ["schedule-fields", "intl-schedule-fields"]) {
+    const host = nodes.get(id);
+    host.append = function (...labels) { for (const label of labels) { const input = label.children[0]; form.elements[input.name] = input; } this.children.push(...labels); };
+    host.replaceChildren = function (...labels) { this.children = []; this.append(...labels); };
+  }
+  const modelHost = nodes.get("intl-model-pick");
+  modelHost.append = function (...children) { for (const child of children) if (child.name) form.elements[child.name] = child; this.children.push(...children); };
+  modelHost.replaceChildren = function (...children) { this.children = []; this.append(...children); };
+  const calls = [], status = { version, config: { ...structuredClone(defaults), intlProxy: "http://127.0.0.1:1082" }, intlSchedules: structuredClone(defaults.intlSchedules), intlModels: ["hy3", "kimi-k3"], accounts: [
     { id: "cn:a", name: "国内测试", realm: "cn", source: "magpie", enabled: true },
     { id: "intl:c", name: "国际测试", realm: "intl", source: "magpie", enabled: true },
     { id: "cn:b", name: "国内测试二", realm: "cn", source: "magpie", enabled: true }
@@ -86,15 +93,38 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   board.accounts[2].expires = Date.now() + 3600_000;
   board.accounts[1].balance = { balance: 42.75, size: 2000, packages: [] };
   const bodyEl = new Element("body");
-  let failConfig = false;
+  let failConfig = false, snapshot = { config: status.config, accounts: status.accounts, jobs: [] };
+  const polls = new Map();
   const context = vm.createContext({
     document: { body: bodyEl, getElementById: id => nodes.get(id) ?? (/^wb-(account-scope|record)-/.test(id) ? findNode(nodes.get("board"), n => n.id === id) : undefined), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: selector => selector === "[data-action]" ? buttons : [], querySelector: () => null, addEventListener() {} },
-    fetch: async (path, init) => { calls.push({ path, body: init.body ? JSON.parse(init.body) : undefined }); if (path === "/api/config" && failConfig) return { ok: false, json: async () => ({ error: "配置无效" }) }; return { ok: true, json: async () => path === "/api/status" ? structuredClone(status) : path === "/api/board" ? structuredClone(board) : {} }; },
-    setInterval() {}, console
+    fetch: async (path, init) => { calls.push({ path, body: init.body ? JSON.parse(init.body) : undefined }); if (path === "/api/config" && failConfig) return { ok: false, json: async () => ({ error: "配置无效" }) }; return { ok: true, json: async () => path === "/api/status" ? structuredClone(snapshot) : path === "/api/board" ? structuredClone(board) : {} }; },
+    setInterval(fn, ms) { polls.set(ms, fn); }, console
   });
   context.globalThis = context;
   for (const file of ["../page/board.js", "../public/app.js"]) vm.runInContext(readFileSync(new URL(file, import.meta.url), "utf8"), context);
   await setImmediate();
+  assert.match(nodes.get("error").textContent, /后台是旧版本.*重启电脑/, "a v0.5.4-style status reports the upgrade issue instead of reading 'daily'");
+  assert.equal(saveButton.disabled, true);
+  await polls.get(4000)(); await setImmediate();
+  assert.equal(nodes.get("schedule-fields").children.length, 4, "polling must not append a second set of domestic fields");
+  assert.equal(form.elements["schedule-daily"].readOnly, true);
+  for (const oldStatus of [{ ...status, version: "0.7.10" }, { ...status, intlSchedules: undefined }, { ...status, config: { ...status.config, schedules: undefined } }]) {
+    snapshot = oldStatus;
+    await polls.get(4000)(); await setImmediate();
+    assert.equal(saveButton.disabled, true);
+    await form.onsubmit({ preventDefault() {}, currentTarget: form });
+    await assert.rejects(vm.runInContext('save({ enabled: false })', context), /后台是旧版本/);
+  }
+  assert.ok(!calls.some(call => call.path === "/api/config"), "neither the form nor a board control writes to an incompatible service");
+  snapshot = status;
+  await polls.get(4000)(); await setImmediate();
+  assert.equal(saveButton.disabled, false);
+  assert.equal(nodes.get("error").hidden, true);
+  assert.equal(nodes.get("schedule-fields").children.length, 4);
+  assert.equal(form.elements["schedule-daily"].readOnly, false);
+  assert.equal(form.elements["intl-web"].value, defaults.intlSchedules.web.join(", "));
+  await polls.get(15000)(); await setImmediate();
+  calls.length = 0;
   const text = node => typeof node === "string" ? node : [node.textContent || "", ...(node.children || []).map(text)].join(" ");
   const findNode = (node, predicate) => {
     if (typeof node === "string") return;
@@ -473,27 +503,53 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
     focus() {}
     get lastChild() { return this.children.at(-1); }
   }
-  const nodes = new Map(), requests = [];
+  const nodes = new Map(), requests = [], syncRequests = [];
   for (const id of ["state", "note", "board", "jobs", "panel", "cn-state", "intl-state", "sched-pill", "intl-model-pick", "settings", "settings-form", "open-settings", "close-settings", "save-settings", "save-status", "wb-nav-toggle"]) nodes.set(id, new Element("div"));
+  for (const id of ["sync-settings", "sync-role-hint", "sync-account-row", "sync-accounts", "sync-result", "sync-result-title", "sync-result-hint", "sync-result-time",
+    "sync-snapshot", "sync-actions", "sync-now", "sync-switch-master", "sync-switch-hint", "sync-clear", "sync-clear-hint",
+    "sync-clear-confirm-panel", "sync-clear-cancel", "sync-clear-confirm", "sync-device-row", "sync-device-hint", "sync-devices"]) nodes.set(id, new Element("div"));
+  const syncSection = nodes.get("sync-settings"), syncRoles = ["off", "master", "follower"].map(value => Object.assign(new Element("input"), { value }));
+  syncSection.querySelectorAll = () => syncRoles;
+  syncSection.addEventListener = (event, fn) => { syncSection[event] = fn; };
+  for (const role of syncRoles) role.click = () => { for (const input of syncRoles) input.checked = input === role; syncSection.change(); };
+  nodes.get("sync-accounts").querySelectorAll = () => nodes.get("sync-accounts").children.flatMap(label => label.children.filter(child => child.checked));
   const form = nodes.get("settings-form");
   form.elements = Object.fromEntries(["daily", "tasks", "sweep", "night", "intl-daily", "intl-web", "intl-model", "intl-web-on", "campaign-app", "skill-share", "buddy-auto", "spread", "timezone", "proxy", "intlProxy"].map(k => [k, new Element("input")]));
   form.reportValidity = () => true;
   const bodyEl = new Element("body");
+  let releaseSave;
   const context = vm.createContext({
     WBPLUS: {
-      panel: "http://127.0.0.1:4389", build: "abc123", generated: new Date().toISOString(), at: Date.now(), enabled: true, intlEnabled: true,
+      version, panel: "http://127.0.0.1:4389", build: "abc123", generated: new Date().toISOString(), at: Date.now(), enabled: true, intlEnabled: true,
       schedules: structuredClone(defaults.schedules), intlSchedules: structuredClone(defaults.intlSchedules),
       settings: { timezone: "Asia/Shanghai", spread: 10, proxy: "", intlProxy: "http://127.0.0.1:1082", intlWebModel: "auto", intlWeb: true, campaignApp: false, skillShare: true },
       intl: { accounts: 0 }, today: { timezone: "Asia/Shanghai", next: { kind: "tasks", at: "21:10", status: "upcoming" }, slots: [{ kind: "tasks", at: "21:10", status: "upcoming" }] },
       accounts: [{ id: "cn:a", name: "主力号", expires: 0, errors: {}, balance: { balance: 100, size: 200, packages: [] }, tasks: { total: 2, claimed: 1, credit: 50, open: [{ code: "skill_1", title: "技能任务", state: "claimable", current: 1, target: 1, credit: 50 }] }, travel: { state: "arrived", location: "大理", reward: 30 } }],
       jobs: []
     },
-    magpie: { options: { get: async () => ({}), set: async opts => { requests.push(opts.request); } } },
+    crypto,
+    magpie: { options: { get: async () => ({}), set: async opts => { if (opts.request) requests.push(opts.request); if (opts.syncRequest) syncRequests.push(opts.syncRequest); } } },
     document: { body: bodyEl, getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: () => [], querySelector: () => null, addEventListener() {} },
-    setInterval() {}, setTimeout() {}, clearTimeout() {}, console
+    setInterval() {}, setTimeout(fn, ms) { if (ms === 3000) releaseSave = fn; }, clearTimeout() {}, console: { error() {} }
   });
+  const view = context.WBPLUS, saveButton = nodes.get("save-settings");
+  context.WBPLUS = { ...view, version: undefined, settings: undefined, intlSchedules: undefined };
   context.globalThis = context;
   for (const file of ["../page/board.js", "../page/app.js"]) vm.runInContext(readFileSync(new URL(file, import.meta.url), "utf8"), context);
+  assert.match(nodes.get("note").textContent, /后台是旧版本.*重启电脑/);
+  assert.equal(saveButton.disabled, true);
+  await saveButton.onclick({ currentTarget: saveButton });
+  await assert.rejects(vm.runInContext('ask("config", { config: { concurrency: 2 } })', context), /后台是旧版本/);
+  assert.equal(requests.length, 0, "the old snapshot must not submit a settings or board configuration request");
+  context.WBPLUS = { ...view, today: { slots: {} } };
+  context.WBBoard.goTab("schedule");
+  assert.doesNotThrow(() => vm.runInContext("paint()", context));
+  assert.match(nodes.get("note").textContent, /无法显示后台数据.*刷新/);
+  assert.equal(saveButton.disabled, true);
+  context.WBPLUS = view;
+  vm.runInContext("paint()", context);
+  assert.equal(saveButton.disabled, false);
+  assert.equal(nodes.get("note").hidden, true);
 
   assert.equal(nodes.get("sched-pill").textContent, "定时运行中 · 下次 21:10");
   for (const file of ["../page/index.html", "../public/index.html"]) assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), "utf8"), /打开本机面板|使用说明|仅本机访问|后台自动更新|<footer\b/);
@@ -528,7 +584,7 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
 
   // A malformed international proxy is rejected locally too.
   form.elements.intlProxy.value = "127.0.0.1:1082";
-  button.disabled = false;
+  releaseSave();
   await button.onclick({ currentTarget: button });
   assert.match(nodes.get("save-status").textContent, /^国际版代理需要/);
   assert.equal(button.disabled, false, "a rejected proxy does not disable the button");
@@ -537,10 +593,104 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
 
   // A malformed time keeps the settings open and says so beside the button.
   form.elements.daily.value = "9:00";
-  button.disabled = false;
   await button.onclick({ currentTarget: button });
   assert.equal(nodes.get("save-status").textContent, "时间「9:00」不对，应为 HH:MM，例如 09:00");
   assert.equal(nodes.get("save-status").classList._on, true);
   assert.equal(button.disabled, false, "a rejected save does not disable the button");
   assert.equal(requests.filter(r => r.action === "config").length, 1, "nothing is sent for an invalid time");
+
+  const now = Date.now(), target = "3895cb43-f6c8-4081-89ae-01cf236350aa";
+  const master = { name: "设备 102A4DEC", role: "master", local: false, online: true, seen: now - 120_000 };
+  view.sync = {
+    actions: { clear: true, now: true },
+    target, role: "follower", code: "received", count: 1, at: now, picks: [], applied: 12,
+    choices: [{ id: "cn:a", name: "本地测试", realm: "cn", kind: "personal" },
+      { id: "enterprise:cn:opaque", name: "企业测试", realm: "cn", kind: "enterprise" },
+      { id: "api:intl:opaque", name: "密钥 AABBCC", realm: "intl", kind: "api" }],
+    snapshot: { ...master, until: now + 480_000, generation: 12 },
+    devices: [master, { name: "设备 3895CB43", role: "follower", local: true, online: true, seen: now, generation: 12 },
+      { name: "设备 A9608AE4", role: "follower", local: false, online: false, seen: now - 3 * 3600_000, generation: 11 }]
+  };
+  vm.runInContext("paint()", context);
+  assert.equal(nodes.get("sync-account-row").hidden, true);
+  assert.equal(nodes.get("sync-device-row").hidden, false);
+  assert.equal(nodes.get("sync-actions").hidden, false);
+  assert.equal(nodes.get("sync-switch-master").hidden, false);
+  const oldPageSync = view.sync;
+  view.sync = { ...view.sync, actions: undefined };
+  vm.runInContext("paint()", context);
+  assert.equal(nodes.get("sync-now").hidden, true, "an older service does not get the new sync-now control");
+  view.sync = oldPageSync;
+  vm.runInContext("paint()", context);
+  assert.equal(nodes.get("sync-now").hidden, false);
+  assert.match(nodes.get("sync-snapshot").textContent, /当前主机是设备 102A4DEC.*本机已应用第 12 代/);
+  const [, local, stale] = nodes.get("sync-devices").children;
+  assert.match(local.children[0].children[1].textContent, /本机.*第 12 代/);
+  assert.equal(stale.children[1].children[0].textContent, "离线");
+  assert.equal(stale.children[1].children[1].textContent, "3 小时前");
+  nodes.get("sync-switch-master").onclick();
+  assert.equal(syncRequests.length, 0, "switching the draft never writes or takes over a lease");
+  assert.equal(nodes.get("sync-account-row").hidden, false);
+  const labels = nodes.get("sync-accounts").children;
+  assert.equal(labels[1].children[1].children[0].textContent.trim(), "企业");
+  assert.equal(labels[2].children[1].children[0].textContent.trim(), "API Key");
+  assert.ok(labels.every(label => !label.children[0].checked), "new shareable credentials are never preselected");
+  const pick = nodes.get("sync-accounts").children[0].children[0];
+  pick.checked = true;
+  vm.runInContext("paint()", context);
+  assert.equal(syncRoles[1].checked, true, "refresh keeps the draft role");
+  assert.equal(pick.checked, true, "refresh keeps the draft account choice");
+  await button.onclick();
+  assert.equal(syncRequests.length, 1);
+  const { role, picks, target: machine } = syncRequests[0];
+  assert.deepEqual(JSON.parse(JSON.stringify({ role, picks, machine })), { role: "master", picks: ["cn:a"], machine: target });
+
+  // The save acknowledgement turns the draft into the saved master state.
+  view.sync = { ...view.sync, role: "master", picks: ["cn:a"], code: "published", count: 1, reply: { id: syncRequests[0].id, error: "" } };
+  vm.runInContext("paint()", context);
+  assert.equal(nodes.get("save-status").textContent, "已保存账号同步设置。");
+  assert.equal(nodes.get("sync-account-row").hidden, false);
+  assert.equal(nodes.get("sync-clear").hidden, false);
+  assert.equal(nodes.get("sync-clear").disabled, false);
+  assert.equal(nodes.get("sync-now").disabled, false);
+
+  // Clearing needs a second click and sends the explicit empty selection.
+  nodes.get("sync-clear").onclick();
+  assert.equal(nodes.get("sync-clear-confirm-panel").hidden, false);
+  nodes.get("sync-clear-cancel").onclick();
+  assert.equal(nodes.get("sync-clear-confirm-panel").hidden, true);
+  nodes.get("sync-clear").onclick();
+  await nodes.get("sync-clear-confirm").onclick();
+  assert.equal(syncRequests.length, 2);
+  const clearing = syncRequests[1];
+  assert.deepEqual(JSON.parse(JSON.stringify({ role: clearing.role, picks: clearing.picks, clear: clearing.clear, target: clearing.target })),
+    { role: "master", picks: [], clear: true, target });
+  assert.equal(nodes.get("sync-clear").disabled, true);
+  assert.equal(nodes.get("sync-now").disabled, true);
+
+  // The clear acknowledgement hides the action and explains the empty state.
+  view.sync = { ...view.sync, picks: [], code: "cleared", count: 0, reply: { id: clearing.id, error: "" }, at: now };
+  vm.runInContext("paint()", context);
+  assert.equal(nodes.get("save-status").textContent, "已清除共享账号。请保持同步开启，直到所有设备都同步过。");
+  assert.equal(nodes.get("sync-result-title").textContent, "已清除共享");
+  assert.equal(nodes.get("sync-clear").hidden, true);
+  assert.equal(nodes.get("sync-clear-hint").hidden, false);
+  assert.match(nodes.get("sync-clear-hint").textContent, /共享账号已清空/);
+  assert.equal(nodes.get("sync-now").disabled, false);
+
+  // The status button asks for one force poll without resending a role.
+  await nodes.get("sync-now").onclick();
+  assert.equal(syncRequests.length, 3);
+  const polling = syncRequests[2];
+  assert.equal(polling.now, true);
+  assert.equal(polling.role, undefined);
+  assert.equal(polling.picks, undefined);
+  assert.equal(polling.target, target);
+  assert.equal(nodes.get("sync-now").textContent, "同步中…");
+  assert.equal(nodes.get("sync-now").disabled, true);
+  view.sync = { ...view.sync, reply: { id: polling.id, error: "" } };
+  vm.runInContext("paint()", context);
+  assert.equal(nodes.get("save-status").textContent, "已提交立即同步。");
+  assert.equal(nodes.get("sync-now").textContent, "立即同步");
+  assert.equal(nodes.get("sync-now").disabled, false);
 });

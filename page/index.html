@@ -88,7 +88,7 @@
       <section class="group sync-group" id="sync-settings" aria-labelledby="sync-title" hidden>
         <div class="sync-heading">
           <h3 id="sync-title">账号同步</h3>
-          <p class="hint">通过 Magpie 的 GitHub 同步，在多台设备间共享 WorkBuddy 账号。</p>
+          <p class="hint">使用 Magpie 中配置的 GitHub、WebDAV 或 S3，在多台设备间共享 WorkBuddy 账号。</p>
         </div>
         <div class="sync-row">
           <span id="sync-role-label" class="sync-label">本机角色</span>
@@ -103,16 +103,42 @@
         </div>
         <div class="sync-row" id="sync-account-row" hidden>
           <span id="sync-account-label" class="sync-label">共享账号</span>
-          <div class="sync-list" id="sync-accounts" role="group" aria-labelledby="sync-account-label"></div>
+          <div class="sync-field">
+            <div class="sync-list" id="sync-accounts" role="group" aria-labelledby="sync-account-label"></div>
+            <p class="hint" id="sync-clear-hint" hidden></p>
+            <div class="sync-clear-row">
+              <button type="button" class="sync-quiet sync-danger" id="sync-clear" aria-describedby="sync-clear-hint" hidden>停止共享并清除从机</button>
+            </div>
+            <div class="sync-confirm" id="sync-clear-confirm-panel" role="alert" hidden>
+              <p><strong>停止共享并清除从机？</strong> 清除后，其他设备会删除由 Plus 导入的账号；各设备自己登录的账号不受影响。主机会继续续租空快照，直到你关闭同步，这样离线的设备回来时也能清掉。旧版本 Plus 不会应用空快照，请先把各设备升级。</p>
+              <div class="sync-confirm-actions">
+                <button type="button" class="sync-quiet" id="sync-clear-cancel">取消</button>
+                <button type="button" class="sync-urgent" id="sync-clear-confirm">确认清除</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="sync-row">
-          <span class="sync-label">最近同步</span>
+          <span class="sync-label">状态</span>
           <div class="sync-field sync-result" id="sync-result">
             <div class="sync-result-line">
               <span class="sync-result-title" id="sync-result-title">未启用</span>
               <time class="hint" id="sync-result-time" hidden></time>
             </div>
             <p id="sync-result-hint" class="hint" hidden></p>
+            <p id="sync-snapshot" class="hint" hidden></p>
+            <div class="sync-actions" id="sync-actions" hidden>
+              <button type="button" class="sync-quiet" id="sync-now">立即同步</button>
+              <button type="button" class="sync-quiet" id="sync-switch-master" aria-describedby="sync-switch-hint" hidden>切换为主机</button>
+            </div>
+            <p id="sync-switch-hint" class="hint" hidden>浏览器账号先在本机登录，已导入的 API Key 可直接选。请在原主机关闭同步，再等原租约到期。</p>
+          </div>
+        </div>
+        <div class="sync-row" id="sync-device-row" hidden>
+          <span id="sync-device-label" class="sync-label">设备</span>
+          <div class="sync-field">
+            <ul class="sync-devices" id="sync-devices" aria-labelledby="sync-device-label"></ul>
+            <p id="sync-device-hint" class="hint" hidden></p>
           </div>
         </div>
       </section>

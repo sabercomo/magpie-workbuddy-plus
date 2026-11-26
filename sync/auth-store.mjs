@@ -1,7 +1,7 @@
 import { open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { accountIdentity, marker, providerKey } from "./view.mjs";
+import { accountIdentity, marker, providerKey, shareableKind } from "./view.mjs";
 
 // Adapted from WorkBuddy Sync. Do not publish or modify a corrupt live file,
 // and leave Magpie's own backup alone rather than copying unrelated secrets.
@@ -18,45 +18,77 @@ export async function readAuthFile(file) {
   return auth;
 }
 
-const fields = ["access", "uid", "accountId", "domain", "tokenType", "plan"];
-function accessOnly(auth) {
+const baseFields = ["access", "uid", "accountId", "domain", "tokenType", "plan"];
+const fields = [...baseFields, "enterpriseId"];
+function portable(auth) {
+  if (auth.type === "api") return { type: "api", key: auth.key };
   return { type: "oauth", ...Object.fromEntries(fields.filter(key => typeof auth[key] === "string" && auth[key]).map(key => [key, auth[key]])) };
 }
 
-// Unlike upstream collectWorkBuddy, project down to access-only BEFORE
-// sealing. API keys, original expiry and refresh credentials never travel.
-export function collectWorkBuddy(auth, picked) {
+// Like upstream WorkBuddy Sync, carry explicitly selected API entries and
+// enterprise context; unlike upstream, never carry OAuth refresh or expiry.
+export function collectWorkBuddy(auth, picked, machine) {
   const keys = new Set(picked);
   return Object.fromEntries(Object.entries(auth).sort(([a], [b]) => a.localeCompare(b))
-    .filter(([key, value]) => providerKey(key) && value?.type === "oauth" && value.source !== "desktop" && !value.enterpriseId &&
-      !value[marker] && typeof value.access === "string" && value.access && keys.has(accountIdentity(key, value)))
-    .map(([key, value]) => [key, accessOnly(value)]));
+    .filter(([key, value]) => shareableKind(key, value, machine) && keys.has(accountIdentity(key, value)))
+    .map(([key, value]) => [key, portable(value)]));
 }
 
-export function validAccounts(accounts) {
+export const accountSnapshotVersion = accounts => Object.values(accounts).some(a => a.type === "api" || a.enterpriseId) ? 2 : 1;
+
+export function validAccounts(accounts, version = 2) {
   if (!accounts || typeof accounts !== "object" || Array.isArray(accounts)) return false;
   const entries = Object.entries(accounts);
-  return entries.length > 0 && entries.length <= 100 && entries.every(([key, auth]) =>
-    providerKey(key) && auth?.type === "oauth" && typeof auth.access === "string" && !!auth.access &&
-    accountIdentity(key, auth) && Object.keys(auth).every(k => k === "type" || (fields.includes(k) && typeof auth[k] === "string")));
+  const allowed = version === 1 ? baseFields : fields;
+  return entries.length > 0 && entries.length <= 100 && entries.every(([key, auth]) => {
+    if (!accountIdentity(key, auth)) return false;
+    if (auth.type === "api") return version === 2 && Object.keys(auth).every(k => k === "type" || k === "key");
+    return auth.type === "oauth" && typeof auth.access === "string" && !!auth.access &&
+      Object.keys(auth).every(k => k === "type" || (allowed.includes(k) && typeof auth[k] === "string"));
+  });
+}
+
+// A clear snapshot carries no accounts. It is a separate version so an older
+// follower that only knows 1 or 2 rejects it instead of silently keeping a
+// revoked account.
+export function validClearedAccounts(accounts) {
+  return !!accounts && typeof accounts === "object" && !Array.isArray(accounts) && Object.keys(accounts).length === 0;
 }
 
 // Only entries imported by this installation are ours to replace or remove.
 // An official sign-in (even under a different key for the same UID) wins.
 export function mergeForFollower(current, accounts, owner) {
   const isOurs = (key, auth) => providerKey(key) && auth?.[marker] === owner &&
-    auth.type === "oauth" && auth.expires === 0 &&
-    Object.keys(auth).every(name => name === marker || name === "type" || name === "expires" || fields.includes(name));
+    (auth.type === "api" ? Object.keys(auth).every(name => name === marker || name === "type" || name === "key")
+      : auth.type === "oauth" && auth.expires === 0 &&
+        Object.keys(auth).every(name => name === marker || name === "type" || name === "expires" || fields.includes(name)));
   const locals = Object.entries(current).filter(([key, auth]) => !isOurs(key, auth));
   const localIds = new Set(locals.map(([key, auth]) => accountIdentity(key, auth)).filter(Boolean));
   const next = Object.fromEntries(locals), applied = [];
   let skipped = 0;
   for (const [key, auth] of Object.entries(accounts)) {
     if (Object.hasOwn(next, key) || localIds.has(accountIdentity(key, auth))) { skipped++; continue; }
-    next[key] = { ...accessOnly(auth), expires: 0, [marker]: owner };
+    next[key] = { ...portable(auth), ...(auth.type === "oauth" ? { expires: 0 } : {}), [marker]: owner };
     applied.push(key);
   }
   return { next, applied, skipped };
+}
+
+// A clear removes every entry this module ever imported on this installation,
+// not only the ones carrying the current machine's marker: a reset config
+// must not strand an older import. Official local sign-ins have no marker and
+// stay untouched.
+export function clearImported(current) {
+  const next = {};
+  let removed = 0;
+  for (const [key, auth] of Object.entries(current)) {
+    if (providerKey(key) && auth && typeof auth === "object" && auth[marker]) {
+      removed++;
+      continue;
+    }
+    next[key] = auth;
+  }
+  return { next, applied: [], skipped: 0, removed };
 }
 
 // Same .lock file as Magpie. Read fresh under it, and never unlink the

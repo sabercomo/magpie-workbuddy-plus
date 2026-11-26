@@ -1,8 +1,11 @@
 const $ = id => document.getElementById(id);
 const scheduleNames = { daily: "活跃 / 旅行 / 连登福利", tasks: "成长任务", sweep: "补领清扫", night: "夜猫子任务" };
 const intlNames = { daily: "连登活跃 / 签到 / 连登福利", web: "网页会话（每日活跃奖励）" };
+const upgradeHint = "后台是旧版本，请重启电脑后重试。独立安装请重新运行新版安装脚本。";
+const saveButton = $("config-form").querySelector('button[type="submit"]');
+saveButton.disabled = true;
 
-let current, initialSettings, modelField = null;
+let current, initialSettings, modelField = null, compatibility = "";
 const selected = new Set();
 function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 async function api(path, body) {
@@ -11,7 +14,29 @@ async function api(path, body) {
 }
 function failure(error) { $("error").textContent = error.message; $("error").hidden = false; }
 function saveStatus(text, bad) { const status = $("saved"); status.textContent = text; status.classList.toggle("bad", !!bad); }
-async function save(config) { await api("/api/config", config); await refresh(); }
+function compatible(view) {
+  const [major, minor] = String(view?.version).split(".").map(Number);
+  const schedules = plan => plan && typeof plan === "object" && !Array.isArray(plan);
+  // Before v0.8.0 /api/config replaced the whole file instead of merging changes.
+  return (major > 0 || (major === 0 && minor >= 8)) &&
+    schedules(view.config?.schedules) && schedules(view.intlSchedules);
+}
+async function save(config) {
+  if (!current) throw new Error("还没有读到后台状态，请稍等再试");
+  if (!compatible(current)) throw new Error(upgradeHint);
+  await api("/api/config", config);
+  await refresh();
+}
+
+function fillTimes(host, names, prefix, schedules, readOnly) {
+  $(host).replaceChildren(...Object.entries(names).map(([key, name]) => {
+    const label = element("label", name), input = element("input"), times = schedules?.[key];
+    input.name = prefix + key; input.value = Array.isArray(times) ? times.join(", ") : ""; input.placeholder = "HH:MM, HH:MM";
+    input.readOnly = readOnly;
+    label.append(input);
+    return label;
+  }));
+}
 
 function updateScopeNote() {
   const noteEl = $("run-scope-note");
@@ -41,10 +66,23 @@ function toggleSettings(open) {
 
 async function refresh() {
   current = await api("/api/status");
+  const blocked = !compatible(current), config = current.config;
   const hasIntl = current.accounts.some(a => a.realm === "intl");
   $("intl-fields").hidden = $("intl-conversation").hidden = !hasIntl;
-  $("cn-state").textContent = `· 定时${current.config.enabled && !current.syncPaused ? "已开启" : "已暂停"}`;
-  $("intl-state").textContent = `· 定时${current.config.intlEnabled && !current.syncPaused ? "已开启" : "已暂停"}`;
+  $("cn-state").textContent = `· 定时${config?.enabled && !current.syncPaused ? "已开启" : "已暂停"}`;
+  $("intl-state").textContent = `· 定时${config?.intlEnabled && !current.syncPaused ? "已开启" : "已暂停"}`;
+  if (blocked) {
+    saveButton.disabled = true;
+    initialSettings = undefined;
+    modelField = null;
+    compatibility = upgradeHint;
+    failure(new Error(compatibility));
+    saveStatus("后台升级后才能保存设置。", true);
+  } else if (compatibility) {
+    if ($("error").textContent === compatibility) $("error").hidden = true;
+    compatibility = "";
+    saveStatus("");
+  }
   $("accounts").replaceChildren();
   const rank = a => (a.realm === "intl" ? 2 : 0) + (a.enterprise ? 1 : 0), accounts = [...current.accounts].sort((a, b) => rank(a) - rank(b));
   for (const account of accounts) {
@@ -56,7 +94,7 @@ async function refresh() {
     meta.append(element("span", account.realm === "intl" ? "国际版" : account.enterprise ? "企业" : "个人", "tag"), element("span", account.enterprise ? "无个人成长奖励" : "复用 Magpie 登录", "muted"));
     info.append(title, meta);
     const toggle = element("button", account.enabled ? "停用" : "启用");
-    toggle.type = "button";
+    toggle.type = "button"; toggle.disabled = blocked;
     toggle.onclick = async () => {
       try {
         const config = { disabledAccounts: account.enabled ? [...current.config.disabledAccounts, account.id] : current.config.disabledAccounts.filter(id => id !== account.id) };
@@ -68,27 +106,21 @@ async function refresh() {
   updateScopeNote();
 
   if (!initialSettings) {
-    for (const [key, times] of Object.keys(scheduleNames).map(k => [k, current.config.schedules[k] || []])) {
-      const label = element("label", scheduleNames[key]), input = element("input");
-      input.name = `schedule-${key}`; input.value = times.join(", "); input.placeholder = "HH:MM, HH:MM";
-      label.append(input); $("schedule-fields").append(label);
-    }
-    for (const [key, times] of Object.keys(intlNames).map(k => [k, current.intlSchedules[k] || []])) {
-      const label = element("label", intlNames[key]), input = element("input");
-      input.name = `intl-${key}`; input.value = times.join(", "); input.placeholder = "HH:MM, HH:MM";
-      label.append(input); $("intl-schedule-fields").append(label);
-    }
-    const model = $("intl-model-pick"), pick = element("input"), wanted = current.config.intlWebModel || "auto";
+    fillTimes("schedule-fields", scheduleNames, "schedule-", config?.schedules, blocked);
+    fillTimes("intl-schedule-fields", intlNames, "intl-", current.intlSchedules, blocked);
+    if (blocked) return;
+    const model = $("intl-model-pick"), pick = element("input"), wanted = config.intlWebModel || "auto";
     pick.type = "hidden"; pick.name = "intl-model"; pick.value = wanted;
-    model.append(pick, WBBoard.picker(pick, WBBoard.modelChoices(current.intlModels, wanted)));
+    model.replaceChildren(pick, WBBoard.picker(pick, WBBoard.modelChoices(current.intlModels, wanted)));
     modelField = { host: model, pick, count: (current.intlModels || []).length };
-    for (const key of ["timezone", "proxy"]) $("config-form").elements[key].value = current.config[key];
-    if ($("config-form").elements.intlProxy) $("config-form").elements.intlProxy.value = current.config.intlProxy || "";
-    $("config-form").elements.spread.value = Number.isInteger(current.config.spread) ? current.config.spread : 10;
-    $("config-form").elements.intlWeb.checked = current.config.intlWeb !== false;
-    $("config-form").elements.campaignApp.checked = current.config.campaignApp === true;
-    $("config-form").elements.skillShare.checked = current.config.skillShare !== false;
+    for (const key of ["timezone", "proxy"]) $("config-form").elements[key].value = config[key] || "";
+    if ($("config-form").elements.intlProxy) $("config-form").elements.intlProxy.value = config.intlProxy || "";
+    $("config-form").elements.spread.value = Number.isInteger(config.spread) ? config.spread : 10;
+    $("config-form").elements.intlWeb.checked = config.intlWeb !== false;
+    $("config-form").elements.campaignApp.checked = config.campaignApp === true;
+    $("config-form").elements.skillShare.checked = config.skillShare !== false;
     initialSettings = readSettings($("config-form"));
+    saveButton.disabled = false;
   }
   if (modelField && (current.intlModels || []).length !== modelField.count && !modelField.host.lastChild.open) {
     modelField.count = (current.intlModels || []).length; modelField.host.lastChild.remove();
@@ -99,7 +131,7 @@ async function refresh() {
 async function board(view) {
   view = view || await api("/api/board");
   const jobs = view.jobs || [], currentIds = new Set(jobs.map(job => job.id));
-  view = { ...view, jobs: [...jobs, ...current.jobs.filter(job => !currentIds.has(job.id))] };
+  view = { ...view, jobs: [...jobs, ...(current?.jobs || []).filter(job => !currentIds.has(job.id))] };
   updateSchedPill(view);
   WBBoard.render($("board"), view, Date.now(), {
     onSchedule: (intl, on) => save({ [intl ? "intlEnabled" : "enabled"]: on }).then(() => board()).catch(failure),
@@ -108,11 +140,14 @@ async function board(view) {
     onRunAction: (action, accounts) => action === "refresh" ? api("/api/board", { accounts: accounts || [...selected] }).then(() => refresh()) : api("/api/run", { action, accounts: accounts || [...selected] }).then(() => refresh()).catch(e => { failure(e); throw e; }),
     onRefresh: () => api("/api/board", {}).then(() => board()),
     onPauseAccount: (account, paused) => {
-      const list = current.config.pausedAccounts || [];
+      const list = current?.config?.pausedAccounts || [];
       const config = { pausedAccounts: paused ? [...list, account] : list.filter(id => id !== account) };
       return save(config).then(() => refresh()).catch(e => { failure(e); throw e; });
     },
-    onPauseAccounts: (accounts, paused) => save({ pausedAccounts: paused ? [...new Set([...current.config.pausedAccounts, ...accounts])] : current.config.pausedAccounts.filter(id => !accounts.includes(id)) }),
+    onPauseAccounts: (accounts, paused) => {
+      const list = current?.config?.pausedAccounts || [];
+      return save({ pausedAccounts: paused ? [...new Set([...list, ...accounts])] : list.filter(id => !accounts.includes(id)) });
+    },
     onConfig: save,
     onRetry: id => api("/api/retry", { id }).then(refresh),
     onCancel: id => api("/api/cancel", { id }).then(refresh),
@@ -163,13 +198,16 @@ $("config-form").onsubmit = async event => {
   event.preventDefault();
   const form = event.currentTarget;
   try {
-    if (!current) throw new Error("还没有读到后台状态，请稍等再试");
+    if (compatibility) return saveStatus("后台升级后才能保存设置。", true);
+    if (!initialSettings) throw new Error("还没有读到后台设置，请稍等再试");
     const config = readSettings(form), { intlProxy } = config;
     if (intlProxy && intlProxy !== "direct" && !/^https?:\/\//.test(intlProxy)) { saveStatus("国际版代理需要 http:// 或 https:// 地址，或留空 / direct", true); return; }
     saveStatus("正在保存…");
     await save(WBBoard.settingsChanges(initialSettings, config));
-    initialSettings = config;
-    saveStatus("已保存");
+    if (!compatibility) {
+      initialSettings = config;
+      saveStatus("已保存");
+    }
   } catch (e) { saveStatus(`保存失败：${e.message}`, true); }
 };
 

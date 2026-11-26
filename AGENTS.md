@@ -1,9 +1,6 @@
 # AGENTS.md — Magpie WorkBuddy Plus 代理工作规范
 
-本文件约束 AI 代理（以及人类协作者）在本仓库（`magpie-workbuddy-plus`）中执行开发、评审与交付的方式。
-目标：任何新会话开始时，代理读完本文件即可按软件工程标准无损接手工作，不依赖旧对话；历史状态与交接记录由 `project-save-load` 技能维护的 `.project-memory/` 承载（见 §4）。
-
-> Claude Code 用户：本文件通过仓库根目录的 `CLAUDE.md` 以 `@AGENTS.md` 引入，两处规范一致；CI 自动修复工作流（`.github/workflows/ai-fix.yml`、`claude-reply.yml`）同样在本仓库上下文中运行。
+仓库工作规范集中写在本文件。Claude Code 通过 `CLAUDE.md` 引入本文件。
 
 ---
 
@@ -15,22 +12,14 @@ WorkBuddy Plus 是 Magpie 的非官方 WorkBuddy 补充插件，同时支持国�
   - 纯 ESM（`package.json` 为 `"type": "module"`，根目录 `*.mjs`）+ 原生 HTML / JS / CSS（无前端框架、无打包构建步骤）。
   - 零第三方 npm 依赖（无 `dependencies` / `devDependencies`，仅使用 `node:*` 内置模块与标准 Web API）。
   - `engines.node >= 22`（Node 22+ 跑测试及无代理服务）；**HTTP 代理（`fetch(..., { proxy })`）与 macOS `install.mjs` 需要 Bun 1.3+**（`client.mjs` 检测 `globalThis.Bun`）。
-- **模块架构（单文件单职责 + 双端界面）**：
-  - **入口与进程外壳**：`index.mjs`（Magpie 插件入口 `WorkBuddyPlusPlugin`、工具注册、端口解析 `portOf` 与升级交接 `handoff`）、`server.mjs`（本机 HTTP 服务 `127.0.0.1:3439`、实例互斥与优雅退出）、`cli.mjs`（CLI 子命令）、`install.mjs`（macOS LaunchAgent 安装器）。
-  - **配置、状态与调度**：`storage.mjs`（配置校验 `validateConfig`、历史配置迁移 `settle` / `migrateSchedules`、原子写 JSON、Magpie `plugin-auth.json` / `plugin-checkin.json` 读取与脱敏 `maskProxy`）、`runner.mjs`（`Runner`：队列、错峰 `shifted`、调度 `tick`、熔断与恢复、分钟级 `heartbeat`、看板生成与多目标快照发布 `publish`）、`network.mjs`（纯网络连接中断判定 `dropped`）。
-  - **上游客户端与任务引擎**：`client.mjs`（`WorkBuddyClient`：统一请求头、节流、429 退避、风控识别 `isRestricted`）、`engine.mjs`（`perform` 与 `actions` 调度）、`events.mjs`（事件形态 `specs`、`unreachable`、`channel`、`buildEvents`、`buildEvent`、`growthTasks`）、`campaign.mjs`（运营活动执行与只读状态 `campaignStatus`）、`skills.mjs`（技能分享渠道创建与事件上报）、`webagent.mjs`（国际版每日网页会话 ACP 流程与 `pickModel`）。
-  - **只读看板与模型目录**：`board.mjs`（只读采集 `collect`、积分包/批次到期 `summarize`、企业额度 `allowance`、用量分页 `usage` / `usageSince`、任务中心视图 `taskBoard`、快照指纹 `pageBuild` 与 `writePage`）、`history.mjs`（7 天积分流水溯源 `ledger`）、`models.mjs`（`/v3/config` 解析与推理档位/优惠/等级）、`limits.mjs`（真实 6004/6020 限额与排队解析、Magpie `routing/` 日志解析 `routingRefusals`）。
-  - **双端界面**：`page/`（Magpie 无网络沙箱页，通过 `page/data.js` 读快照、经 `magpie.options.set` 传请求；其中 `board.js`、`board.css`、`icon.svg` 与本机面板共用）和 `public/`（本机 HTTP 面板，直接调用 `/api/*`）。
-  - **分发白名单**：遵循 `package.json` 的 `"files"` 与 `install.mjs` 的复制列表。同步模块和原始许可均须分发；运行时生成的 `page/data.js` 不得随包或源码安装器复制。调整模块时同步检查两处。
 - **核心原则（违反即返工）**：
   1. **零凭据外泄与职责边界**：`page/data.js`、`/api/status`、`/api/board`、日志和普通插件文件不得包含 `access` / `refresh` token、完整带密代理 URL（页面只拿 `maskProxy` 脱敏值）或请求正文文本（`input` / `inputTrunc`）。账号同步唯一允许的凭据写入见第 4 条。不调用国内版每日签到接口，不取代 Magpie 的账号登录管理。
   2. **双版本与企业号严格隔离**：国内版（`cn`）与国际版（`intl`）各自保留独立开关（`enabled` / `intlEnabled`）、时段（`schedules` / `intlSchedules`）与站点域；企业账号（`enterprise`）只接入企业只读看板，不执行个人成长/旅行/签到/领奖，也不读个人补偿与盲盒配额；任务页只列国内个人账号。国际版不请求猫猫旅行，不模拟客户端成长任务。
   3. **真实消费操作默认保守**：会调用大模型、消耗积分或消耗成长能量的新操作（如 `campaignApp` 活动 App 对话、`buddyAuto` 旅行后自动开盲盒）必须默认关闭（opt-in）；国际版网页会话优先当前免费模型；`limits.mjs` 只记录真实请求拒绝与 Magpie 路由日志，绝不主动发 `"Hi"` 探测模型限额。
-  4. **账号文件默认只读与原子写入**：Plus 后台只读 Magpie 的 `plugin-auth.json`，登录与续期仍归 Magpie。唯一写入例外是默认关闭、只在 Magpie 插件宿主运行的 `sync/`：主机仅把获选个人账号的 access token 和必要元数据加密上传到已校验的 GitHub 私有仓库，不同步 refresh token 或 API Key；从机在 Magpie 的锁下原子更新本模块管理的 access-only 条目，不覆盖本机登录，不写备份或其他 Magpie 文件。GitHub 凭据与同步口令只在同步模块内使用。所有插件本地 JSON 与 `page/data.js` 采用同目录临时文件 + 原子替换。
-  5. **只读看板与执行隔离**：`board.mjs`、`campaignStatus`、`models.mjs`、`history.mjs`、`limits.mjs` 必须保持无副作用只读语义；插件更新交接 `handoff` 在 `runner.working()` 为真时不得强行退出正在执行任务的后台服务。
+  4. **账号文件默认只读与原子写入**：Plus 后台只读 Magpie 的 `plugin-auth.json`，登录与续期仍归 Magpie。唯一写入例外是默认关闭、只在 Magpie 插件宿主运行的 `sync/`：主机将用户明确勾选的 OAuth access token、必要元数据及 API Key 加密写入经校验的私有存储，不同步 refresh token；API Key 只供 Magpie 使用，不得进入 Plus 任务。显式清空共享时发布带 `cleared` 标记的空快照（version 3），从机只在 Magpie 的锁下删除本模块导入的条目，本机登录不变。同步必须使用条件写，WebDAV 另需排他锁。从机在 Magpie 的锁下原子更新本模块管理的导入条目，不覆盖本机登录，不写备份或其他 Magpie 文件。存储凭据、同步口令和 API Key 不得进入页面、状态、日志或普通配置。所有插件本地 JSON 与 `page/data.js` 采用同目录临时文件 + 原子替换。
+  5. **只读看板与执行隔离**：`board.mjs`、`campaignStatus`、`models.mjs`、`history.mjs`、`limits.mjs` 必须保持无副作用只读语义。运行时 `handoff` 负责插件升级换进程，在 `runner.working()` 为真时不得退出正在执行任务的后台服务。
   6. **网络与界面安全边界**：本机服务只绑 `127.0.0.1`，校验 `Host`、`Origin`、`X-WorkBuddy-Plus: 1`、64KB 请求体上限与严格 CSP；任何从上游返回的动态跳转 URL（如 `boxUrl`）必须经过 `https:` + 域名白名单 + `redirect: "error"` 校验；前端严禁将动态或上游文本传入 `innerHTML`。
   7. **配置向后兼容**：新增或调整配置项时必须在 `storage.mjs`（`settle` / `migrateSchedules` / `validateConfig`）保持旧配置无损迁移，不得覆盖用户已修改的时段或开关。
-  8. **先读规范、先样稿后生产**：界面、视觉或交互改动前必须先读 [DESIGN.md](DESIGN.md)（并按需读 `apple-design` 技能），先在 `docs/mockups/` 或 `docs/redesign/` 出可查看样稿并获用户明确同意，再改 `page/` / `public/` 生产文件。
 
 ---
 
@@ -40,18 +29,19 @@ WorkBuddy Plus 是 Magpie 的非官方 WorkBuddy 补充插件，同时支持国�
 
 | 位置 | 职责 | 更新时机 |
 |---|---|---|
-| `README.md` / `README.en.md` | 中英文用户手册（安装、功能规则、默认定时、MCP 工具/CLI、配置与数据、测试清单） | 功能、默认定时、配置字段、MCP 工具、支持行为或截图变化时**双语同步** |
+| `README.md` / `README.en.md` | 中英文用户手册 | 用户需要知道的功能、安装方式、配置或用法变化时双语同步 |
 | `THIRD_PARTY_NOTICES.md` | 第三方 MIT 参考来源、pinned revision 与适配文件说明 | 新增或修改源自第三方上游的协议/事件适配时 |
-| `AGENTS.md` / `CLAUDE.md` | 代理工作规范与 Claude Code 速查入口 | 模块边界、命令、安全规则或交付流程变化时 |
+| `AGENTS.md` | 代理工作规范 | 模块边界、命令、安全规则或交付流程变化时 |
+| `DEFENSIVE_NOTES.txt` | 插件的防御性说明 | 免责、预防性声明或内部保护机制的说明变化时 |
 | `DESIGN.md` | UI/视觉与交互设计系统（Apple 设计原则 × Magpie 宿主风格） | 色彩令牌、字体排版、组件状态、响应断点或禁止反模式变化时 |
-| `docs/images/` & `docs/screenshots.sh` | README 演示截图（由 `docs/demo-data.mjs` 虚构数据生成） | 生产 UI（`page/`）发生明显变化且用户确认后重拍 |
+| `docs/images/` & `docs/screenshots.sh` | README 演示截图（由 `docs/demo-data.mjs` 虚构数据生成） | 发版前更新受影响且已明显过时的演示图 |
 | `docs/mockups/` / `docs/redesign/` | 独立 UI 样稿与重设计探索（未合入前保留在此，不自动提交） | 用户要求做视觉方案、样稿或修改样稿时 |
-| `.project-memory/` | 会话交接归档（由 `project-save-load` 技能维护，本地 `.gitignore` 忽略） | 每次已授权迭代收尾「存档」，见 §4 |
+| `.project-memory/` | 本地会话交接归档，由 `project-save-load` 技能维护 | 用户要求「存档」时更新，见 §5 |
 
 ### 1.2 写作规则
 
 - 文档正文用中文（`README.en.md` 除外）；代码标识符、配置键名、命令、文件名与 HTTP 状态/错误码保留英文原文；新写内容中的评估、校验与验收口径统一使用「标准」。
-- `README.md` 与 `README.en.md` 保持信息等价；改动 `actions`、默认时段表、MCP 工具、配置字段或测试覆盖范围后，全仓 grep 核对中英文文档与注释是否同步。
+- `README.md` 与 `README.en.md` 保持信息等价。用户可见的接口、默认时段或配置变化时，用 `rg` 核对受影响的说明与注释。
 - 严格区分**已核实事实**（对应代码路径、实测输出或测试名）与**推断 / 待实测项**；任何依赖腾讯/WorkBuddy 上游真实响应的新事件或新字段，在未用真号验证前必须显式标注「需真号实测」。
 - 严禁在文档、截图脚本或注释中写入个人真实账号 ID、令牌、真实代理凭据或私有环境信息。
 
@@ -99,7 +89,8 @@ WorkBuddy Plus 是 Magpie 的非官方 WorkBuddy 补充插件，同时支持国�
 - **CSP 与 XSS 纪律**：
   - `server.mjs` 对 `public/` 启用严格 CSP（`default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'`），禁止内联脚本/样式与外链资源；`page/` 运行于无网络沙箱，同样禁止任何外链资源。
   - DOM 构建统一用 `document.createElement` / `textContent` / 辅助构造器；严禁把来自上游响应、配置、账号名或日志的文本塞入 `innerHTML`（`board.js` 仅允许对内置静态 SVG path 字符串使用）。
-- **设计改版流程与视觉标准**：设计或前端改动前必须先读 [DESIGN.md](DESIGN.md) 并严格遵循（Apple 设计原则 × Magpie `--magpie-*` 风格，禁国内 App 复杂堆砌）；先在 `docs/mockups/` 或 `docs/redesign/` 出样稿获用户确认后再同步修改 `page/` 与 `public/`，保持行为一致。
+- 免责、预防性声明和仅用于解释内部保护机制的文案统一写入 [DEFENSIVE_NOTES.txt](DEFENSIVE_NOTES.txt)。插件界面（包括页脚、折叠说明和悬浮提示）只呈现当前状态、必要的操作说明和操作后果，如扣积分或消耗成长能量。
+- 界面、视觉、布局或交互改动先读 [DESIGN.md](DESIGN.md)，在 `docs/mockups/` 或 `docs/redesign/` 提供独立样稿，用户明确同意后再改生产文件。静态小改给局部效果图，交互改动给可操作样稿，涉及整页或双端布局时再扩大预览范围。用虚构数据，优先复用现有样稿与共享渲染器。
 
 ### 3.3 上游接口、任务与熔断契约
 
@@ -160,25 +151,16 @@ sh docs/screenshots.sh
 
 ---
 
-## 4. 迭代收尾流程（已授权的仓库实施迭代强制执行）
+## 4. 按改动范围验证
 
-本节适用于已授权的仓库实施迭代；只读审阅、答疑或待确认样稿阶段不改动生产代码，也不执行提交、打标签或发版。实施迭代完成以下五项才算收尾：
-
-1. **同步测试与契约基线**：运行 `npm test` 验证全部测试通过；若改动涉及配置、任务引擎、HTTP 接口、前端交互或平台路径，补齐对应 `test/*.test.mjs` 用例；若修改了插件分发结构，检查 `package.json` `"files"` 与 `install.mjs`。
-2. **更新文档与实测标注**：按 §1.1 同步更新 `README.md`、`README.en.md`、`THIRD_PARTY_NOTICES.md`、`AGENTS.md` / `CLAUDE.md`；核对数量与清单类声明；涉及上游协议或事件变更时，明确列出哪些项「需真号实测」。
-3. **预览验收与 Git 门禁**：若涉及界面/视觉修改，先呈交独立样稿并确认获批；**未经用户明确同意，不执行 `git commit`、`git tag`、GitHub Release 或 GitHub Issue 回复**。获用户明确授权提交时，先查 `git status` / `git diff`，仅显式 `git add <paths>` 本轮改动路径后提交。
-4. **压缩上下文（存档）**：执行 `project-save-load` 技能的 **`存档`** 流程，先运行 `snapshot` 备份，再更新 `.project-memory/`（`state.md`、`session-summary.md`、`todo.md`、`decisions.md`、`technical-notes.md`、`cautions.md`、`handover.md`、`logs/YYYY-MM-DD.md`）并运行 `validate` 校验通过（禁止写入任何 token、密码或代理秘钥，必要时用 `[REDACTED]`）。`.project-memory/` 在 `.gitignore` 中保持本地忽略。完成后向用户声明「上下文已交接，新会话可从 `.project-memory/` 恢复（读档）」。
-5. **验收自检**：逐项核对用户要求与本轮实际结果，只陈述直接观察到的文件状态与命令输出；若受沙箱权限、缺少真号环境或工具限制导致某项未执行，如实标记为未验证/待核实及恢复条件，不声称全部完成。
-
-> 交接载体的唯一真相是 `.project-memory/`（由 `project-save-load` 维护）。具体目录结构、读取顺序与校验脚本用法以该技能的 `SKILL.md` 与 `references/schema.md` 为准。
+- 纯文档核对差异与引用。文案或样式小改只看受影响的界面和状态，共享 UI 仍核对两个入口。局部行为改动运行相关测试，现有测试覆盖不到变更行为时补用例。UI 测试优先断言行为、可访问名称及必要结构，只有用户指定的固定文案或依赖该文案的契约才做逐字断言。
+- 跨模块改动、提交和发布运行全量 `npm test`。分发文件变化时核对 `package.json` 的 `"files"` 与 `install.mjs` 的复制列表。按 §1.1 更新受影响文档，发布按 §2.3 执行。
+- 收尾检查 `git diff --check`，对照用户要求报告验证结果和待实测项。
 
 ---
 
-## 5. 会话启动清单
+## 5. 启动与交接
 
-新会话开始时的标准动作：
-
-1. 读取本文件（或经 `CLAUDE.md` 的 `@AGENTS.md` 自动加载）；若涉及设计、UI、视觉或交互任务，**必须先读根目录 [DESIGN.md](DESIGN.md)** 再动手。
-2. 执行 `project-save-load` 技能的只读 **`读档`** 流程，按序读取现有 `.project-memory/`（`handover.md` → `state.md` → `todo.md` → `cautions.md` → `decisions.md` → `technical-notes.md` → 最新 `logs/*.md`）。自动读档仅用于恢复上下文，不构成停止点，也不自动授权执行旧 TODO；不在只读阶段初始化或覆写归档。
-3. 执行 `git status` 与 `git log --oneline -15` 核对当前工作区与归档；注意区分既有未追踪样稿（如 `docs/mockups/`、`docs/redesign/`）及运行中服务写入的 `page/data.js`，本地记录不能替代远端状态。若归档缺失或与代码不一致，以当前仓库实态为准并说明差异。
-4. 若用户带有明确任务，读档后直接推进当前任务；若用户仅要求「读档」，汇报恢复状态后停止等待；仅当用户要求继续既有项目工作时，才从归档「下一步」中领用任务。
+- 有明确的新任务时直接查相关文件，动手前用 `git status --short` 查看已有改动。
+- 接续旧任务时先看 `.project-memory/handover.md`，只补读相关记录，并用当前工作区核对。交接页聚焦现状、未决事项和下一步，细节链接到已有记录。
+- 用户要求「存档」或「读档」时走完整的 `project-save-load` 流程。归档保留在本地 `.project-memory/`，日常修改和发布均无需自动存档。

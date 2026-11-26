@@ -7,7 +7,8 @@ import { dataDir, newer, publicConfig, version } from "./storage.mjs";
 import { proxyEnvironment } from "./network.mjs";
 import { answering, portTaken } from "./server.mjs";
 import { actions } from "./engine.mjs";
-import { startSync } from "./sync/host.mjs";
+import { writePage } from "./board.mjs";
+import { hostTick, startSync } from "./sync/host.mjs";
 
 // The service's port: the plugin option "port" (set with `magpie plugin options`,
 // since Magpie starts plugins with no environment of the user's), else
@@ -66,6 +67,18 @@ async function rpc(path, body) {
 
 const pageFile = join(dirname(fileURLToPath(import.meta.url)), "page", "data.js");
 
+async function targetPage(result) {
+  if (result === "old") console.warn("[workbuddy-plus] 未能自动交接旧后台，请按页面提示处理。");
+  try { await rpc("/api/page-target", { file: pageFile }); }
+  catch (error) {
+    if (result !== "old") throw error;
+    // Some old services cannot publish to this install's page at all.
+    try { writePage(pageFile, { generated: new Date().toISOString(), handoff: "old" }); }
+    catch (e) { console.error("[workbuddy-plus]", e.message); }
+  }
+  return result;
+}
+
 // Updating the plugin replaces its files, not the service already running:
 // that one keeps the old code until it stops. So a newer plugin, when loaded,
 // asks an older service to step aside and starts its own (rpc does, once
@@ -88,7 +101,7 @@ export async function handoff({ fetcher = fetch, wait = delay, mine = version, r
     return "stopping";
   }
   const reply = await response.json().catch(() => ({}));
-  if (reply.busy && tries > 1) retry(() => handoff({ fetcher, wait, mine, retry, tries: tries - 1 }).then(() => rpc("/api/page-target", { file: pageFile })).catch(() => {}), 60_000);
+  if (reply.busy && tries > 1) retry(() => handoff({ fetcher, wait, mine, retry, tries: tries - 1 }).then(targetPage).catch(() => {}), 60_000);
   return reply.busy ? "busy" : "old";
 }
 
@@ -101,13 +114,26 @@ export const WorkBuddyPlusPlugin = async (input, options) => {
   port = portOf(options);
   // Magpie passes its active settings directory, including for portable installs.
   hostConfig = input?.magpie && isAbsolute(input.directory || "") ? input.directory : undefined;
-  const ready = handoff().then(() => rpc("/api/page-target", { file: pageFile })).catch(e => console.error("[workbuddy-plus]", e.message));
-  if (options?.request) ready.then(() => rpc("/api/page", options.request)).catch(e => console.error("[workbuddy-plus]", e.message));
-  if (hostConfig) startSync(hostConfig, options?.syncRequest, async () => {
+  const ready = handoff().then(targetPage).catch(e => console.error("[workbuddy-plus]", e.message));
+  if (options?.request) ready.then(result => {
+    if (result === "old" && options.request.action === "config") return;
+    return rpc("/api/page", options.request);
+  }).catch(e => console.error("[workbuddy-plus]", e.message));
+  const directory = hostConfig;
+  const publishSync = async () => {
     await ready;
     await rpc("/api/page-target", { file: pageFile }).catch(() => {});
-  });
+  };
+  if (directory) startSync(directory, options?.syncRequest, publishSync);
   return { tool: {
+    ...(directory ? { sync_now: {
+      description: "按照本机已保存的主从角色立即同步 WorkBuddy 账号；不会开启已关闭的同步、切换角色，也不会返回凭据。",
+      args: { type: "object", properties: {}, additionalProperties: false },
+      execute: async () => {
+        try { return { code: await hostTick(directory, null, { force: true, onChange: publishSync }) }; }
+        catch { return { code: "failed" }; }
+      }
+    } } : {}),
     status: {
       description: "WorkBuddy Plus 的国内版与国际版账号、执行记录、定时设置。成长任务、猫猫旅行、连登福利；本机面板默认 http://127.0.0.1:3439（端口可在插件选项 port 中修改）。不会返回登录密钥。",
       args: { type: "object", properties: {}, additionalProperties: false },

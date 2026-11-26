@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 
 export const dataDir = process.env.WORKBUDDY_PLUS_DIR || join(homedir(), ".config", "workbuddy-plus");
 export const magpieDir = process.env.WORKBUDDY_PLUS_MAGPIE_DIR || join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "magpie");
@@ -109,13 +110,21 @@ export function accounts(config) {
     if (!realm || auth.type !== "oauth") continue;
     if (!auth.access || !auth.uid) continue;
     const id = `${realm}:${auth.uid}`;
-    found.set(id, { id, realm, name: auth.accountId || auth.uid, auth, source: "magpie", key });
+    const enterprise = !!auth.enterpriseId;
+    found.set(JSON.stringify([id, auth.enterpriseId || ""]), { id, realm, name: auth.accountId || auth.uid, auth, source: "magpie", key, enterprise });
   }
   // Personal accounts first, enterprise last; the board still groups by realm.
   const rank = a => (a.realm === "intl" ? 2 : 0) + (a.enterprise ? 1 : 0);
+  const used = new Set();
   return [...found.values()]
-    .map(a => ({ ...a, enabled: !config.disabledAccounts.includes(a.id), paused: (config.pausedAccounts || []).includes(a.id), enterprise: !!a.auth.enterpriseId }))
-    .sort((a, b) => rank(a) - rank(b));
+    .sort((a, b) => rank(a) - rank(b))
+    .map(a => {
+      // An imported organization can have the same UID as an existing
+      // personal login. Keep the established personal ID and both rows.
+      const id = used.has(a.id) ? `${a.id}:enterprise:${createHash("sha256").update(String(a.auth.enterpriseId)).digest("hex").slice(0, 16)}` : a.id;
+      used.add(id);
+      return { ...a, id, enabled: !config.disabledAccounts.includes(id), paused: (config.pausedAccounts || []).includes(id) };
+    });
 }
 
 // The international login the models view reads its list and plan with.
