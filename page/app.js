@@ -76,7 +76,7 @@ function paintView(view, canSave) {
 function paint() {
   const view = globalThis.WBPLUS, previous = blocked;
   blocked = !view ? "还没有读到后台设置，请稍等再试"
-    : !view.version || view.handoff === "old" || !view.settings || !view.schedules || !view.intlSchedules ? upgradeHint : "";
+    : !view.version || view.handoff === "old" || !view.settings || !WBBoard.hasScheduleFields(view.schedules, view.intlSchedules) ? upgradeHint : "";
   try { paintView(view, !blocked); }
   catch (error) {
     console.error("[workbuddy-plus]", error);

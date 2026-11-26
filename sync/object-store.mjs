@@ -35,10 +35,11 @@ class Objects {
     return anonymous ? this.fetcher(url, opts) : this.send(url, opts);
   }
 
-  async privateCheck(url, method = "HEAD", headers, missing = false) {
+  async privateCheck(url, method, headers) {
     const res = await this.request(url, method, headers, undefined, true);
     await discard(res);
-    if (![401, 403, ...(missing ? [404] : [])].includes(res.status)) throw new Error("Sync storage is not confirmed private");
+    // A missing object says nothing about who could read it after the first write.
+    if (![401, 403].includes(res.status)) throw new Error("Sync storage is not confirmed private");
   }
 
   async read(file) {
@@ -99,7 +100,7 @@ export class S3Contents extends Objects {
 
   async checkPrivate(file) {
     await this.privateCheck(this.listing(file.slice(0, file.lastIndexOf("/"))), "GET");
-    await this.privateCheck(this.url(file), "HEAD", undefined, true);
+    await this.privateCheck(this.url(file), "GET");
   }
 
   async list(dir) {
@@ -138,7 +139,7 @@ export class WebDAVContents extends Objects {
 
   async checkPrivate(file) {
     await this.privateCheck(this.url(), "PROPFIND", { Depth: "0" });
-    await this.privateCheck(this.url(file), "HEAD", undefined, true);
+    await this.privateCheck(this.url(file), "GET");
   }
 
   async mkdir(dir, headers) {

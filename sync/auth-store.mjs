@@ -1,7 +1,7 @@
 import { open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { accountIdentity, marker, providerKey, shareableKind } from "./view.mjs";
+import { accountIdentity, marker, providerKey, shareableKind, uuid } from "./view.mjs";
 
 // Adapted from WorkBuddy Sync. Do not publish or modify a corrupt live file,
 // and leave Magpie's own backup alone rather than copying unrelated secrets.
@@ -55,14 +55,19 @@ export function validClearedAccounts(accounts) {
   return !!accounts && typeof accounts === "object" && !Array.isArray(accounts) && Object.keys(accounts).length === 0;
 }
 
-// Only entries imported by this installation are ours to replace or remove.
-// An official sign-in (even under a different key for the same UID) wins.
-export function mergeForFollower(current, accounts, owner) {
-  const isOurs = (key, auth) => providerKey(key) && auth?.[marker] === owner &&
+// A local re-login may leave a marker behind. A renewable login or an entry
+// with extra fields is no longer an untouched sync import.
+function imported(key, auth) {
+  return providerKey(key) && uuid(auth?.[marker]) &&
     (auth.type === "api" ? Object.keys(auth).every(name => name === marker || name === "type" || name === "key")
       : auth.type === "oauth" && auth.expires === 0 &&
         Object.keys(auth).every(name => name === marker || name === "type" || name === "expires" || fields.includes(name)));
-  const locals = Object.entries(current).filter(([key, auth]) => !isOurs(key, auth));
+}
+
+// Only entries imported by this installation are ours to replace or remove.
+// An official sign-in (even under a different key for the same UID) wins.
+export function mergeForFollower(current, accounts, owner) {
+  const locals = Object.entries(current).filter(([key, auth]) => !(imported(key, auth) && auth[marker] === owner));
   const localIds = new Set(locals.map(([key, auth]) => accountIdentity(key, auth)).filter(Boolean));
   const next = Object.fromEntries(locals), applied = [];
   let skipped = 0;
@@ -82,7 +87,7 @@ export function clearImported(current) {
   const next = {};
   let removed = 0;
   for (const [key, auth] of Object.entries(current)) {
-    if (providerKey(key) && auth && typeof auth === "object" && auth[marker]) {
+    if (imported(key, auth)) {
       removed++;
       continue;
     }

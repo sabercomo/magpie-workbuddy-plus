@@ -111,3 +111,22 @@ test("WebDAV serializes creators with a server lock and verifies the ETag while 
   assert.equal(calls.filter(([method]) => method === "PUT").length, 2);
   assert.equal(locked, false);
 });
+
+test("a denied directory listing and a missing object do not prove a new snapshot will be private", async t => {
+  for (const [Store, params] of [[S3Contents, { url: "s3://fixtures" }], [WebDAVContents, { url: "https://dav.example.test/" }]]) {
+    const cfg = fixture(t, params);
+    let objectStatus = 404;
+    const calls = [];
+    const store = new Store({ ...cfg, fetcher: async (url, options) => {
+      const req = new Request(url, options);
+      calls.push(req);
+      return new Response(null, { status: req.url.endsWith(snapshot) ? objectStatus : 403 });
+    } });
+    await assert.rejects(store.checkPrivate(snapshot), /not confirmed private/);
+    objectStatus = 403;
+    await store.checkPrivate(snapshot);
+    assert(calls.every(req => !req.headers.has("authorization")));
+    assert(calls.filter(req => req.url.endsWith(snapshot)).every(req => req.method === "GET"),
+      "test anonymous object reads, not just HEAD permissions");
+  }
+});

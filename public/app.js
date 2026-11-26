@@ -16,10 +16,9 @@ function failure(error) { $("error").textContent = error.message; $("error").hid
 function saveStatus(text, bad) { const status = $("saved"); status.textContent = text; status.classList.toggle("bad", !!bad); }
 function compatible(view) {
   const [major, minor] = String(view?.version).split(".").map(Number);
-  const schedules = plan => plan && typeof plan === "object" && !Array.isArray(plan);
   // Before v0.8.0 /api/config replaced the whole file instead of merging changes.
   return (major > 0 || (major === 0 && minor >= 8)) &&
-    schedules(view.config?.schedules) && schedules(view.intlSchedules);
+    Array.isArray(view.accounts) && WBBoard.hasScheduleFields(view.config?.schedules, view.intlSchedules);
 }
 async function save(config) {
   if (!current) throw new Error("还没有读到后台状态，请稍等再试");
@@ -66,8 +65,9 @@ function toggleSettings(open) {
 
 async function refresh() {
   current = await api("/api/status");
-  const blocked = !compatible(current), config = current.config;
-  const hasIntl = current.accounts.some(a => a.realm === "intl");
+  const blocked = !compatible(current), config = current?.config;
+  const rows = Array.isArray(current?.accounts) ? current.accounts : [];
+  const hasIntl = rows.some(a => a.realm === "intl");
   $("intl-fields").hidden = $("intl-conversation").hidden = !hasIntl;
   $("cn-state").textContent = `· 定时${config?.enabled && !current.syncPaused ? "已开启" : "已暂停"}`;
   $("intl-state").textContent = `· 定时${config?.intlEnabled && !current.syncPaused ? "已开启" : "已暂停"}`;
@@ -84,7 +84,7 @@ async function refresh() {
     saveStatus("");
   }
   $("accounts").replaceChildren();
-  const rank = a => (a.realm === "intl" ? 2 : 0) + (a.enterprise ? 1 : 0), accounts = [...current.accounts].sort((a, b) => rank(a) - rank(b));
+  const rank = a => (a.realm === "intl" ? 2 : 0) + (a.enterprise ? 1 : 0), accounts = [...rows].sort((a, b) => rank(a) - rank(b));
   for (const account of accounts) {
     const row = element("div", undefined, account.realm === "intl" ? "account intl" : "account"), checkbox = element("input");
     checkbox.type = "checkbox"; checkbox.checked = selected.has(account.id); checkbox.disabled = !account.enabled;
@@ -107,7 +107,7 @@ async function refresh() {
 
   if (!initialSettings) {
     fillTimes("schedule-fields", scheduleNames, "schedule-", config?.schedules, blocked);
-    fillTimes("intl-schedule-fields", intlNames, "intl-", current.intlSchedules, blocked);
+    fillTimes("intl-schedule-fields", intlNames, "intl-", current?.intlSchedules, blocked);
     if (blocked) return;
     const model = $("intl-model-pick"), pick = element("input"), wanted = config.intlWebModel || "auto";
     pick.type = "hidden"; pick.name = "intl-model"; pick.value = wanted;

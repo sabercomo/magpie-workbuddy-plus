@@ -95,10 +95,15 @@ export async function handoff({ fetcher = fetch, wait = delay, mine = version, r
   if (response.status === 202) {
     for (let i = 0; i < 50; i++) {
       await wait(100);
-      try { await fetcher(base() + "/api/status", { signal: AbortSignal.timeout(500) }); }
+      try {
+        const status = await fetcher(base() + "/api/status", { signal: AbortSignal.timeout(500) });
+        const next = status.ok && await status.json();
+        if (next?.config && next.version && !newer(mine, next.version)) return "current";
+      }
       catch (e) { if (refused(e)) return "stopped"; }
     }
-    return "stopping";
+    // A supervisor may already have restarted its old installed copy.
+    return "old";
   }
   const reply = await response.json().catch(() => ({}));
   if (reply.busy && tries > 1) retry(() => handoff({ fetcher, wait, mine, retry, tries: tries - 1 }).then(targetPage).catch(() => {}), 60_000);
@@ -116,7 +121,8 @@ export const WorkBuddyPlusPlugin = async (input, options) => {
   hostConfig = input?.magpie && isAbsolute(input.directory || "") ? input.directory : undefined;
   const ready = handoff().then(targetPage).catch(e => console.error("[workbuddy-plus]", e.message));
   if (options?.request) ready.then(result => {
-    if (result === "old" && options.request.action === "config") return;
+    const settingsWrite = ["config", "pause", "resume", "intl-on", "intl-off", "pause-tasks", "resume-tasks"].includes(options.request.action);
+    if (settingsWrite && !["none", "current", "stopped"].includes(result)) return;
     return rpc("/api/page", options.request);
   }).catch(e => console.error("[workbuddy-plus]", e.message));
   const directory = hostConfig;

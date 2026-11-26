@@ -2046,7 +2046,9 @@
   }
 
   const scheduleTimes = value => [...new Set(value.split(/[,，\s]+/).filter(Boolean))].sort();
+  const hasScheduleFields = (domestic, intl) => [[domestic, ["daily", "tasks", "sweep", "night"]], [intl, ["daily", "web"]]]
+    .every(([plan, keys]) => keys.every(key => Array.isArray(plan?.[key]) && plan[key].every(t => typeof t === "string")));
   const settingsChanges = (before, after) => Object.fromEntries(Object.entries(after).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(before?.[key])));
 
-  globalThis.WBBoard = { render, when, picker, modelChoices, goTab, setMode, scheduleTimes, settingsChanges };
+  globalThis.WBBoard = { render, when, picker, modelChoices, goTab, setMode, scheduleTimes, hasScheduleFields, settingsChanges };
 })();

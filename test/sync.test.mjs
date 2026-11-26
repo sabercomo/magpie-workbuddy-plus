@@ -378,6 +378,10 @@ test("clearing shared accounts publishes an empty snapshot and removes only impo
   assert.equal(readJSON(authFile(b)).workbuddy.access, "fixture-access-primary");
 
   clock += 1;
+  // Magpie may have renewed a locally signed-in entry that still has the old marker.
+  const signedIn = { ...auth("signed-in", "new-local-access"), [marker]: syncConfig(b).machine };
+  const files = readJSON(authFile(b));
+  writeJSON(authFile(b), { ...files, "workbuddy#signed-in": signedIn });
   const clear = { ...change(a, clock, "master", []), clear: true };
   assert.equal(await hostTick(a, clear, services), "cleared");
   const snapshot = await openData(repo.file().data, passphrase);
@@ -395,6 +399,7 @@ test("clearing shared accounts publishes an empty snapshot and removes only impo
   const after = readJSON(authFile(b));
   assert.equal(after.workbuddy, undefined);
   assert.equal(after["workbuddy-ai"], undefined);
+  assert.deepEqual(after["workbuddy#signed-in"], signedIn);
   assert.deepEqual(after["workbuddy#own"], local["workbuddy#own"]);
   assert.deepEqual(after.unrelated, local.unrelated);
   assert.equal(syncView(b, clock).code, "cleared");
@@ -406,6 +411,17 @@ test("clearing shared accounts publishes an empty snapshot and removes only impo
   clock += 30_000;
   assert.equal(await hostTick(b, null, services), "received");
   assert.equal(readJSON(authFile(b)).workbuddy.access, "fixture-access-primary");
+});
+
+test("empty master picks without an explicit clear never revoke follower accounts", async t => {
+  const dir = setup(t, { workbuddy: auth("main") }), repo = github(), clock = Date.now();
+  const services = { storeFactory: repo.storeFactory, now: () => clock };
+  await hostTick(dir, null, services);
+  assert.equal(await hostTick(dir, change(dir, clock, "master", ["cn:main"]), services), "published");
+  const original = repo.file();
+  writeJSON(configPath(dir), { ...syncConfig(dir), picks: [] });
+  assert.equal(await hostTick(dir, null, { ...services, force: true }), "missing");
+  assert.equal(repo.file().sha, original.sha);
 });
 
 test("a missing selected account never turns into a clear", async t => {
@@ -440,6 +456,11 @@ test("a page request can force one poll without changing the saved role", async 
   assert.deepEqual(after.picks, ["cn:main"]);
   assert.equal(after.reply.id, request.id);
   assert.equal(syncView(dir, clock).reply.id, request.id);
+  const calls = repo.calls.length;
+  for (const repeated of [request, { ...request, id: randomUUID(), target: randomUUID() }]) {
+    assert.equal(await hostTick(dir, repeated, services), "idle");
+  }
+  assert.equal(repo.calls.length, calls, "replayed or foreign requests do not bypass the poll interval");
 });
 
 test("a page request cannot enable an off machine", async t => {

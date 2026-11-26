@@ -108,7 +108,9 @@ test("panel runs selected accounts and saves deduplicated schedule times", async
   await polls.get(4000)(); await setImmediate();
   assert.equal(nodes.get("schedule-fields").children.length, 4, "polling must not append a second set of domestic fields");
   assert.equal(form.elements["schedule-daily"].readOnly, true);
-  for (const oldStatus of [{ ...status, version: "0.7.10" }, { ...status, intlSchedules: undefined }, { ...status, config: { ...status.config, schedules: undefined } }]) {
+  for (const oldStatus of [{ ...status, version: "0.7.10" }, { ...status, intlSchedules: undefined }, { ...status, config: { ...status.config, schedules: undefined } },
+    { ...status, config: { ...status.config, schedules: { ...status.config.schedules, daily: null } } },
+    { ...status, intlSchedules: {} }, { ...status, accounts: undefined }]) {
     snapshot = oldStatus;
     await polls.get(4000)(); await setImmediate();
     assert.equal(saveButton.disabled, true);
@@ -541,6 +543,14 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   await saveButton.onclick({ currentTarget: saveButton });
   await assert.rejects(vm.runInContext('ask("config", { config: { concurrency: 2 } })', context), /后台是旧版本/);
   assert.equal(requests.length, 0, "the old snapshot must not submit a settings or board configuration request");
+  for (const patch of [{ schedules: { daily: [] } }, { intlSchedules: { daily: "09:00", web: [] } }]) {
+    context.WBPLUS = { ...view, ...patch };
+    vm.runInContext("paint()", context);
+    assert.match(nodes.get("note").textContent, /后台是旧版本/);
+    assert.equal(saveButton.disabled, true);
+    await saveButton.onclick();
+    assert.equal(requests.length, 0);
+  }
   context.WBPLUS = { ...view, today: { slots: {} } };
   context.WBBoard.goTab("schedule");
   assert.doesNotThrow(() => vm.runInContext("paint()", context));

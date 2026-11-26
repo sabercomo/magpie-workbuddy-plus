@@ -31,7 +31,7 @@ export async function syncOnce(dir, config, { now = Date.now, storeFactory = sto
   const remote = transport(dir);
   if (!remote) return { code: "unconfigured" };
   const authFile = join(dir, "plugin-auth.json");
-  const cleared = config.role === "master" && config.picks.length === 0;
+  const cleared = config.role === "master" && config.cleared === true && config.picks.length === 0;
   let own = null;
   if (config.role === "master") {
     own = cleared ? {} : collectWorkBuddy(await readAuthFile(authFile), config.picks, config.machine);
@@ -119,7 +119,7 @@ async function saveRequest(dir, config, request, now) {
     } catch { error = "unavailable"; }
   }
   const next = { ...config, ...(error ? {} : {
-    role: clear ? "master" : role,
+    role, cleared: clear,
     picks: clear || role !== "master" ? [] : [...new Set(picks)],
     revision: request.id
   }), reply: { id: request.id, at: request.at, error } };
@@ -147,7 +147,7 @@ export async function hostTick(dir, request, { now = Date.now, storeFactory, onC
     if (changed || previous !== config) await onChange();
     if (config.role === "off") return "off";
     const state = syncResult(dir), revision = config.revision || "";
-    const forced = force || request?.now === true;
+    const forced = force || (previous !== config && request?.now === true);
     if (!forced && state?.revision === revision && now() - state.checkedAt < pollMs - 1000) return "idle";
     let result;
     try { result = await syncOnce(dir, config, { now, storeFactory, state }); }

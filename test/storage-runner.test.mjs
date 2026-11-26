@@ -337,6 +337,17 @@ test("an older service steps aside for a newer plugin, never mid-job; the same o
   assert.deepEqual(later, [60_000]);
 });
 
+test("handoff verifies the listener when a service restarts without an observable port gap", async () => {
+  for (const replacement of ["0.7.10", "0.8.3"]) {
+    let asked = false;
+    const fetcher = async url => {
+      if (url.endsWith("/api/handoff")) { asked = true; return Response.json({}, { status: 202 }); }
+      return Response.json({ config: {}, version: asked ? replacement : "0.7.10" });
+    };
+    assert.equal(await handoff({ fetcher, wait: async () => {}, mine: "0.8.3" }), replacement === "0.8.3" ? "current" : "old");
+  }
+});
+
 test("a rate limit is retried, then defers the slot instead of failing it", async t => {
   const p = fixture(t), config = p.config();
   config.enabled = true; config.schedules.tasks = ["09:10"];
@@ -713,23 +724,34 @@ test("an old service that cannot target the plugin page leaves a diagnostic, not
     cpSync(new URL(file, root), join(dir, file), { recursive: true });
   }
   const paths = [];
+  let busy = false;
   const old = createServer((req, res) => {
     paths.push(req.url);
-    res.statusCode = req.url === "/api/status" ? 200 : 404;
-    res.end(JSON.stringify(req.url === "/api/status" ? { config: {} } : { error: "未知地址" }));
+    const handoffBusy = busy && req.url === "/api/handoff";
+    res.statusCode = req.url === "/api/status" || (busy && req.url === "/api/page-target") ? 200 : handoffBusy ? 409 : 404;
+    res.end(JSON.stringify(req.url === "/api/status" ? { config: {}, ...(busy ? { version: "0.7.10" } : {}) } : handoffBusy ? { busy: true } : {}));
   });
   await new Promise(resolve => old.listen(0, "127.0.0.1", resolve));
   t.after(() => old.close());
   const env = { ...process.env, WORKBUDDY_PLUS_DIR: join(dir, "state"), WORKBUDDY_PLUS_MAGPIE_DIR: join(dir, "magpie") };
-  const child = spawn(process.execPath, ["--input-type=module", "-e", `import { WorkBuddyPlusPlugin } from "./index.mjs";
-    await WorkBuddyPlusPlugin({}, { port: ${old.address().port}, request: { action: "config", config: { enabled: false } } });`], { cwd: dir, env });
-  t.after(() => child.kill());
-  let stderr = "";
-  child.stderr.on("data", chunk => { stderr += chunk; });
-  assert.equal(await new Promise(resolve => child.once("close", resolve)), 0);
-  assert.match(stderr, /未能自动交接旧后台/);
+  const invoke = async action => {
+    const child = spawn(process.execPath, ["--input-type=module", "-e", `import { WorkBuddyPlusPlugin } from "./index.mjs";
+      await WorkBuddyPlusPlugin({}, { port: ${old.address().port}, request: { action: ${JSON.stringify(action)}, config: { enabled: false } } });`], { cwd: dir, env });
+    t.after(() => child.kill());
+    let stderr = "";
+    child.stderr.on("data", chunk => { stderr += chunk; });
+    assert.equal(await new Promise(resolve => child.once("close", resolve)), 0);
+    return stderr;
+  };
+  assert.match(await invoke("config"), /未能自动交接旧后台/);
   assert.match(readFileSync(join(dir, "page", "data.js"), "utf8"), /"handoff":"old"/);
   assert.deepEqual(paths, ["/api/status", "/api/handoff", "/api/page-target", "/api/status"]);
+  busy = true;
+  for (const action of ["config", "pause-tasks"]) {
+    paths.length = 0;
+    await invoke(action);
+    assert.deepEqual(paths, ["/api/status", "/api/handoff", "/api/page-target"], "no settings write during a busy handoff");
+  }
 });
 
 test("only a WorkBuddy Plus answering on the port counts as one running", async () => {
