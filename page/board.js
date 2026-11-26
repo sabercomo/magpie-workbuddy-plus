@@ -1998,6 +1998,9 @@
     else body = boardTab(rows, view, now);
 
     if (switched) { body.className = `${body.className || ""} wb-enter`.trim(); switched = false; }
+    if (hooks.requestLocked?.()) {
+      for (const button of body.querySelectorAll(".wb-task-run,.wb-task-run-all,.wb-task-sweep,.wb-work-button")) button.disabled = true;
+    }
     content.replaceChildren(body);
     if (tab === "accounts" && focusedScope) document.getElementById(`wb-account-scope-${focusedScope}`).focus({ preventScroll: true });
   }
@@ -2050,5 +2053,7 @@
     .every(([plan, keys]) => keys.every(key => Array.isArray(plan?.[key]) && plan[key].every(t => typeof t === "string")));
   const settingsChanges = (before, after) => Object.fromEntries(Object.entries(after).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(before?.[key])));
 
-  globalThis.WBBoard = { render, when, picker, modelChoices, goTab, setMode, scheduleTimes, hasScheduleFields, settingsChanges };
+  function showRecords() { prizeRecord = null; workTab = "runs"; recordChannel = "all"; recordsFailed = false; goTab("schedule"); }
+
+  globalThis.WBBoard = { showRecords, render, when, picker, modelChoices, goTab, setMode, scheduleTimes, hasScheduleFields, settingsChanges };
 })();

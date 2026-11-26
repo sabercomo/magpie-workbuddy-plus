@@ -347,7 +347,8 @@ Use the returned run ID to check the result in the panel or through `status`.
 | Area | Details |
 | --- | --- |
 | Snapshot and refresh | The sandbox cannot access the network. It reloads the service-written `page/data.js` every 15 seconds. The snapshot has no credentials; a warning appears when it is over 25 minutes old. |
-| Requests | Controls submit requests through plugin options. Magpie reloads the plugin to pass them to the service; each runs once and requests older than 10 minutes are rejected. |
+| Requests | If no receipt arrives within 30 seconds of submission, the sidebar shows that the task’s status is unconfirmed. It may already be running. Checking status rereads the snapshot; viewing run history does not submit work. Do not repeat the run from the local panel. An acceptance receipt does not mean the task has finished. |
+| Reopening the sidebar | The page reads the existing request without submitting it again. If the host has not yet saved it, its absence on reopen does not prove that nothing ran. Repeating the most recent request republishes its receipt without running it again; newly received requests older than 10 minutes are rejected. |
 | Plugin updates | The open page loads the new version after an update. |
 
 </details>
@@ -505,6 +506,10 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 | Pinned install | If `magpie plugin list` shows a suffix such as `#v0.4.0`, remove it with `magpie plugin rm` and add the unpinned address. Set plugin options such as the port again. |
 | From 0.5.5 onward | Magpie asks the old service to hand off when loading an update. It waits until the current job finishes, retrying each minute. |
 | 0.5.4 or earlier | Stop the old service once, or log out, restart the computer or restart the container. |
+
+**v0.8.4 changes**
+
+- The sidebar no longer waits indefinitely for a task receipt. After 30 seconds you can check status and run history without resubmitting. Snapshot writes are isolated per directory; repeating the last request only republishes its receipt.
 
 **v0.8.3 changes**
 

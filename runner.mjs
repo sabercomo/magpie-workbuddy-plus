@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { gunzipSync } from "node:zlib";
@@ -14,6 +14,8 @@ import { routingRefusals } from "./limits.mjs";
 import { chinaModels, enterpriseModels, intlModels } from "./models.mjs";
 import { dropped } from "./network.mjs";
 import { syncChoices, syncView } from "./sync/view.mjs";
+
+class PageRejection extends Error {} // Validation before a job is created, never an execution error.
 
 const NETWORK_FAILURES = 3, NETWORK_PAUSE_MS = 10 * 60_000;
 const actionNames = { all: "全部任务", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "单项任务", travel: "猫猫旅行", buddy: "Buddy 盲盒", compensation: "官方补偿", bonus: "连登福利", night: "夜猫子", web: "网页会话", inspect: "状态查询" };
@@ -235,7 +237,7 @@ export class Runner {
     if (!dir || basename(dir) !== "page" || name !== "magpie-workbuddy-plus" || !["index.html", "board.js"].every(f => existsSync(join(dir, f)))) throw new Error("不是 WorkBuddy Plus 的页面目录");
     if (file !== this.pageFile) this.state.pageTargets = [file, ...(this.state.pageTargets || []).filter(f => f !== file)].slice(0, 4);
     this.save();
-    this.publish();
+    if (!this.publish().includes(file)) throw new Error("当前页面快照写入失败");
     return { targets: [this.pageFile, ...(this.state.pageTargets || [])].filter(Boolean) };
   }
   // Signing in belongs to Magpie's WorkBuddy plugin; this only starts its
@@ -287,11 +289,23 @@ export class Runner {
   }
   publish() {
     const view = this.boardView(), targets = this.state.pageTargets || [];
-    if (this.pageFile) writePage(this.pageFile, view);
-    // A removed plugin's folder is left removed, not recreated.
-    const live = targets.filter(f => existsSync(join(dirname(f), "index.html")));
-    for (const f of live) if (f !== this.pageFile) writePage(f, view);
-    if (live.length !== targets.length) { this.state.pageTargets = live; this.save(); }
+    const written = [], removed = [];
+    for (const [index, file] of [...new Set([this.pageFile, ...targets].filter(Boolean))].entries()) {
+      try {
+        // Don't recreate removed installs. Keep temporarily inaccessible targets for the next publish.
+        if (file !== this.pageFile && !statSync(join(dirname(file), "index.html"), { throwIfNoEntry: false })) {
+          removed.push(file);
+          continue;
+        }
+        writePage(file, view);
+        written.push(file);
+      } catch (e) {
+        if (!e.syscall || !e.code) throw e;
+        console.warn(`[workbuddy-plus] 快照目标 ${index + 1} 写入失败：${e.code}`);
+      }
+    }
+    if (removed.length) { this.state.pageTargets = targets.filter(f => !removed.includes(f)); this.save(); }
+    return written;
   }
   refreshBoard(maxAge = 0, ids) {
     if (ids !== undefined && (!Array.isArray(ids) || ids.some(id => typeof id !== "string" || !this.list().some(a => a.id === id)))) throw new Error("账号列表无效");
@@ -423,12 +437,16 @@ export class Runner {
     return { ...a, balance: shown, checkin: a.realm === "intl" ? a.checkin : checkin(found, key, day, checkinUpstream, this.config().timezone), ...(balance?.grants ? { ledger: ledger(balance, a.usage, logs, checkinGrant, Date.now(), 7, a.realm) } : {}) };
   }
   // Magpie hands the page's last request back on every plugin restart, so
-  // each request id runs once and an old one is only acknowledged.
+  // a consecutive repeat only republishes the last receipt.
   pageRequest(request) {
-    if (!request?.id || String(request.id) === this.state.pageRequest?.id) return this.state.pageRequest;
+    if (!request?.id) return this.state.pageRequest;
+    if (String(request.id) === this.state.pageRequest?.id) {
+      this.publish();
+      return this.state.pageRequest;
+    }
     const note = { id: String(request.id), action: request.action, at: new Date().toISOString(), ok: false };
     try {
-      if (!(Date.now() - Number(request.at) < 10 * 60_000)) throw new Error("页面请求已过期，请重新点击");
+      if (!(Date.now() - Number(request.at) < 10 * 60_000)) throw new PageRejection("页面请求已过期");
       if (request.action === "refresh") { this.boardStale = true; this.refreshBoard(0, request.accounts).catch(e => console.error(e)); }
       else if (["login", "login-intl"].includes(request.action)) this.login(request.action === "login-intl" ? "intl" : "cn");
       else if (["pause", "resume"].includes(request.action)) this.updateConfig({ enabled: request.action === "resume" });
@@ -453,7 +471,7 @@ export class Runner {
       else if (["intl-on", "intl-off"].includes(request.action)) this.updateConfig({ intlEnabled: request.action === "intl-on" });
       else note.job = this.submit([request.action], request.accounts, "page", { task: request.task }).id;
       note.ok = true;
-    } catch (e) { note.error = e.message; }
+    } catch (e) { note.error = e.message; if (e instanceof PageRejection) note.beforeDispatch = true; }
     this.state.pageRequest = note;
     this.save();
     this.publish();
@@ -463,13 +481,13 @@ export class Runner {
     return this.state.jobs.some(job => ["queued", "running"].includes(job.status) && job.accounts.some(a => ids.includes(a)));
   }
   submit(requestedActions, ids, trigger = "manual", { task, retryOf, accountActions } = {}) {
-    if (!Array.isArray(requestedActions) || !requestedActions.length || requestedActions.some(a => !actions.includes(a))) throw new Error("无效的操作");
-    if (requestedActions.includes("task") && (typeof task !== "string" || !/^[A-Za-z0-9_.-]{1,80}$/.test(task))) throw new Error("无效的任务");
+    if (!Array.isArray(requestedActions) || !requestedActions.length || requestedActions.some(a => !actions.includes(a))) throw new PageRejection("无效的操作");
+    if (requestedActions.includes("task") && (typeof task !== "string" || !/^[A-Za-z0-9_.-]{1,80}$/.test(task))) throw new PageRejection("无效的任务");
     const single = requestedActions.includes("task") ? task : undefined;
     const list = this.list().filter(a => a.enabled);
     const selected = ids?.length ? list.filter(a => ids.includes(a.id)) : list;
-    if (!selected.length || (ids?.length && selected.length !== new Set(ids).size)) throw new Error("所选账号不存在或已停用");
-    if (this.busy(selected.map(a => a.id))) throw new Error("所选账号已有任务正在执行或排队");
+    if (!selected.length || (ids?.length && selected.length !== new Set(ids).size)) throw new PageRejection("所选账号不存在或已停用");
+    if (this.busy(selected.map(a => a.id))) throw new PageRejection("所选账号已有任务正在执行或排队");
     const job = { id: randomUUID(), actions: requestedActions, ...(single ? { task: single } : {}), accounts: selected.map(a => a.id), trigger, status: "queued", created: new Date().toISOString(), logs: [], results: [], retries: [], ...(retryOf ? { retryOf } : {}), queue: selected.map(a => ({ account: a.id, actions: accountActions?.[a.id] || requestedActions, status: "queued", completed: 0, total: (accountActions?.[a.id] || requestedActions).length })) };
     this.state.jobs.unshift(job);
     this.state.jobs = this.state.jobs.filter((j, i) => i < 100 || ["queued", "running"].includes(j.status));
@@ -507,7 +525,7 @@ export class Runner {
   }
   retry(id) {
     const previous = this.state.jobs.find(j => j.id === id);
-    if (!previous || !["failed", "partial", "deferred", "interrupted"].includes(previous.status)) throw new Error("没有需要重试的操作");
+    if (!previous || !["failed", "partial", "deferred", "interrupted"].includes(previous.status)) throw new PageRejection("没有需要重试的操作");
     const accountActions = {};
     for (const account of previous.accounts) {
       const failures = previous.results.filter(r => r.account === account && !r.ok).map(r => r.action);
@@ -516,7 +534,7 @@ export class Runner {
       if (failures.length || previous.status === "interrupted") accountActions[account] = [...new Set(failures.length ? failures : previous.actions)];
     }
     const ids = Object.keys(accountActions);
-    if (!ids.length) throw new Error("没有需要重试的操作");
+    if (!ids.length) throw new PageRejection("没有需要重试的操作");
     return this.submit([...new Set(Object.values(accountActions).flat())], ids, "manual", { task: previous.task, retryOf: previous.id, accountActions });
   }
   async run(job, list) {

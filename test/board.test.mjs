@@ -194,7 +194,7 @@ test("the WorkBuddy AI board only reads the supported parts and explains a rejec
   assert.equal(paths.length, 5);
 });
 
-test("page snapshot carries no credentials and each page request runs once", async t => {
+test("page snapshot carries no credentials and repeating the last request does not run it again", async t => {
   const dir = mkdtempSync(join(tmpdir(), "wb-plus-board-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   initialize(dir); mkdirSync(join(dir, "magpie"));
@@ -236,8 +236,10 @@ test("page snapshot carries no credentials and each page request runs once", asy
   assert.equal(runner.pageRequest(request).ok, true);
   assert.equal(readJSON(join(dir, "config.json")).enabled, true);
   writeJSON(join(dir, "config.json"), { ...runner.config(), enabled: false });
+  rmSync(pageFile);
   runner.pageRequest(request); // Magpie restarting with the same options
   assert.equal(readJSON(join(dir, "config.json")).enabled, false);
+  assert.match(readFileSync(pageFile, "utf8"), /"id":"a1"/, "duplicate delivery repairs the receipt, not the action");
   assert.match(runner.pageRequest({ id: "a2", action: "pause", at: Date.now() - 3600_000 }).error, /过期/);
   assert.match(runner.pageRequest({ id: "a3", action: "checkin", at: Date.now() }).error, /无效的操作/);
 
@@ -461,4 +463,29 @@ test('check-in uses the newer same-day observation and rejects yesterday snapsho
   const yesterday = { active: true, checked: true, at: Date.parse('2026-11-17T23:59:00+08:00') };
   assert.equal(checkin({ on: true, records: {} }, 'workbuddy#u1', day, yesterday).outcome, 'waiting');
   assert.equal(checkin({ on: true, records: {} }, 'workbuddy#u1', day, { checked: true }).outcome, 'waiting');
+});
+
+test("snapshot IO failures are isolated, but registration requires the requested copy to be writable", t => {
+  const dir = mkdtempSync(join(tmpdir(), "wb-plus-target-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const target = copy => {
+    const root = join(dir, copy), page = join(root, "page");
+    mkdirSync(page, { recursive: true });
+    writeJSON(join(root, "package.json"), { name: "magpie-workbuddy-plus" });
+    for (const f of ["index.html", "board.js"]) writeFileSync(join(page, f), "");
+    return join(page, "data.js");
+  };
+  const own = target("own"), other = target("other");
+  const runner = new Runner(dir, {}, { pageFile: own, hostConfig: join(dir, "magpie") });
+  const warnings = [];
+  t.mock.method(console, "warn", (...msg) => warnings.push(msg.join(" ")));
+  mkdirSync(own); // rename fails on every platform, including as root
+  runner.addPageTarget(other);
+  assert.match(readFileSync(other, "utf8"), /globalThis.WBPLUS/);
+  assert.throws(() => runner.addPageTarget(own), /快照/);
+  assert.ok(warnings.length && warnings.every(w => !w.includes(dir)));
+  rmSync(own, { recursive: true }); runner.publish();
+  assert.match(readFileSync(own, "utf8"), /globalThis.WBPLUS/);
+  runner.boardView = () => ({ invalid: 1n });
+  assert.throws(() => runner.publish(), TypeError, "serialization failures are not file failures");
 });

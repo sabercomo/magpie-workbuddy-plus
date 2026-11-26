@@ -75,6 +75,7 @@ async function targetPage(result) {
     // Some old services cannot publish to this install's page at all.
     try { writePage(pageFile, { generated: new Date().toISOString(), handoff: "old" }); }
     catch (e) { console.error("[workbuddy-plus]", e.message); }
+    throw error;
   }
   return result;
 }
@@ -114,20 +115,21 @@ export async function handoff({ fetcher = fetch, wait = delay, mine = version, r
 // loading the plugin is when the service is brought up (rpc starts it when
 // nothing answers) and told where this copy's page reads its snapshot.
 // Magpie also restarts its plugins with new options whenever the page's
-// buttons save a request into them; the service runs each request id once.
+// buttons save a request into them; the service recognizes its last receipt.
 export const WorkBuddyPlusPlugin = async (input, options) => {
   port = portOf(options);
   // Magpie passes its active settings directory, including for portable installs.
   hostConfig = input?.magpie && isAbsolute(input.directory || "") ? input.directory : undefined;
-  const ready = handoff().then(targetPage).catch(e => console.error("[workbuddy-plus]", e.message));
-  if (options?.request) ready.then(result => {
+  const ready = handoff().then(targetPage);
+  ready.then(result => {
+    if (!options?.request) return;
     const settingsWrite = ["config", "pause", "resume", "intl-on", "intl-off", "pause-tasks", "resume-tasks"].includes(options.request.action);
     if (settingsWrite && !["none", "current", "stopped"].includes(result)) return;
     return rpc("/api/page", options.request);
   }).catch(e => console.error("[workbuddy-plus]", e.message));
   const directory = hostConfig;
   const publishSync = async () => {
-    await ready;
+    await ready.catch(() => {});
     await rpc("/api/page-target", { file: pageFile }).catch(() => {});
   };
   if (directory) startSync(directory, options?.syncRequest, publishSync);

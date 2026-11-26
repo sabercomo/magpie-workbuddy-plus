@@ -746,6 +746,9 @@ test("an old service that cannot target the plugin page leaves a diagnostic, not
   assert.match(await invoke("config"), /未能自动交接旧后台/);
   assert.match(readFileSync(join(dir, "page", "data.js"), "utf8"), /"handoff":"old"/);
   assert.deepEqual(paths, ["/api/status", "/api/handoff", "/api/page-target", "/api/status"]);
+  paths.length = 0;
+  await invoke("all");
+  assert.deepEqual(paths, ["/api/status", "/api/handoff", "/api/page-target", "/api/status"], "a failed target registration must stop task delivery too");
   busy = true;
   for (const action of ["config", "pause-tasks"]) {
     paths.length = 0;
@@ -848,4 +851,60 @@ test("the page saves the web conversation switch; anything but a boolean is refu
     assert.throws(() => validateConfig({ ...defaults, buddyAuto: "no" }), /自动开盲盒开关无效/);
     assert.throws(() => validateConfig({ ...defaults, pausedAccounts: "no" }), /暂停任务列表无效/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("host delivers only after its own snapshot is writable; repeated options restore ACK without another job", { timeout: 8000 }, async t => {
+  const { dir } = fixture(t), copy = join(dir, "install"), page = join(copy, "page");
+  mkdirSync(page, { recursive: true });
+  const root = new URL("../", import.meta.url);
+  for (const name of readdirSync(root).filter(n => n.endsWith(".mjs") || ["package.json", "sync"].includes(n))) {
+    cpSync(new URL(name, root), join(copy, name), { recursive: true });
+  }
+  for (const name of ["index.html", "board.js"]) writeFileSync(join(page, name), "");
+  let runs = 0;
+  const runner = new Runner(dir);
+  runner.run = async () => { runs++; }; // real job creation, no business actions
+  const { server } = createService({ runner });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const invoke = async request => {
+    const child = spawn(process.execPath, ["--input-type=module", "-e",
+      `import { WorkBuddyPlusPlugin } from "./index.mjs"; await WorkBuddyPlusPlugin({}, ${JSON.stringify({ port: server.address().port, request })});`],
+    { cwd: copy, env: { ...process.env, WORKBUDDY_PLUS_DIR: dir, WORKBUDDY_PLUS_MAGPIE_DIR: join(dir, "magpie") }, stdio: "ignore" });
+    t.after(() => child.kill());
+    assert.equal(await new Promise(resolve => child.once("close", resolve)), 0);
+  };
+  const file = join(page, "data.js"), request = { id: "fixture-request", action: "all", at: Date.now() };
+  mkdirSync(file);
+  await invoke(request);
+  assert.equal(runs, 0); assert.equal(runner.state.jobs.length, 0);
+  rmSync(file, { recursive: true }); await invoke(request);
+  const stored = readJSON(join(dir, "state.json")).pageRequest;
+  assert.equal(stored.job, runner.state.jobs[0].id);
+  assert.equal(stored.ok, true);
+  rmSync(file); await invoke(request);
+  assert.match(readFileSync(file, "utf8"), /"request":\{"id":"fixture-request"/);
+  assert.deepEqual(runner.state.pageRequest, stored); assert.equal(runs, 1); assert.equal(runner.state.jobs.length, 1);
+});
+
+test("missing receipt after dispatch is not a rejected job; restart republishes the last saved receipt", t => {
+  const { dir } = fixture(t);
+  const runner = new Runner(dir), pageFile = join(dir, "page", "data.js");
+  const request = { id: "before-snapshot", at: Date.now(), action: "all" };
+  let runs = 0;
+  runner.run = async () => { runs++; };
+  runner.publish = () => { throw new TypeError("injected snapshot error"); };
+  assert.throws(() => runner.pageRequest(request), /injected snapshot error/);
+  assert.equal(runs, 1);
+  const fresh = new Runner(dir, {}, { pageFile });
+  fresh.run = runner.run;
+  const ack = fresh.pageRequest(request);
+  assert.equal(ack.ok, true); assert.equal(ack.job, fresh.state.jobs[0].id);
+  assert.match(readFileSync(pageFile, "utf8"), /"id":"before-snapshot"/);
+  assert.equal(runs, 1);
+  const rejected = fresh.pageRequest({ ...request, id: "too-late", at: Date.now() - 11 * 60_000 });
+  assert.equal(rejected.ok, false); assert.equal(rejected.beforeDispatch, true); assert.equal(runs, 1);
+  fresh.submit = () => { throw new Error("outcome uncertain"); };
+  const unknown = fresh.pageRequest({ ...request, id: "new-id" });
+  assert.equal(unknown.ok, false); assert.equal(unknown.beforeDispatch, undefined);
 });

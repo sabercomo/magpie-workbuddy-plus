@@ -2,8 +2,41 @@
 // background service rewrites, and asks for work by saving a request into
 // the plugin's options (see index.mjs).
 const $ = id => document.getElementById(id);
-const names = { all: "执行所有任务", "pause-tasks": "暂停任务", "resume-tasks": "恢复任务", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "执行单任务", travel: "猫猫旅行", bonus: "连登福利", night: "夜猫子", inspect: "查询状态", web: "国际版网页会话", refresh: "刷新余额", login: "添加国内版账号", "login-intl": "添加国际版账号", pause: "暂停国内版定时", resume: "开启国内版定时", "intl-on": "开启国际版定时", "intl-off": "暂停国际版定时", retry: "重试失败任务", cancel: "停止执行", config: "保存设置" };
-let pending = null;
+const names = { all: "执行所有任务", "pause-tasks": "暂停任务", "resume-tasks": "恢复任务", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "执行单任务", travel: "猫猫旅行", buddy: "开盲盒", compensation: "领取补偿", bonus: "连登福利", night: "夜猫子", inspect: "查询状态", web: "国际版网页会话", refresh: "刷新余额", login: "添加国内版账号", "login-intl": "添加国际版账号", pause: "暂停国内版定时", resume: "开启国内版定时", "intl-on": "开启国际版定时", "intl-off": "暂停国际版定时", retry: "重试失败任务", cancel: "停止执行", config: "保存设置" };
+let pending = null; // Non-task settings and maintenance requests.
+let requestStatus, snapshotFailed = false, controlsLocked = false;
+const requests = WBRequests({
+  history: globalThis.history,
+  options: { get: () => magpie.options.get(), set: options => magpie.options.set(options) },
+  receipt: () => globalThis.WBPLUS?.request,
+  changed: status => {
+    requestStatus = status;
+    renderRequest();
+    if (controlsLocked !== requests.locked()) {
+      controlsLocked = requests.locked();
+      for (const button of document.querySelectorAll("[data-action]")) button.disabled = controlsLocked;
+      paint();
+    }
+  }
+});
+
+function renderRequest() {
+  if (!requestStatus) return;
+  const { action, phase, detail } = requestStatus;
+  const [title, hint] = ({
+    submitting: ["正在提交…", "正在与 Magpie 交接请求。"],
+    awaiting: ["已提交，等待后台接收…", "正在等候这次请求的回执。"],
+    unknown: ["执行状态待确认", detail ? `后台返回错误：${detail}。请核对执行记录。` : "任务可能已经开始，请先查看记录，不要重复执行。"],
+    accepted: ["后台已接收", "请在执行记录中查看任务进度。"],
+    rejected: ["后台已拒绝", `${detail}。本次投递未创建任务。`],
+    "not-submitted": ["尚未提交", "读取设置失败，本次没有写入请求。"]
+  })[phase];
+  $("request-status").hidden = false;
+  $("request-status").dataset.phase = phase;
+  $("request-title").textContent = `${names[action] || action}：${title}`;
+  $("request-hint").textContent = snapshotFailed ? "暂时无法读取最新快照。显示的是上次状态，请稍后再检查。" : hint;
+}
+
 let syncPending, syncEdited = false, syncChoicesKey, syncClearing = false;
 const build = globalThis.WBPLUS?.build;
 const upgradeHint = "后台是旧版本，请重启电脑后重试。独立安装请重新运行新版安装脚本。";
@@ -46,6 +79,7 @@ function paintView(view, canSave) {
   $("intl-state").textContent = view ? `· 定时${view.intlEnabled ? "已开启" : "已暂停"}` : "";
 
   WBBoard.render($("board"), view, Date.now(), {
+    requestLocked: requests.locked,
     onSchedule: (intl, on) => ask(intl ? (on ? "intl-on" : "intl-off") : (on ? "resume" : "pause")).catch(e => note(`提交失败：${e.message}`, true)),
     onTask: (account, task) => ask("task", { task, accounts: [account] }),
     onQueue: accounts => ask("tasks", { accounts }),
@@ -75,6 +109,7 @@ function paintView(view, canSave) {
 
 function paint() {
   const view = globalThis.WBPLUS, previous = blocked;
+  requests.receive(view?.request);
   blocked = !view ? "还没有读到后台设置，请稍等再试"
     : !view.version || view.handoff === "old" || !view.settings || !WBBoard.hasScheduleFields(view.schedules, view.intlSchedules) ? upgradeHint : "";
   try { paintView(view, !blocked); }
@@ -379,21 +414,17 @@ $("open-settings").onclick = () => settings(true);
 $("close-settings").onclick = () => settings(false);
 if ($("sched-pill")) $("sched-pill").onclick = () => { settings(false); WBBoard.goTab("schedule"); };
 
-async function sendOptions(changes) {
-  let timer;
-  const guard = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Magpie 没有响应，请重试")), 10_000); });
-  try { await Promise.race([(async () => {
-    const options = (await magpie.options.get()) || {};
-    await magpie.options.set({ ...options, ...changes });
-  })(), guard]); } finally { clearTimeout(timer); }
-}
+const sendOptions = changes => requests.send(changes);
 
 async function ask(action, extra = {}) {
-  if (blocked && ["config", "pause", "resume", "intl-on", "intl-off", "pause-tasks", "resume-tasks"].includes(action)) throw new Error(blocked);
-  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  if (blocked && (requests.isJob(action) || ["config", "pause", "resume", "intl-on", "intl-off", "pause-tasks", "resume-tasks"].includes(action))) throw new Error(blocked);
+  if (requests.locked()) throw new Error("请先确认上一次请求的状态");
+  const id = syncRequestId();
   await sendOptions({ request: { id, action, at: Date.now(), ...extra } });
-  pending = id;
-  note(`${names[action]}：已提交，等待 Magpie 重载插件…`);
+  if (!requests.isJob(action)) {
+    pending = id;
+    note(`${names[action]}：已提交，等待 Magpie 重载插件…`);
+  }
   setTimeout(reload, 2000);
 }
 
@@ -449,9 +480,18 @@ saveButton.onclick = async () => {
 };
 
 function reload() {
+  const before = globalThis.WBPLUS;
   const script = document.createElement("script");
   script.src = `data.js?t=${Date.now()}`;
-  script.onload = script.onerror = () => {
+  script.onerror = () => {
+    script.remove();
+    snapshotFailed = true;
+    renderRequest();
+  };
+  script.onload = () => {
+    if (globalThis.WBPLUS === before) return script.onerror();
+    snapshotFailed = false;
+    renderRequest();
     script.remove();
     if (globalThis.WBPLUS?.build && globalThis.WBPLUS.build !== build) return location.reload();
     paint();
@@ -468,8 +508,15 @@ for (const button of document.querySelectorAll("[data-action]")) button.onclick 
   for (const m of menus) m.open = false;
   button.disabled = true;
   try { await ask(action); } catch (e) { note(`提交失败：${e.message}`, true); }
-  finally { setTimeout(() => { button.disabled = false; }, 3000); }
+  finally { button.disabled = requests.locked(); }
+};
+
+$("request-check").onclick = reload;
+$("request-records").onclick = () => {
+  if (!$("settings").hidden) settings(false);
+  WBBoard.showRecords();
 };
 
 paint();
+requests.restore();
 setInterval(reload, 15_000);

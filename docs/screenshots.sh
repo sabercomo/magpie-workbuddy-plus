@@ -8,7 +8,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/_magpie"
-cp "$root"/page/index.html "$root"/page/app.js "$root"/page/board.js "$root"/page/board.css "$root"/page/style.css "$root"/page/icon.svg "$work/"
+cp "$root"/page/index.html "$root"/page/app.js "$root"/page/requests.js "$root"/page/board.js "$root"/page/board.css "$root"/page/style.css "$root"/page/icon.svg "$work/"
 cp "$root/docs/screenshot-bridge.js" "$work/_magpie/bridge.js"
 ${BUN:-bun} "$root/docs/demo-data.mjs" "$work"
 chrome=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}

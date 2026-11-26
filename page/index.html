@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WorkBuddy Plus</title>
   <link rel="stylesheet" href="board.css"><link rel="stylesheet" href="style.css">
-  <script src="_magpie/bridge.js"></script><script src="data.js"></script><script src="board.js"></script><script src="app.js" defer></script>
+  <script src="_magpie/bridge.js"></script><script src="data.js"></script><script src="board.js"></script><script src="requests.js"></script><script src="app.js" defer></script>
 </head>
 <body class="wb-board">
   <header>
@@ -36,6 +36,11 @@
     </div>
   </header>
   <p id="note" class="note" role="status" hidden></p>
+  <section id="request-status" class="note" aria-label="任务请求" hidden>
+    <strong id="request-title" role="status"></strong>
+    <p id="request-hint"></p>
+    <div class="request-actions"><button type="button" id="request-check">检查状态</button><button type="button" id="request-records">查看执行记录</button></div>
+  </section>
   <div id="main-view">
     <section id="board"></section>
   </div>

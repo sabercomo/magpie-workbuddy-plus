@@ -502,11 +502,13 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
     setAttribute(k, v) { (this.attributes ||= {})[k] = v; }
     getAttribute(k) { return this.attributes?.[k] ?? null; }
     removeAttribute() {}
+    querySelectorAll() { return []; }
+    remove() {}
     focus() {}
     get lastChild() { return this.children.at(-1); }
   }
   const nodes = new Map(), requests = [], syncRequests = [];
-  for (const id of ["state", "note", "board", "jobs", "panel", "cn-state", "intl-state", "sched-pill", "intl-model-pick", "settings", "settings-form", "open-settings", "close-settings", "save-settings", "save-status", "wb-nav-toggle"]) nodes.set(id, new Element("div"));
+  for (const id of ["state", "note", "request-status", "request-title", "request-hint", "request-check", "request-records", "board", "jobs", "panel", "cn-state", "intl-state", "sched-pill", "intl-model-pick", "settings", "settings-form", "open-settings", "close-settings", "save-settings", "save-status", "wb-nav-toggle"]) nodes.set(id, new Element("div"));
   for (const id of ["sync-settings", "sync-role-hint", "sync-account-row", "sync-accounts", "sync-result", "sync-result-title", "sync-result-hint", "sync-result-time",
     "sync-snapshot", "sync-actions", "sync-now", "sync-switch-master", "sync-switch-hint", "sync-clear", "sync-clear-hint",
     "sync-clear-confirm-panel", "sync-clear-cancel", "sync-clear-confirm", "sync-device-row", "sync-device-hint", "sync-devices"]) nodes.set(id, new Element("div"));
@@ -531,13 +533,13 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
     },
     crypto,
     magpie: { options: { get: async () => ({}), set: async opts => { if (opts.request) requests.push(opts.request); if (opts.syncRequest) syncRequests.push(opts.syncRequest); } } },
-    document: { body: bodyEl, getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: () => [], querySelector: () => null, addEventListener() {} },
+    document: { head: new Element("head"), body: bodyEl, getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: () => [], querySelector: () => null, addEventListener() {} },
     setInterval() {}, setTimeout(fn, ms) { if (ms === 3000) releaseSave = fn; }, clearTimeout() {}, console: { error() {} }
   });
   const view = context.WBPLUS, saveButton = nodes.get("save-settings");
   context.WBPLUS = { ...view, version: undefined, settings: undefined, intlSchedules: undefined };
   context.globalThis = context;
-  for (const file of ["../page/board.js", "../page/app.js"]) vm.runInContext(readFileSync(new URL(file, import.meta.url), "utf8"), context);
+  for (const file of ["../page/board.js", "../page/requests.js", "../page/app.js"]) vm.runInContext(readFileSync(new URL(file, import.meta.url), "utf8"), context);
   assert.match(nodes.get("note").textContent, /后台是旧版本.*重启电脑/);
   assert.equal(saveButton.disabled, true);
   await saveButton.onclick({ currentTarget: saveButton });
@@ -574,11 +576,28 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   findNode(nodes.get("board"), n => n.className === "wb-nav wb-side-nav").children.find(n => n.dataset.tab === "tasks").onclick();
   navToggle.onclick();
   assert.equal(bodyEl.dataset.wbTab, "tasks");
+  const acknowledge = () => {
+    view.request = { id: requests.at(-1).id, action: requests.at(-1).action, ok: true };
+    vm.runInContext("paint()", context);
+  };
   await findNode(nodes.get("board"), n => n.textContent === "补领奖励" && n.className === "wb-task-sweep").onclick();
   assert.equal(requests.at(-1).action, "sweep");
+  const count = requests.length;
+  await assert.rejects(vm.runInContext('ask("all")', context), /确认/);
+  assert.equal(requests.length, count);
+  nodes.get("request-check").onclick();
+  context.document.head.lastChild.onerror();
+  assert.match(nodes.get("request-hint").textContent, /无法读取最新快照/);
+  nodes.get("request-records").onclick();
+  assert.equal(bodyEl.dataset.wbTab, "schedule");
+  assert.equal(findNode(nodes.get("board"), n => n.dataset?.workTab === "runs").getAttribute("aria-pressed"), "true");
+  assert.equal(requests.length, count, "both inspection controls are read-only");
+  context.WBBoard.goTab("tasks");
+  acknowledge();
   await findNode(nodes.get("board"), n => n.textContent === "领奖并出发" && n.className === "wb-task-run claim").onclick();
   assert.equal(requests.at(-1).action, "travel");
   assert.equal(requests.at(-1).accounts.join(","), "cn:a");
+  acknowledge();
 
   // The App conversation setting is saved by Magpie's page too.
   assert.equal(form.elements["campaign-app"].checked, false);
