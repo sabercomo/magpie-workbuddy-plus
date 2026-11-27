@@ -452,8 +452,17 @@ Set up the same **private storage target** and sync passphrase in Magpie on all 
 - Status shows the current lease and snapshot generation. Devices are identified by random IDs, not hostnames. A follower that can reach sync storage writes a heartbeat at most once every 10 minutes, even while waiting for a snapshot. It reports the last seen time and applied generation; after 30 minutes without a heartbeat it is shown as offline. Read-only followers can still receive accounts, but cannot send heartbeats.
 - 立即同步 next to 状态 syncs once with the saved role; the Magpie tool `sync_now` does the same. Neither enables an off device or saves unsaved account selections.
 - A successful sync confirms snapshot transfer, not that WorkBuddy accepts the current access credential. If Magpie reports revoked OAuth renewal credentials or a signed-out account on the master, sign in again under Providers on the master, then run 立即同步 so followers can receive the new access credential. Plus neither renews nor shares refresh credentials.
-- To change masters, turn sync off on the old master and allow up to 10 minutes for its lease to expire. A new master can select API keys already imported onto that device without re-entering them; browser OAuth still requires a local Magpie sign-in. Turning sync off does not delete imports or revoke previously shared credentials.
+- To change masters, turn Plus sync off on the old master and allow up to 10 minutes for its lease to expire. A new master can select API keys already imported onto that device without re-entering them; OAuth requires a renewable sign-in in Magpie on the new machine. Turning sync off does not delete imports or revoke previously shared credentials.
 - If you use the standalone [WorkBuddy Sync](https://github.com/NotoChen/magpie-workbuddy-sync), disable it on all related devices before enabling Plus sync. Plus uses a separate snapshot path, does not read the old snapshot, and does not automatically remove entries the old plugin imported.
+
+</details>
+
+<details>
+<summary>Can I move OAuth accounts in a batch without signing into each one in a browser?</summary>
+
+If you already have valid sign-in files supported by [Magpie's official WorkBuddy plugin](https://github.com/magpie-community/plugins/blob/6495fb6095a03eb0ba98178395d44ac90a53387b/packages/workbuddy/index.mjs#L2535-L2550) and containing only the accounts to move, use “Import accounts from a file…” under the corresponding WorkBuddy provider on the new machine. This is a one-time migration, not a Plus sync feature. Without a supported file, or if its refresh credential is no longer valid, sign in again. Magpie's [whole-machine sync and backups](https://github.com/yetone/magpie/blob/7281f97bed6d10f7160ed084fc4c98d316370cc5/docs/subsystems/sync-backup.md#L468-L477) do not carry rotating OAuth sign-ins and cannot migrate these accounts.
+
+Before importing, stop the old machine's relevant Magpie services and any other clients that can renew those accounts, and wait for in-flight renewals to finish. Turning off Plus sync alone does not stop Magpie renewal. Import rotates the refresh credential, so the old sign-in can no longer renew. If the new machine already has a sign-in for the same account that you want to keep, use it rather than importing again. Verify with one non-critical account first. Confirm the accounts work on the new machine before selecting them on the new Plus master. Do not upload sign-in files or your entire account configuration to the sync repository. Batch import across devices still needs testing with real accounts.
 
 </details>
 
@@ -507,6 +516,11 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 | Pinned install | If `magpie plugin list` shows a suffix such as `#v0.4.0`, remove it with `magpie plugin rm` and add the unpinned address. Set plugin options such as the port again. |
 | From 0.5.5 onward | Magpie asks the old service to hand off when loading an update. It waits until the current job finishes, retrying each minute. |
 | 0.5.4 or earlier | Stop the old service once, or log out, restart the computer or restart the container. |
+
+**v0.8.8 changes**
+
+- Select or deselect all shared accounts at once. Changes take effect only after saving settings.
+- Document switching masters: with supported sign-in files, Magpie can import accounts in a batch without opening the browser for each one. The Plus sync protocol is unchanged and does not transmit refresh credentials.
 
 **v0.8.7 changes**
 

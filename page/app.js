@@ -153,6 +153,17 @@ const syncSection = $("sync-settings"), syncForm = $("settings-form");
 const syncRoles = syncSection?.querySelectorAll('input[name="sync-role"]') || [];
 const syncRole = () => [...syncRoles].find(input => input.checked)?.value;
 const syncPicks = () => [...($("sync-accounts")?.querySelectorAll("input:checked") || [])].map(input => input.value);
+const syncPickInputs = () => [...$("sync-accounts").querySelectorAll('input[type="checkbox"]')];
+const syncSelectAll = $("sync-select-all");
+
+function paintSyncPicks() {
+  const inputs = syncPickInputs(), count = inputs.filter(input => input.checked).length;
+  syncSelectAll.hidden = $("sync-pick-summary").hidden = inputs.length === 0;
+  syncSelectAll.textContent = inputs.length && count === inputs.length ? "取消全选" : "全选";
+  const status = $("sync-pick-count"), text = `已选 ${count} / ${inputs.length}`;
+  if (status.textContent !== text) status.textContent = text;
+}
+
 function paintSyncRole(role) {
   $("sync-role-hint").textContent = syncHints[role] || syncHints.unavailable;
   $("sync-account-row").hidden = role !== "master";
@@ -278,6 +289,7 @@ function fillSync(sync) {
       empty.textContent = "没有可共享的账号。请先在 Magpie 登录或添加 WorkBuddy API Key。";
       list.append(empty);
     }
+    paintSyncPicks();
   }
   paintSyncRole(syncRole());
   $("sync-switch-master").disabled = !sync.target || !choices.length;
@@ -306,12 +318,21 @@ function fillSync(sync) {
   paintSyncActions(sync);
 }
 if (syncSection) {
-  syncSection.addEventListener("change", () => {
+  const editSync = () => {
     syncEdited = true;
     syncClearing = false;
     paintSyncRole(syncRole());
+    paintSyncPicks();
     paintSyncActions(globalThis.WBPLUS?.sync);
-  });
+  };
+  syncSection.addEventListener("change", editSync);
+  syncSelectAll.onclick = () => {
+    const inputs = syncPickInputs();
+    if (!inputs.length) return;
+    const checked = inputs.some(input => !input.checked);
+    for (const input of inputs) input.checked = checked;
+    editSync();
+  };
   $("sync-switch-master").onclick = () => {
     const master = [...syncRoles].find(input => input.value === "master");
     master.click();

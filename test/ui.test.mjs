@@ -517,14 +517,15 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   }
   const nodes = new Map(), requests = [], syncRequests = [];
   for (const id of ["state", "note", "request-status", "request-title", "request-hint", "request-check", "request-records", "board", "jobs", "panel", "cn-state", "intl-state", "sched-pill", "intl-model-pick", "settings", "settings-form", "open-settings", "close-settings", "save-settings", "save-status", "wb-nav-toggle"]) nodes.set(id, new Element("div"));
-  for (const id of ["sync-settings", "sync-role-hint", "sync-account-row", "sync-accounts", "sync-result", "sync-result-title", "sync-result-hint", "sync-result-time",
+  for (const id of ["sync-settings", "sync-role-hint", "sync-account-row", "sync-accounts", "sync-select-all", "sync-pick-summary", "sync-pick-count", "sync-result", "sync-result-title", "sync-result-hint", "sync-result-time",
     "sync-snapshot", "sync-actions", "sync-now", "sync-switch-master", "sync-switch-hint", "sync-clear", "sync-clear-hint",
     "sync-clear-confirm-panel", "sync-clear-cancel", "sync-clear-confirm", "sync-device-row", "sync-device-hint", "sync-devices"]) nodes.set(id, new Element("div"));
   const syncSection = nodes.get("sync-settings"), syncRoles = ["off", "master", "follower"].map(value => Object.assign(new Element("input"), { value }));
   syncSection.querySelectorAll = () => syncRoles;
   syncSection.addEventListener = (event, fn) => { syncSection[event] = fn; };
   for (const role of syncRoles) role.click = () => { for (const input of syncRoles) input.checked = input === role; syncSection.change(); };
-  nodes.get("sync-accounts").querySelectorAll = () => nodes.get("sync-accounts").children.flatMap(label => label.children.filter(child => child.checked));
+  nodes.get("sync-accounts").querySelectorAll = selector => nodes.get("sync-accounts").children
+    .flatMap(label => label.children.filter(child => child.type === "checkbox" && (selector !== "input:checked" || child.checked)));
   const form = nodes.get("settings-form");
   form.elements = Object.fromEntries(["daily", "tasks", "sweep", "night", "intl-daily", "intl-web", "intl-model", "intl-web-on", "campaign-app", "skill-share", "buddy-auto", "spread", "timezone", "proxy", "intlProxy"].map(k => [k, new Element("input")]));
   form.reportValidity = () => true;
@@ -696,18 +697,36 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   assert.equal(labels[1].children[1].children[0].textContent.trim(), "企业");
   assert.equal(labels[2].children[1].children[0].textContent.trim(), "API Key");
   assert.ok(labels.every(label => !label.children[0].checked), "new shareable credentials are never preselected");
-  const pick = nodes.get("sync-accounts").children[0].children[0];
-  pick.checked = true;
+  const selectAll = nodes.get("sync-select-all"), pickCount = nodes.get("sync-pick-count");
+  const checked = () => labels.map(label => label.children[0].checked);
+  assert.equal(selectAll.textContent, "全选");
+  selectAll.onclick();
+  assert.deepEqual(checked(), [true, true, true]);
+  assert.equal(selectAll.textContent, "取消全选");
+  assert.match(pickCount.textContent, /3 \/ 3/);
+  selectAll.onclick();
+  assert.deepEqual(checked(), [false, false, false]);
+  assert.equal(selectAll.textContent, "全选");
+  await button.onclick();
+  assert.equal(syncRequests.length, 0, "an empty master draft is not saved or sent as a clear request");
+  assert.match(nodes.get("save-status").textContent, /至少选择一个/);
+  selectAll.onclick();
+  labels[0].children[0].checked = false;
+  syncSection.change();
+  assert.equal(selectAll.textContent, "全选");
+  assert.match(pickCount.textContent, /2 \/ 3/);
+  selectAll.onclick();
+  assert.equal(syncRequests.length, 0, "batch selection only changes the draft");
   vm.runInContext("paint()", context);
   assert.equal(syncRoles[1].checked, true, "refresh keeps the draft role");
-  assert.equal(pick.checked, true, "refresh keeps the draft account choice");
+  assert.equal(selectAll.textContent, "取消全选", "refresh keeps the draft account selection");
   await button.onclick();
   assert.equal(syncRequests.length, 1);
   const { role, picks, target: machine } = syncRequests[0];
-  assert.deepEqual(JSON.parse(JSON.stringify({ role, picks, machine })), { role: "master", picks: ["cn:a"], machine: target });
+  assert.deepEqual(JSON.parse(JSON.stringify({ role, picks, machine })), { role: "master", picks: view.sync.choices.map(choice => choice.id), machine: target });
 
   // The save acknowledgement turns the draft into the saved master state.
-  view.sync = { ...view.sync, role: "master", picks: ["cn:a"], code: "published", count: 1, reply: { id: syncRequests[0].id, error: "" } };
+  view.sync = { ...view.sync, role: "master", picks: [...picks], code: "published", count: 3, reply: { id: syncRequests[0].id, error: "" } };
   vm.runInContext("paint()", context);
   assert.equal(nodes.get("save-status").textContent, "已保存账号同步设置。");
   assert.equal(nodes.get("sync-account-row").hidden, false);
@@ -754,4 +773,9 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   assert.equal(nodes.get("save-status").textContent, "已提交立即同步。");
   assert.equal(nodes.get("sync-now").textContent, "立即同步");
   assert.equal(nodes.get("sync-now").disabled, false);
+
+  view.sync = { ...view.sync, choices: [] };
+  vm.runInContext("paint()", context);
+  assert.equal(selectAll.hidden, true);
+  assert.equal(nodes.get("sync-pick-summary").hidden, true);
 });

@@ -106,10 +106,16 @@
             <p id="sync-role-hint" class="hint"></p>
           </div>
         </div>
-        <div class="sync-row" id="sync-account-row" hidden>
-          <span id="sync-account-label" class="sync-label">共享账号</span>
+        <div class="sync-row sync-account-row" id="sync-account-row" hidden>
+          <div class="sync-account-heading">
+            <span id="sync-account-label" class="sync-label">共享账号</span>
+            <button type="button" class="sync-select-all" id="sync-select-all" aria-controls="sync-accounts" hidden>全选</button>
+          </div>
           <div class="sync-field">
             <div class="sync-list" id="sync-accounts" role="group" aria-labelledby="sync-account-label"></div>
+            <div class="hint sync-pick-summary" id="sync-pick-summary" hidden>
+              <span id="sync-pick-count" role="status"></span><span>保存设置后生效</span>
+            </div>
             <p class="hint" id="sync-clear-hint" hidden></p>
             <div class="sync-clear-row">
               <button type="button" class="sync-quiet sync-danger" id="sync-clear" aria-describedby="sync-clear-hint" hidden>停止共享并清除从机</button>

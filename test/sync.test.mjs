@@ -240,6 +240,49 @@ test("a synced API key can be selected on the next master without offering impor
   assert.deepEqual(next.accounts, { "workbuddy-ai#api": source["workbuddy-ai#api"] });
 });
 
+test("a follower with new Magpie-managed OAuth sign-ins can take over without sharing refresh credentials", async t => {
+  const original = {
+    workbuddy: auth("cn"),
+    "workbuddy#enterprise": { ...auth("firm"), enterpriseId: "fixture-company" },
+    "workbuddy-ai": auth("intl")
+  };
+  const own = { "workbuddy#local": auth("local") };
+  const a = setup(t, original), b = setup(t, own), repo = github();
+  let clock = Date.now();
+  const services = { now: () => clock, storeFactory: repo.storeFactory };
+  for (const dir of [a, b]) await hostTick(dir, null, services);
+  const picks = syncChoices(original).map(choice => choice.id);
+  assert.equal(await hostTick(a, change(a, clock, "master", picks), services), "published");
+  assert.equal(await hostTick(b, change(b, clock, "follower"), services), "received");
+  assert.deepEqual(syncChoices(readJSON(authFile(b)), syncConfig(b).machine).map(choice => choice.id), ["cn:local"]);
+  const prior = repo.file().sha;
+  clock++;
+  assert.equal(await hostTick(b, change(b, clock, "master", picks), services), "idle");
+  assert.equal(syncConfig(b).role, "follower");
+  assert.equal(syncView(b, clock).reply.error, "unavailable");
+  assert.equal(repo.file().sha, prior);
+
+  // Only model the sign-ins Magpie would save after an official import succeeds.
+  // The real vendor import and refresh-token rotation are not part of this test.
+  const native = Object.fromEntries(Object.entries(original).map(([key, item]) => [
+    key, { ...item, access: `new-access-${item.uid}`, refresh: `new-refresh-${item.uid}` }
+  ]));
+  assert.equal(await hostTick(a, change(a, ++clock, "off"), services), "off");
+  writeJSON(authFile(b), { ...own, ...native });
+  assert.equal(await hostTick(b, change(b, ++clock, "master", picks), services), "other-master");
+  assert.equal(syncView(b, clock).paused, true);
+  assert.equal(repo.file().sha, prior);
+  clock += 10 * 60_000;
+  assert.equal(await hostTick(b, null, services), "published");
+  assert.equal(syncView(b, clock).paused, false);
+  const next = await openData(repo.file().data, passphrase);
+  assert.equal(next.version, 2);
+  assert.equal(next.lease.owner, syncConfig(b).machine);
+  assert.deepEqual(next.accounts, Object.fromEntries(Object.entries(native).map(([key, { refresh, expires, ...portable }]) => [key, portable])));
+  assert.deepEqual(readJSON(authFile(a)), original);
+  assert.deepEqual(readJSON(authFile(b)), { ...own, ...native });
+});
+
 test("a manual synchronization polls immediately without enabling an off machine", async t => {
   const dir = setup(t, { workbuddy: auth("main") }), repo = github(), now = Date.now();
   let clock = now;
