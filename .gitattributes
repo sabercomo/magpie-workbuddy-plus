@@ -1,0 +1,2 @@
+# Magpie Web hashes inline script bytes before the browser normalizes newlines.
+/page/*.js text eol=lf

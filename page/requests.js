@@ -11,7 +11,7 @@ globalThis.WBRequests = function ({ options, receipt, changed, history, wake }) 
     catch (e) { if (e.name !== "SecurityError") throw e; }
   }
   function show(request, phase, detail = "") {
-    changed({ action: request.action, phase, detail });
+    changed({ id: request.id, action: request.action, phase, detail });
   }
   function finish(phase, detail) {
     clearTimeout(receiptTimer);
@@ -20,7 +20,7 @@ globalThis.WBRequests = function ({ options, receipt, changed, history, wake }) 
     remember(null);
     show(previous, phase, detail);
   }
-  function receive(ack) {
+  function receive(ack = active && receipt(active.id)) {
     if (!active || active.reading || ack?.id !== active.id || typeof ack.ok !== "boolean") return;
     active.observed = true;
     if (ack.ok) finish("accepted");
@@ -32,7 +32,7 @@ globalThis.WBRequests = function ({ options, receipt, changed, history, wake }) 
   }
   function unresolved(request) {
     if (!request?.id || !jobs.has(request.action)) return false;
-    const ack = receipt();
+    const ack = receipt(request.id);
     return !(ack?.id === request.id && (ack.ok === true || (ack.ok === false && ack.beforeDispatch === true)));
   }
   function awaitReceipt(request) {
@@ -41,7 +41,8 @@ globalThis.WBRequests = function ({ options, receipt, changed, history, wake }) 
   }
   function recover(request) {
     active = { id: request.id, action: request.action };
-    show(active, "unknown", receipt()?.id === request.id ? receipt().error : "");
+    const ack = receipt(request.id);
+    show(active, "unknown", ack?.id === request.id ? ack.error : "");
   }
   // Timing out the await of get (not a chain containing set) prevents a late read from writing.
   async function within(operation, ms) {
@@ -60,7 +61,8 @@ globalThis.WBRequests = function ({ options, receipt, changed, history, wake }) 
       catch (e) { if (e.name !== "SecurityError") throw e; }
       if (marker?.id && jobs.has(marker.action)) {
         active = { id: marker.id, action: marker.action };
-        if (receipt()?.id === marker.id && typeof receipt().ok === "boolean") receive(receipt());
+        const ack = receipt(marker.id);
+        if (ack?.id === marker.id && typeof ack.ok === "boolean") receive(ack);
         else if (marker.until > Date.now() && marker.until <= Date.now() + 30_000) {
           active.until = marker.until;
           awaitReceipt(active);
@@ -77,7 +79,7 @@ globalThis.WBRequests = function ({ options, receipt, changed, history, wake }) 
         // The host may already have published the ACK before the new frame
         // starts, including in a browser that did not retain the history marker.
         active = { id: saved.id, action: saved.action };
-        receive(receipt());
+        receive();
       }
     },
     async send(changes) {
@@ -115,7 +117,8 @@ globalThis.WBRequests = function ({ options, receipt, changed, history, wake }) 
         if (job && active === current) {
           // A matching error receipt may already have arrived during the host write.
           if (current.observed) return;
-          if (receipt()?.id === current.id && typeof receipt().ok === "boolean") receive(receipt());
+          const ack = receipt(current.id);
+          if (ack?.id === current.id && typeof ack.ok === "boolean") receive(ack);
           else if (Date.now() >= deadline) show(current, "unknown");
           else {
             current.until = Date.now() + 30_000;

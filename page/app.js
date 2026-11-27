@@ -4,13 +4,18 @@
 const $ = id => document.getElementById(id);
 const names = { all: "执行所有任务", "pause-tasks": "暂停任务", "resume-tasks": "恢复任务", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "执行单任务", travel: "猫猫旅行", buddy: "开盲盒", compensation: "领取补偿", bonus: "连登福利", night: "夜猫子", inspect: "查询状态", web: "国际版网页会话", refresh: "刷新余额", login: "添加国内版账号", "login-intl": "添加国际版账号", pause: "暂停国内版定时", resume: "开启国内版定时", "intl-on": "开启国际版定时", "intl-off": "暂停国际版定时", retry: "重试失败任务", cancel: "停止执行", config: "保存设置" };
 let pending = null; // Non-task settings and maintenance requests.
-let requestStatus, snapshotFailed = false, controlsLocked = false;
+let requestStatus, requestCheck, snapshotFailed = false, controlsLocked = false;
+function receiptFor(id) {
+  const view = globalThis.WBPLUS;
+  return view?.request?.id === id ? view.request : view?.pageReceipts?.find(receipt => receipt.id === id);
+}
 const requests = WBRequests({
   history: globalThis.history,
   wake: () => location.reload(),
   options: { get: () => magpie.options.get(), set: options => magpie.options.set(options) },
-  receipt: () => globalThis.WBPLUS?.request,
+  receipt: receiptFor,
   changed: status => {
+    if (requestStatus?.id !== status.id || requestStatus?.phase !== status.phase) requestCheck = undefined;
     requestStatus = status;
     renderRequest();
     if (controlsLocked !== requests.locked()) {
@@ -35,7 +40,16 @@ function renderRequest() {
   $("request-status").hidden = false;
   $("request-status").dataset.phase = phase;
   $("request-title").textContent = `${names[action] || action}：${title}`;
-  $("request-hint").textContent = snapshotFailed ? "暂时无法读取最新快照。显示的是上次状态，请稍后再检查。" : hint;
+  const check = requestCheck?.result;
+  $("request-check").disabled = check === "checking";
+  let message = hint;
+  if (check === "checking") message = "正在检查后台状态…";
+  else if (check === "failed" || snapshotFailed) message = "暂时无法读取最新快照。显示的是上次状态，请稍后再检查。";
+  else if (check === "checked") {
+    message = ["awaiting", "unknown"].includes(phase) && !detail
+      ? "已检查，暂未收到这次任务的回执。请先查看执行记录。" : `已检查。${hint}`;
+  }
+  $("request-hint").textContent = message;
 }
 
 let syncPending, syncEdited = false, syncChoicesKey, syncClearing = false;
@@ -101,8 +115,8 @@ function paintView(view, canSave) {
     fillTimes(view, syncForm, true);
   }
   fillSync(view?.sync);
-  const done = view?.request;
-  if (pending && done?.id === pending) {
+  const done = pending && receiptFor(pending);
+  if (done) {
     pending = null;
     note(done.ok ? `${names[done.action] || done.action}：已交给后台服务` : `${names[done.action] || done.action}：${done.error}`, !done.ok);
   }
@@ -110,7 +124,7 @@ function paintView(view, canSave) {
 
 function paint() {
   const view = globalThis.WBPLUS, previous = blocked;
-  requests.receive(view?.request);
+  requests.receive();
   blocked = !view ? "还没有读到后台设置，请稍等再试"
     : !view.version || view.handoff === "old" || !view.settings || !WBBoard.hasScheduleFields(view.schedules, view.intlSchedules) ? upgradeHint : "";
   try { paintView(view, !blocked); }
@@ -480,25 +494,33 @@ saveButton.onclick = async () => {
   finally { setTimeout(() => { saving = false; saveButton.disabled = !!blocked || !!syncPending; }, 3000); }
 };
 
-function reload(allowUpgrade = true) {
+function reload(allowUpgrade = true, check) {
   const upgrade = allowUpgrade && requests.canUpgrade();
   const before = globalThis.WBPLUS;
   const script = document.createElement("script");
   script.src = `data.js?t=${Date.now()}`;
-  script.onerror = () => {
+  let timeout;
+  function finish(failed) {
+    clearTimeout(timeout);
     script.remove();
-    snapshotFailed = true;
+    snapshotFailed = failed;
+    if (check && requestCheck === check) check.result = failed ? "failed" : "checked";
+  }
+  script.onerror = () => {
+    if (!script.isConnected) return;
+    finish(true);
     renderRequest();
   };
   script.onload = () => {
+    if (!script.isConnected) return;
     if (globalThis.WBPLUS === before) return script.onerror();
-    snapshotFailed = false;
-    renderRequest();
-    script.remove();
+    finish(false);
     if (upgrade && requests.canUpgrade() && globalThis.WBPLUS?.build && globalThis.WBPLUS.build !== build) return location.reload();
     paint();
+    renderRequest();
   };
   document.head.append(script);
+  if (check) timeout = setTimeout(script.onerror, 5_000);
 }
 
 const menus = [...document.querySelectorAll("details.run-menu")];
@@ -513,7 +535,11 @@ for (const button of document.querySelectorAll("[data-action]")) button.onclick 
   finally { button.disabled = requests.locked(); }
 };
 
-$("request-check").onclick = () => reload(false);
+$("request-check").onclick = () => {
+  requestCheck = { result: "checking" };
+  renderRequest();
+  reload(false, requestCheck);
+};
 $("request-records").onclick = () => {
   if (!$("settings").hidden) settings(false);
   WBBoard.showRecords();

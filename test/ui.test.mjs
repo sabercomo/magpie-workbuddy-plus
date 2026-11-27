@@ -520,7 +520,15 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   const form = nodes.get("settings-form");
   form.elements = Object.fromEntries(["daily", "tasks", "sweep", "night", "intl-daily", "intl-web", "intl-model", "intl-web-on", "campaign-app", "skill-share", "buddy-auto", "spread", "timezone", "proxy", "intlProxy"].map(k => [k, new Element("input")]));
   form.reportValidity = () => true;
-  const bodyEl = new Element("body");
+  const bodyEl = new Element("body"), head = new Element("head");
+  head.append = script => {
+    script.isConnected = true;
+    head.children.push(script);
+    script.remove = () => {
+      script.isConnected = false;
+      head.children.splice(head.children.indexOf(script), 1);
+    };
+  };
   let releaseSave, navigations = 0;
   const context = vm.createContext({
     location: { reload() { navigations++; } },
@@ -534,7 +542,7 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
     },
     crypto,
     magpie: { options: { get: async () => ({}), set: async opts => { if (opts.request) requests.push(opts.request); if (opts.syncRequest) syncRequests.push(opts.syncRequest); } } },
-    document: { head: new Element("head"), body: bodyEl, getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: () => [], querySelector: () => null, addEventListener() {} },
+    document: { head, body: bodyEl, getElementById: id => nodes.get(id), createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), querySelectorAll: () => [], querySelector: () => null, addEventListener() {} },
     setInterval() {}, setTimeout(fn, ms) { if (ms === 3000) releaseSave = fn; }, clearTimeout() {}, console: { error() {} }
   });
   const view = context.WBPLUS, saveButton = nodes.get("save-settings");
@@ -588,12 +596,14 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   await assert.rejects(vm.runInContext('ask("all")', context), /确认/);
   assert.equal(requests.length, count);
   nodes.get("request-check").onclick();
+  assert.match(nodes.get("request-hint").textContent, /正在检查后台状态/);
   context.document.head.lastChild.onerror();
   assert.match(nodes.get("request-hint").textContent, /无法读取最新快照/);
   for (const check of [() => nodes.get("request-check").onclick(), () => vm.runInContext("reload()", context)]) {
     check(); context.WBPLUS = { ...view, build: "new" }; context.document.head.lastChild.onload();
     assert.equal(navigations, 1, "snapshot inspection cannot wake a host with a pending request");
   }
+  assert.match(nodes.get("request-hint").textContent, /已检查，暂未收到这次任务的回执/);
   context.WBPLUS = view;
   nodes.get("request-records").onclick();
   assert.equal(bodyEl.dataset.wbTab, "schedule");

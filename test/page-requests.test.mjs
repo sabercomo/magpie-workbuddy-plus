@@ -12,14 +12,14 @@ function page(t) {
   const writes = [], states = [], wakes = [];
   const history = { state: {}, replaceState(state) { this.state = state; } };
   const host = {
-    saved: {}, ack: null,
+    saved: {}, ack: null, receipts: new Map(),
     get: async () => host.saved,
     set: async next => { writes.push(next); host.saved = next; }
   };
   const open = (h = history) => {
     const context = vm.createContext({ setTimeout, clearTimeout, Date });
     script.runInContext(context);
-    return context.WBRequests({ options: host, receipt: () => host.ack, changed: s => states.push(s), wake: () => wakes.push(structuredClone(host.saved.request)), history: h });
+    return context.WBRequests({ options: host, receipt: id => host.receipts.get(id) ?? host.ack, changed: s => states.push(s), wake: () => wakes.push(structuredClone(host.saved.request)), history: h });
   };
   return { host, history, open, wakes, ui: open(), writes, phase: () => states.at(-1)?.phase };
 }
@@ -145,6 +145,21 @@ test("saved options plus a recent matching receipt can confirm a fresh handoff w
   assert.equal(reopened.locked(), false);
   assert.equal(reopened.canUpgrade(), true);
   assert.equal(wakes.length, 0); assert.equal(writes.length, 0);
+});
+
+test("sidebar confirms a pending request even when another request has the latest receipt", async t => {
+  const { host, open, phase, writes, wakes } = page(t);
+  host.saved = job("first");
+  host.ack = { id: "second", ok: true };
+  const reopened = open(null);
+  await reopened.restore();
+  assert.equal(phase(), "unknown");
+  host.receipts.set("first", { id: "first", ok: true, job: "original-job" });
+  reopened.receive();
+  assert.equal(phase(), "accepted");
+  assert.equal(reopened.locked(), false);
+  assert.equal(writes.length, 0);
+  assert.equal(wakes.length, 0);
 });
 
 test("a suspended frame observing a successful set after its deadline does not warm the host", async t => {

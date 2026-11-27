@@ -347,8 +347,8 @@ Use the returned run ID to check the result in the panel or through `status`.
 | Area | Details |
 | --- | --- |
 | Snapshot and refresh | The sandbox cannot access the network. It reloads the service-written `page/data.js` every 15 seconds. The snapshot has no credentials; a warning appears when it is over 25 minutes old. |
-| Requests | After Magpie confirms a new task was saved in time, the sidebar reopens once to let the host read the original request, unless a matching receipt has already arrived. It does not rewrite the options or reopen on a timeout, late response, or restored request. If no receipt arrives within 30 seconds of submission, the sidebar shows that the task’s status is unconfirmed. It may already be running. Checking status rereads the snapshot; viewing run history does not submit work. Do not repeat the run from the local panel. An acceptance receipt does not mean the task has finished. |
-| Reopening the sidebar | The restored page reads but does not rewrite the options. Manually reopening the full sidebar can wake the host and deliver a previously saved request; it is not the same as checking status. An empty history does not prove that nothing ran. Repeating the most recent request republishes its receipt without running it again; newly received requests older than 10 minutes are rejected. |
+| Requests | After Magpie confirms a new task was saved in time, the sidebar reopens once to let the host read the original request, unless a matching receipt has already arrived. It does not rewrite the options or reopen on a timeout, late response, or restored request. If no receipt arrives within 30 seconds of submission, the sidebar shows that the task’s status is unconfirmed. It may already be running. Checking status rereads the snapshot and reports the result; viewing run history does not submit work. Do not repeat the run from the local panel. An acceptance receipt does not mean the task has finished. |
+| Reopening the sidebar | The restored page reads but does not rewrite the options. Manually reopening the full sidebar can wake the host and deliver a previously saved request; it is not the same as checking status. An empty history does not prove that nothing ran. The service reuses recent receipts by request ID, so interleaved deliveries of the same request create one run. A request first received more than 10 minutes after submission is rejected. |
 | Plugin updates | The open page loads the new version after an update. |
 
 </details>
@@ -506,6 +506,10 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 | Pinned install | If `magpie plugin list` shows a suffix such as `#v0.4.0`, remove it with `magpie plugin rm` and add the unpinned address. Set plugin options such as the port again. |
 | From 0.5.5 onward | Magpie asks the old service to hand off when loading an update. It waits until the current job finishes, retrying each minute. |
 | 0.5.4 or earlier | Stop the old service once, or log out, restart the computer or restart the container. |
+
+**v0.8.6 changes**
+
+- Fix duplicate executions when old and new sidebar requests arrive interleaved. The sidebar looks up receipts by request ID and shows the result of a status check.
 
 **v0.8.5 changes**
 

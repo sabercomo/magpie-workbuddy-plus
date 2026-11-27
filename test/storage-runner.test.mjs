@@ -908,3 +908,27 @@ test("missing receipt after dispatch is not a rejected job; restart republishes 
   const unknown = fresh.pageRequest({ ...request, id: "new-id" });
   assert.equal(unknown.ok, false); assert.equal(unknown.beforeDispatch, undefined);
 });
+
+test("interleaved sidebar requests retain their own receipts across an upgrade and restart", t => {
+  const { dir } = fixture(t), stateFile = join(dir, "state.json");
+  const first = { id: "first-page-job", action: "all", at: Date.now() };
+  const second = { ...first, id: "second-page-job" };
+  // The 0.8.5 state format contains only the latest receipt.
+  const legacy = { id: first.id, action: first.action, at: new Date().toISOString(), ok: true, job: "legacy-job" };
+  writeJSON(stateFile, { ...readJSON(stateFile), pageRequest: legacy });
+  const upgraded = new Runner(dir);
+  let queued;
+  upgraded.run = async () => { queued = readJSON(stateFile); };
+  const saved = upgraded.pageRequest(second);
+  assert.deepEqual(queued.pageRequest, saved);
+  assert.equal(queued.jobs[0].id, saved.job);
+  const restarted = new Runner(dir);
+  let restartedRuns = 0;
+  restarted.run = async () => { restartedRuns++; };
+  assert.deepEqual(restarted.pageRequest(first), legacy);
+  assert.deepEqual(restarted.pageRequest(second), saved);
+  assert.equal(restartedRuns, 0);
+  assert.equal(restarted.state.jobs.length, 1);
+  assert.deepEqual(restarted.boardView().pageReceipts, [saved, legacy]);
+  assert.deepEqual(restarted.boardView().request, saved);
+});
