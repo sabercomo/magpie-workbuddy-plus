@@ -348,7 +348,7 @@ Use the returned run ID to check the result in the panel or through `status`.
 | --- | --- |
 | Snapshot and refresh | The sandbox cannot access the network. It reloads the service-written `page/data.js` every 15 seconds. The snapshot has no credentials; a warning appears when it is over 25 minutes old. |
 | Requests | After Magpie confirms a new task was saved in time, the sidebar reopens once to let the host read the original request, unless a matching receipt has already arrived. It does not rewrite the options or reopen on a timeout, late response, or restored request. If no receipt arrives within 30 seconds of submission, the sidebar shows that the task’s status is unconfirmed. It may already be running. Checking status rereads the snapshot and reports the result; viewing run history does not submit work. Do not repeat the run from the local panel. An acceptance receipt does not mean the task has finished. |
-| Reopening the sidebar | The restored page reads but does not rewrite the options. Manually reopening the full sidebar can wake the host and deliver a previously saved request; it is not the same as checking status. An empty history does not prove that nothing ran. The service reuses recent receipts by request ID, so interleaved deliveries of the same request create one run. A request first received more than 10 minutes after submission is rejected. |
+| Reopening the sidebar | The restored page reads the saved options. Manually reopening the full sidebar can wake the host and deliver a previously saved request. Checking status only reads the snapshot. The service reuses recent receipts by request ID and rejects requests first received at least 10 minutes after submission. If an expired request has no receipt, the sidebar unlocks and prompts you to check the original run history. |
 | Plugin updates | The open page loads the new version after an update. |
 
 </details>
@@ -510,6 +510,7 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 
 **v0.8.7 changes**
 
+- Fix an expired request without a receipt locking the sidebar after an update. Restoring the page and checking status remain read-only. Check the original run in the schedule and history view.
 - The Magpie sidebar and Installed list share the Plus icon. Magpie builds that support compact rows show Plus on one line; select “Tools · Page” to see the full details and copy the MCP address. Older hosts keep their existing layout.
 - When a campaign run receives HTTP 410 or code `12331`, the board stops showing stale tasks for that account and campaign. The marker lasts up to 10 minutes and clears sooner if a later view or claim write succeeds. It does not affect other accounts or campaigns.
 

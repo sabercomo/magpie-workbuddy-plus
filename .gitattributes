@@ -1,2 +1,4 @@
 # Magpie Web hashes inline script bytes before the browser normalizes newlines.
 /page/*.js text eol=lf
+# The installed row embeds this file's exact bytes in package.json.
+/page/icon.svg text eol=lf

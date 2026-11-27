@@ -61,7 +61,7 @@ test("uncertain set stays locked across refresh and host-options recovery withou
   const submit = ui.send(job("A")); await setImmediate();
   t.mock.timers.tick(10_000); await submit;
   assert.equal(phase(), "unknown"); assert.equal(ui.locked(), true);
-  assert.deepEqual(JSON.parse(JSON.stringify(history.state.wbPending)), { id: "A", action: "all" });
+  assert.deepEqual(JSON.parse(JSON.stringify(history.state.wbPending)), { id: "A", action: "all", at: writes[0].request.at });
   const refreshed = open(); await refreshed.restore(); // host write not yet visible
   await assert.rejects(refreshed.send(job("B")), /确认/);
   gate.resolve(); await setImmediate();
@@ -158,6 +158,72 @@ test("sidebar confirms a pending request even when another request has the lates
   reopened.receive();
   assert.equal(phase(), "accepted");
   assert.equal(reopened.locked(), false);
+  assert.equal(writes.length, 0);
+  assert.equal(wakes.length, 0);
+});
+
+test("an hours-old saved task without a receipt releases the sidebar without replay", async t => {
+  const { host, open, phase, writes, wakes } = page(t);
+  const old = job("old");
+  old.request.at -= 4 * 60 * 60_000;
+  host.saved = { ...old, port: 4389 };
+  const reopened = open(null);
+  await reopened.restore();
+  reopened.receive();
+  assert.equal(phase(), "expired");
+  assert.equal(reopened.locked(), false);
+  assert.equal(reopened.canUpgrade(), true);
+  assert.deepEqual(host.saved, { ...old, port: 4389 });
+  assert.equal(writes.length, 0);
+  assert.equal(wakes.length, 0);
+  await reopened.send(job("new"));
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].port, 4389);
+  assert.deepEqual(wakes.map(request => request.id), ["new"]);
+  assert.equal(writes[0].request.id, "new");
+});
+
+test("a legacy history marker uses the matching saved task's timestamp", async t => {
+  const { host, history, ui, phase, writes, wakes } = page(t);
+  host.saved = job("old");
+  host.saved.request.at -= 4 * 60 * 60_000;
+  history.state.wbPending = { id: "old", action: "all" };
+  await ui.restore();
+  assert.equal(phase(), "expired");
+  assert.equal(ui.locked(), false);
+  assert.equal(history.state.wbPending, null);
+  assert.equal(writes.length, 0);
+  assert.equal(wakes.length, 0);
+});
+
+test("a recent recovered task blocks until expiry and still accepts a late matching receipt", async t => {
+  const { host, ui, phase, writes, wakes } = page(t);
+  host.saved = job("recent");
+  await ui.restore();
+  t.mock.timers.tick(10 * 60_000 - 1);
+  assert.equal(phase(), "unknown");
+  await assert.rejects(ui.send(job("too-early")), /确认/);
+  t.mock.timers.tick(1);
+  assert.equal(phase(), "expired");
+  assert.equal(ui.locked(), false);
+  host.ack = { id: "recent", ok: true, job: "original-job" };
+  ui.receive();
+  assert.equal(phase(), "accepted");
+  assert.equal(writes.length, 0);
+  assert.equal(wakes.length, 0);
+});
+
+test("an expired history marker cannot override a different recent saved request", async t => {
+  const { host, history, ui, phase, writes, wakes } = page(t);
+  history.state.wbPending = { id: "old", action: "all", at: Date.now() - 4 * 60 * 60_000 };
+  host.saved = job("recent");
+  await ui.restore();
+  assert.equal(phase(), "unknown");
+  assert.equal(ui.locked(), true);
+  await assert.rejects(ui.send(job("new")), /确认/);
+  host.ack = { id: "recent", ok: true };
+  ui.receive();
+  assert.equal(phase(), "accepted");
   assert.equal(writes.length, 0);
   assert.equal(wakes.length, 0);
 });

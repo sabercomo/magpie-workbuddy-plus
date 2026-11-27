@@ -212,7 +212,7 @@ body.in-settings #main-view,body.in-settings footer,body.in-settings .header-act
 }
 
 #request-title::before{content:"";display:inline-block;width:6px;height:6px;margin-right:8px;vertical-align:middle;border-radius:50%;background:var(--wb-go)}
-#request-status[data-phase="unknown"] #request-title::before{background:var(--wb-warn)}
+#request-status:is([data-phase="unknown"],[data-phase="expired"]) #request-title::before{background:var(--wb-warn)}
 #request-status:is([data-phase="rejected"],[data-phase="not-submitted"]) #request-title::before{background:var(--wb-urgent)}
 #request-status[data-phase="accepted"] #request-title::before{background:var(--wb-accent)}
 #request-status p{margin:4px 0 8px;color:var(--wb-muted);overflow-wrap:anywhere}
