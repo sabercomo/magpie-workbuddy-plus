@@ -5,6 +5,14 @@ import vm from "node:vm";
 import { setImmediate } from "node:timers/promises";
 import { defaults, version } from "../storage.mjs";
 
+test("Magpie's installed row and sidebar share the bundled Plus icon", () => {
+  const { magpie } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(magpie.compactInstalledRow, true);
+  const icon = readFileSync(new URL(`../${magpie.page.icon}`, import.meta.url));
+  assert.match(icon.toString(), /^<svg\b/);
+  assert.equal(magpie.icon, `data:image/svg+xml;base64,${icon.toString("base64")}`);
+});
+
 // Exercise the shipped page script with a small DOM fixture. This checks
 // button/account selection, two-level navigation, board views, task center,
 // models catalog, and schedule editing without contacting a vendor.

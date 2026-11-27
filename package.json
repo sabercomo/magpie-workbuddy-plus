@@ -1,6 +1,6 @@
 {
   "name": "magpie-workbuddy-plus",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "description": "Unofficial Magpie companion for WorkBuddy China and WorkBuddy AI growth tasks, streak rewards, Buddy travel and schedules; China's daily check-in stays with Magpie",
   "type": "module",
   "main": "./index.mjs",
@@ -38,6 +38,8 @@
   ],
   "license": "MIT",
   "magpie": {
+    "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0iIzI0Njc0RiIvPgogIDxwYXRoIGQ9Ik0xNiA5aC00LjVBNC41IDQuNSAwIDAgMCA3IDEzLjV2NkE0LjUgNC41IDAgMCAwIDExLjUgMjRoOGE0LjUgNC41IDAgMCAwIDQuNS00LjVWMTdNMTIuNSAxNXYyTTE4LjUgMTV2Mk0yMyA2djhtLTQtNGg4IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+Cg==",
+    "compactInstalledRow": true,
     "page": {
       "title": "WorkBuddy Plus",
       "titles": {

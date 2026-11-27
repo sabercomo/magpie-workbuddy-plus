@@ -227,11 +227,19 @@ async function fire(client, campaign, task, row, options) {
   return row;
 }
 
-export async function campaign(client, { execute = true, includeApp = true, poll: gap = 3000, sleep = delay } = {}) {
+export async function campaign(client, { execute = true, includeApp = true, poll: gap = 3000, sleep = delay, observe } = {}) {
   let tasks = 0, ready = 0, claimed = 0, earned = 0, manual = 0, skipped = 0, pending = 0, appSkipped = 0;
   const errors = [];
+  const view = async (spec, task) => {
+    await viewed(client, spec, task.code);
+    observe?.(spec.code, false);
+  };
   const take = async (spec, task, credit) => {
-    try { await claim(client, spec, task.code, credit); claimed++; earned += credit; }
+    try {
+      await claim(client, spec, task.code, credit);
+      observe?.(spec.code, false);
+      claimed++; earned += credit;
+    }
     catch (e) {
       if (e instanceof CampaignClosed || e.restricted || dropped(e)) throw e;
       if (e.code !== 12304) errors.push(`${spec.label}/${task.label}：${e.message}`);
@@ -252,7 +260,7 @@ export async function campaign(client, { execute = true, includeApp = true, poll
         if (row.claimed_at) continue;
         if (done(row)) {
           if (row.needView) {
-            try { await viewed(client, spec, task.code); }
+            try { await view(spec, task); }
             catch (e) { if (e instanceof CampaignClosed || e.restricted || dropped(e)) throw e; errors.push(`${spec.label}/${task.label}：查看失败 ${e.message}`); continue; }
           }
           ready++;
@@ -263,7 +271,7 @@ export async function campaign(client, { execute = true, includeApp = true, poll
         if (task.kind === "app" && !includeApp) { appSkipped++; continue; }
         if (!["chat", "expert", "skill", "desktop", "app"].includes(task.kind)) { manual++; continue; }
         if (row.needView) {
-          try { await viewed(client, spec, task.code); }
+          try { await view(spec, task); }
           catch (e) { if (e instanceof CampaignClosed || e.restricted || dropped(e)) throw e; errors.push(`${spec.label}/${task.label}：查看失败 ${e.message}`); continue; }
         }
         let after;
@@ -277,7 +285,7 @@ export async function campaign(client, { execute = true, includeApp = true, poll
         }
       }
     } catch (e) {
-      if (e instanceof CampaignClosed) { skipped++; continue; }
+      if (e instanceof CampaignClosed) { observe?.(spec.code, true); skipped++; continue; }
       if (e.restricted || dropped(e)) throw e;
       errors.push(`${spec.label}：${e.message}`);
     }

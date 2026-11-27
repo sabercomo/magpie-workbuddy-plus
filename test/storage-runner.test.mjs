@@ -681,6 +681,54 @@ test("a board refresh reads both builds' model lists, each failing alone", async
   assert.ok(tokens.includes("Bearer ent-access"));
 });
 
+test("a campaign's closed write masks stale task reads only for that account and campaign", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  const p = fixture(t), authFile = join(p.magpieDir, "plugin-auth.json");
+  writeJSON(authFile, { ...readJSON(authFile), "workbuddy#u2": { ...p.auth, uid: "u2", accountId: "second@example.test" } });
+  const starbucks = "campaign_starbucks_2026", reporter = "campaign_reporter_2026";
+  const claims = [];
+  let closed = true, starbucksReads = 0;
+  const ok = data => Response.json({ code: 0, data });
+  const runner = new Runner(p.dir, { gap: 0, fetcher: async (url, init) => {
+    const { pathname, searchParams } = new URL(url), activity = searchParams.get("activity_code");
+    if (pathname === "/v2/activity/growth/tasks") return ok({ tasks: [] });
+    if (pathname === "/portal/activity/config") return ok({ config: { in_period: true } });
+    if (pathname === "/portal/activity/tasks") {
+      if (activity === starbucks) starbucksReads++;
+      const task_code = activity === starbucks ? "ai_chat" : "expert_chat";
+      return ok({ tasks: [{ task_code, target_count: 1, need_view: false }], progress: [{ task_code, progress: activity === starbucks ? 1 : 0 }] });
+    }
+    if (pathname.endsWith("/claim") && activity === starbucks) {
+      claims.push([activity, init.headers.Authorization]);
+      return closed ? Response.json({ code: 12331 }) : ok({});
+    }
+    assert.ok(!pathname.startsWith("/portal/activity/"), pathname);
+    return ok({});
+  } });
+  const visible = () => Object.fromEntries(runner.boardView().accounts.map(a => [a.id, a.campaigns.map(c => c.code)]));
+  const all = { "cn:u1": [starbucks, reporter], "cn:u2": [starbucks, reporter] };
+  const masked = { ...all, "cn:u1": [reporter] };
+  const sweep = async () => { runner.submit(["sweep"], ["cn:u1"]); await settled(runner); };
+  await runner.refreshBoard();
+  assert.deepEqual(visible(), all);
+  await sweep();
+  assert.deepEqual(claims, [[starbucks, "Bearer private-access"]]);
+  assert.deepEqual(visible(), masked, "the already published board must stop offering the task");
+  const before = starbucksReads;
+  await runner.refreshBoard();
+  assert.equal(starbucksReads, before + 2, "the read-only board still checks both accounts");
+  assert.equal(claims.length, 1, "reading the board does not try to claim");
+  assert.deepEqual(visible(), masked, "a stale successful read does not override the terminal write");
+  t.mock.timers.tick(10 * 60_000);
+  assert.deepEqual(visible(), all, "a temporary end marker cannot hide a future opening indefinitely");
+  await sweep();
+  assert.deepEqual(visible(), masked);
+  closed = false;
+  await sweep();
+  assert.equal(claims.length, 3, "the marker must not block later normal attempts");
+  assert.deepEqual(visible(), all, "a recent successful activity write clears the marker");
+});
+
 test("a login added in Magpie itself refreshes the board at the next beat, not when it is next due", async t => {
   const p = fixture(t), authFile = join(p.magpieDir, "plugin-auth.json");
   const runner = new Runner(p.dir, { gap: 0, fetcher: async () => Response.json({ code: 0, data: {} }) });

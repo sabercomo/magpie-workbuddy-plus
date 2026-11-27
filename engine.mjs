@@ -26,6 +26,9 @@ const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.pa
 
 export async function perform(action, client, context) {
   const { account, config, state, log, checkpoint } = context;
+  const runCampaign = options => campaign(client, {
+    poll: context.campaignPoll ?? 3000, sleep: context.campaignSleep ?? delay, observe: context.observeCampaign, ...options
+  });
   const today = () => calendar(new Date(), config.timezone).day;
   const reportKey = code => `${account.id}:${code}:${today()}`;
   const daily = async (name, run) => {
@@ -208,7 +211,7 @@ export async function perform(action, client, context) {
     // client can report, then claim whatever is ready.
     if (!intl && !onlyNight) {
       try {
-        const got = await campaign(client, { includeApp: config.campaignApp === true, poll: context.campaignPoll ?? 3000, sleep: context.campaignSleep ?? delay });
+        const got = await runCampaign({ includeApp: config.campaignApp === true });
         if (!got.tasks && !got.errors.length) log("活动：当前不在活动期");
         else log([`活动：完成 ${got.ready} 项`, `领取 ${got.claimed} 项${got.earned ? ` +${got.earned} 积分` : ""}`,
           got.pending && `${got.pending} 项待上游落账`, got.manual && `${got.manual} 项需手动`,
@@ -282,7 +285,7 @@ export async function perform(action, client, context) {
     }
     let campaigns;
     try {
-      campaigns = await campaign(client, { execute: false, poll: context.campaignPoll ?? 3000, sleep: context.campaignSleep ?? delay });
+      campaigns = await runCampaign({ execute: false });
       for (const e of campaigns.errors || []) {
         failures.push(`活动：${e}`);
         log(`活动补领失败：${e}`);

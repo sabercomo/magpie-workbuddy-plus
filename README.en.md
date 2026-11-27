@@ -451,6 +451,7 @@ Set up the same **private storage target** and sync passphrase in Magpie on all 
 - On the master, choose 停止共享并清除从机 under 共享账号 and confirm. Plus publishes a clear-marked empty snapshot; followers delete only the entries this module imported and keep their own sign-ins. The master keeps renewing the empty lease until you turn sync off, so a device that comes back later is cleared too. Older Plus versions ignore the empty snapshot; update every device first. Clearing does not revoke tokens or API keys already issued; revoke a shared API key in WorkBuddy.
 - Status shows the current lease and snapshot generation. Devices are identified by random IDs, not hostnames. A follower that can reach sync storage writes a heartbeat at most once every 10 minutes, even while waiting for a snapshot. It reports the last seen time and applied generation; after 30 minutes without a heartbeat it is shown as offline. Read-only followers can still receive accounts, but cannot send heartbeats.
 - 立即同步 next to 状态 syncs once with the saved role; the Magpie tool `sync_now` does the same. Neither enables an off device or saves unsaved account selections.
+- A successful sync confirms snapshot transfer, not that WorkBuddy accepts the current access credential. If Magpie reports revoked OAuth renewal credentials or a signed-out account on the master, sign in again under Providers on the master, then run 立即同步 so followers can receive the new access credential. Plus neither renews nor shares refresh credentials.
 - To change masters, turn sync off on the old master and allow up to 10 minutes for its lease to expire. A new master can select API keys already imported onto that device without re-entering them; browser OAuth still requires a local Magpie sign-in. Turning sync off does not delete imports or revoke previously shared credentials.
 - If you use the standalone [WorkBuddy Sync](https://github.com/NotoChen/magpie-workbuddy-sync), disable it on all related devices before enabling Plus sync. Plus uses a separate snapshot path, does not read the old snapshot, and does not automatically remove entries the old plugin imported.
 
@@ -506,6 +507,11 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 | Pinned install | If `magpie plugin list` shows a suffix such as `#v0.4.0`, remove it with `magpie plugin rm` and add the unpinned address. Set plugin options such as the port again. |
 | From 0.5.5 onward | Magpie asks the old service to hand off when loading an update. It waits until the current job finishes, retrying each minute. |
 | 0.5.4 or earlier | Stop the old service once, or log out, restart the computer or restart the container. |
+
+**v0.8.7 changes**
+
+- The Magpie sidebar and Installed list share the Plus icon. Magpie builds that support compact rows show Plus on one line; select “Tools · Page” to see the full details and copy the MCP address. Older hosts keep their existing layout.
+- When a campaign run receives HTTP 410 or code `12331`, the board stops showing stale tasks for that account and campaign. The marker lasts up to 10 minutes and clears sooner if a later view or claim write succeeds. It does not affect other accounts or campaigns.
 
 **v0.8.6 changes**
 

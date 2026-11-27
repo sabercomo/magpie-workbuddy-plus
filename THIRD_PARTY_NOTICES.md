@@ -20,7 +20,7 @@ This project includes adaptations of these MIT-licensed projects:
 
 Additional compatibility references checked on 2026-11-27 (the earlier pins above still describe the original adaptations):
 - [niyouqianma/workbuddy2api-hub v2.2.7](https://github.com/niyouqianma/workbuddy2api-hub/tree/99fa0f5707554d2d7520307d3e03cbf9779cd878), MIT: the creation-phase model quota refusal codes in `wb_accounts.py`, adapted in `webagent.mjs` and `engine.mjs`. Plus does not adopt the gateway, account backup, session pruning, or multi-round retries.
-- [jichie/magpie-workbuddy-tasks](https://github.com/jichie/magpie-workbuddy-tasks/commit/3dd3e20), MIT: activity-portal terminal responses (HTTP 410 / code 12331), adapted in `campaign.mjs`.
+- [jichie/magpie-workbuddy-tasks](https://github.com/jichie/magpie-workbuddy-tasks/commit/3dd3e2072f8b64441948f209a4ea96ac85f037c2), revision `3dd3e2072f8b64441948f209a4ea96ac85f037c2`, MIT: activity-portal terminal responses (HTTP 410 / code 12331) and the case where a successful read still lists tasks from a closed campaign. Plus adapts the terminal response in `campaign.mjs` and a short-lived, per-account campaign marker for the board in `runner.mjs`; it does not copy upstream's refresh budget or persistent marker.
 - [zseeu1/wbkit](https://github.com/zseeu1/wbkit/commit/5aace0837e9a47c3d4c1633c17858619b58fa2ef), MIT: cycle and precise capacity fields in `lib/quota.mjs`, adapted in `board.mjs`. Plus preserves an explicit zero and keeps historical grant amounts separate.
 
 Magpie's local `plugin-auth.json` layout was checked against [yetone/magpie](https://github.com/yetone/magpie), `internal/plugin/host.js` and `store.go`. This companion does not include Magpie's gateway or replace its WorkBuddy provider.

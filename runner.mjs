@@ -19,6 +19,7 @@ class PageRejection extends Error {} // Validation before a job is created, neve
 
 const NETWORK_FAILURES = 3, NETWORK_PAUSE_MS = 10 * 60_000;
 const PAGE_REQUEST_MAX_AGE = 10 * 60_000;
+const CAMPAIGN_CLOSED_MAX_AGE = 10 * 60_000;
 const actionNames = { all: "全部任务", activity: "连登活跃", tasks: "成长任务", sweep: "补领奖励", task: "单项任务", travel: "猫猫旅行", buddy: "Buddy 盲盒", compensation: "官方补偿", bonus: "连登福利", night: "夜猫子", web: "网页会话", inspect: "状态查询" };
 const logChannel = action => action === "web" ? "chat" : action === "inspect" ? "system" : "task";
 const visibleJob = job => !(job.actions?.length === 1 && job.actions[0] === "keepalive");
@@ -135,6 +136,7 @@ export class Runner {
     this.active = 0;
     this.waiters = [];
     this.taskCache = new Map();
+    this.campaignClosures = new Map();
     for (const job of this.state.jobs) if (["running", "queued"].includes(job.status)) {
       job.status = "interrupted";
       job.finished = new Date().toISOString();
@@ -168,10 +170,21 @@ export class Runner {
   }
   // A job queued or running: the service must not be swapped out under it.
   working() { return this.controllers.size > 0 || this.state.jobs.some(j => ["running", "queued"].includes(j.status)); }
+  observeCampaign(account, code, closed) {
+    let activities = this.campaignClosures.get(account);
+    if (closed) {
+      if (!activities) this.campaignClosures.set(account, activities = new Map());
+      activities.set(code, Date.now() + CAMPAIGN_CLOSED_MAX_AGE);
+    } else if (activities) {
+      activities.delete(code);
+      if (!activities.size) this.campaignClosures.delete(account);
+    }
+  }
   // The check-in is read on every publish: Magpie claims it at midnight,
   // between board refreshes.
   boardView() {
     const config = this.config(), found = checkins(config), { day } = calendar(new Date(), config.timezone);
+    const now = Date.now();
     const sync = syncView(config.magpieDir), syncPaused = sync?.paused === true;
     if (sync?.target) {
       try { sync.choices = syncChoices(readJSON(join(config.magpieDir, "plugin-auth.json")), sync.target); } catch { sync.choices = []; }
@@ -200,9 +213,12 @@ export class Runner {
       settings: { timezone: config.timezone, spread: this.spread(config), proxy: maskProxy(config.proxy), intlProxy: maskProxy(config.intlProxy || ""), intlWebModel: config.intlWebModel || "auto", intlWeb: config.intlWeb !== false, campaignApp: config.campaignApp === true, skillShare: config.skillShare, buddyAuto: config.buddyAuto === true, concurrency: config.concurrency, tasksCacheTtl: config.tasksCacheTtl, progressCacheHours: config.progressCacheHours },
       accounts: this.board.accounts.map(({ key, ...a }) => {
         const row = this.withLedger(a, key, found, day);
+        // A successful portal read can still list tasks whose writes were refused as closed.
+        const closed = this.campaignClosures.get(a.id);
         const restricted = this.state.restricted?.[a.id], webPaused = this.state.webPaused?.[a.id];
         return {
           ...row,
+          ...(closed && row.campaigns ? { campaigns: row.campaigns.filter(c => !(closed.get(c.code) > now)) } : {}),
           enabled: !config.disabledAccounts.includes(a.id),
           health: this.accountHealth(a, config, day),
           paused: (config.pausedAccounts || []).includes(a.id),
@@ -322,6 +338,10 @@ export class Runner {
     const config = this.config();
     this.boarding = (async () => {
       const list = this.list(), rows = ids?.length ? this.board.accounts.filter(row => !ids.includes(row.id) && list.some(a => a.id === row.id)) : [];
+      for (const [id, activities] of this.campaignClosures) {
+        for (const [code, until] of activities) if (until <= Date.now()) activities.delete(code);
+        if (!activities.size || !list.some(a => a.id === id)) this.campaignClosures.delete(id);
+      }
       // What each account's model limits were found to be, kept across refreshes and restarts.
       const memory = this.state.limits ||= {};
       for (const k of Object.keys(memory)) if (!list.some(a => a.id === k)) delete memory[k];
@@ -608,6 +628,7 @@ export class Runner {
       };
       // WorkBuddy AI's model list picks the web conversation's model.
       const context = { account, config, state: this.state, trigger: job.trigger, task: job.task, log, checkpoint: () => this.save(), signal: controller.signal, ...(account.realm === "intl" ? { models: this.board.models?.intl } : {}) };
+      context.observeCampaign = (code, closed) => this.observeCampaign(account.id, code, closed);
       for (const action of row.actions) {
         if (controller.signal.aborted) break;
         if (scheduled && syncView(config.magpieDir)?.paused) { row.status = "paused"; log("账号同步已暂停定时，跳过后续操作"); break; }
