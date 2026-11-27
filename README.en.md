@@ -33,6 +33,7 @@ If you find it useful, a ⭐ Star helps others find it too.
 | **What needs you** | Credits about to lapse, enterprise allowance resets and logins about to expire, gathered at the bottom of the board; exhausted or queued models get their own model-quota card. |
 | **Add accounts** | Open WorkBuddy's official browser sign-in for China or WorkBuddy AI. Magpie still handles sign-in and renewal. |
 | **Account sync across devices (trial)** | In Magpie, open WorkBuddy Plus → Settings → Account sync (「账号同步」) to choose a master or follower. Share selected personal accounts through Magpie's private GitHub repository. Off by default. |
+| **Switch the sync master** | Turn off sync on the old master, then select 「切换为主机」 in Account sync on the new device and save. It takes over after the old lease expires. OAuth accounts need renewable sign-ins on the new device. Magpie can import accounts in a batch from valid sign-in files it supports. [Instructions](#settings-and-data) |
 
 ## Screenshots
 
