@@ -23,17 +23,16 @@ If you find it useful, a ⭐ Star helps others find it too.
 
 ## At a glance
 
-| | |
-| --- | --- |
-| **Works once installed** | One `magpie plugin add` command. Magpie starts the background service when it launches, and a "WorkBuddy Plus" page appears in its sidebar. |
-| **Runs the tasks for you** | Login-streak activity, growth and campaign tasks, claim-only sweeps, Buddy travel (send out and claim), streak rewards and the night-owl task, on a schedule, retried on failure. |
-| **Account board** | Each account's credits, when each credit package lapses, the last 7 days of usage, and travel and task progress, in switchable views; the nav is horizontal by default and the fixed button to the left of the title switches to a sidebar and remembers the choice. |
-| **Which models you can use** | The Models view (「模型」) lists both builds' models (and an enterprise's, when an enterprise account is added) with their ids, native reasoning levels, context and credit multipliers, sets WorkBuddy AI's Pro-only models apart, and marks subscriber priority and running promotions. |
-| **WorkBuddy AI too** | With a WorkBuddy AI login in Magpie, that account is kept active daily, its streak tiers are redeemed, and it checks in whenever a campaign runs. It has its own schedule switch and times, apart from China's. |
-| **What needs you** | Credits about to lapse, enterprise allowance resets and logins about to expire, gathered at the bottom of the board; exhausted or queued models get their own model-quota card. |
-| **Add accounts** | Open WorkBuddy's official browser sign-in for China or WorkBuddy AI. Magpie still handles sign-in and renewal. |
-| **Account sync across devices (trial)** | In Magpie, open WorkBuddy Plus → Settings → Account sync (「账号同步」) to choose a master or follower. Share selected personal accounts through Magpie's private GitHub repository. Off by default. |
-| **Switch the sync master** | Turn off sync on the old master, then select 「切换为主机」 in Account sync on the new device and save. It takes over after the old lease expires. OAuth accounts need renewable sign-ins on the new device. Magpie can import accounts in a batch from valid sign-in files it supports. [Instructions](#settings-and-data) |
+<table>
+  <tr><td><strong>Works once installed</strong></td><td>One <code>magpie plugin add</code> command. Magpie starts the background service when it launches, and a "WorkBuddy Plus" page appears in its sidebar.</td></tr>
+  <tr><td><strong>Runs the tasks for you</strong></td><td>Login-streak activity, growth and campaign tasks, claim-only sweeps, Buddy travel (send out and claim), streak rewards and the night-owl task, on a schedule, retried on failure.</td></tr>
+  <tr><td><strong>Account board</strong></td><td>Each account's credits, when each credit package lapses, the last 7 days of usage, and travel and task progress, in switchable views; the nav is horizontal by default and the fixed button to the left of the title switches to a sidebar and remembers the choice.</td></tr>
+  <tr><td><strong>Which models you can use</strong></td><td>The Models view (「模型」) lists both builds' models (and an enterprise's, when an enterprise account is added) with their ids, native reasoning levels, context and credit multipliers, sets WorkBuddy AI's Pro-only models apart, and marks subscriber priority and running promotions.</td></tr>
+  <tr><td><strong>WorkBuddy AI too</strong></td><td>With a WorkBuddy AI login in Magpie, that account is kept active daily, its streak tiers are redeemed, and it checks in whenever a campaign runs. It has its own schedule switch and times, apart from China's.</td></tr>
+  <tr><td><strong>What needs you</strong></td><td>Credits about to lapse, enterprise allowance resets and logins about to expire, gathered at the bottom of the board; exhausted or queued models get their own model-quota card.</td></tr>
+  <tr><td><strong>Add accounts</strong></td><td>Open WorkBuddy's official browser sign-in for China or WorkBuddy AI. Magpie still handles sign-in and renewal.</td></tr>
+  <tr><td><strong>Manage accounts across devices (trial)</strong></td><td>In Magpie, open WorkBuddy Plus → Settings → Account sync (「账号同步」) to share selected accounts, see device status, or switch the sync master. Sync uses the private storage configured in Magpie and is off by default. <a href="#manage-accounts-across-devices">Instructions</a></td></tr>
+</table>
 
 ## Screenshots
 
@@ -452,8 +451,10 @@ magpie plugin options <plugin name> '{"port":4389}'
 
 </details>
 
+### Manage accounts across devices
+
 <details>
-<summary>Share WorkBuddy accounts across devices (off by default)</summary>
+<summary>Share WorkBuddy accounts (off by default)</summary>
 
 Set up the same **private storage target** and sync passphrase in Magpie on all devices: a private GitHub repository (same branch and folder), WebDAV, or S3. Open WorkBuddy Plus → Settings → Account sync. Choose 主机 (master) on one device, select the accounts to share and save. Choose 从机 (follower) on the other devices and save. Check 状态 (Status) for the result. This setting is not available in the standalone panel.
 
@@ -464,13 +465,19 @@ Set up the same **private storage target** and sync passphrase in Magpie on all 
 - Status shows the current lease and snapshot generation. Devices are identified by random IDs, not hostnames. A follower that can reach sync storage writes a heartbeat at most once every 10 minutes, even while waiting for a snapshot. It reports the last seen time and applied generation; after 30 minutes without a heartbeat it is shown as offline. Read-only followers can still receive accounts, but cannot send heartbeats.
 - 立即同步 next to 状态 syncs once with the saved role; the Magpie tool `sync_now` does the same. Neither enables an off device or saves unsaved account selections.
 - A successful sync confirms snapshot transfer, not that WorkBuddy accepts the current access credential. If Magpie reports revoked OAuth renewal credentials or a signed-out account on the master, sign in again under Providers on the master, then run 立即同步 so followers can receive the new access credential. Plus neither renews nor shares refresh credentials.
-- To change masters, turn Plus sync off on the old master and allow up to 10 minutes for its lease to expire. A new master can select API keys already imported onto that device without re-entering them; OAuth requires a renewable sign-in in Magpie on the new machine. Turning sync off does not delete imports or revoke previously shared credentials.
+- Before [switching masters](#switch-the-sync-master), turn Plus sync off on the old master. This does not delete imports or revoke previously shared credentials.
 - If you use the standalone [WorkBuddy Sync](https://github.com/NotoChen/magpie-workbuddy-sync), disable it on all related devices before enabling Plus sync. Plus uses a separate snapshot path, does not read the old snapshot, and does not automatically remove entries the old plugin imported.
 
 </details>
 
+#### Switch the sync master
+
+1. On the old master, open Magpie → WorkBuddy Plus → Settings → Account sync. Set the local role to 「关闭」 (Off) and save.
+2. Open the same settings on the new device. With the role set to 「从机」 (Follower), 「切换为主机」 (Switch to master) appears next to Status. You can select API keys already synced to the new device. OAuth accounts need renewable sign-ins in Magpie on the new device before you can select them for sharing.
+3. Select 「切换为主机」, select the accounts to share, and save. The new master starts publishing after the old lease expires, which can take up to 10 minutes.
+
 <details>
-<summary>Can I move OAuth accounts in a batch without signing into each one in a browser?</summary>
+<summary>Import OAuth sign-ins in a batch</summary>
 
 If you already have valid sign-in files supported by [Magpie's official WorkBuddy plugin](https://github.com/magpie-community/plugins/blob/6495fb6095a03eb0ba98178395d44ac90a53387b/packages/workbuddy/index.mjs#L2535-L2550) and containing only the accounts to move, use “Import accounts from a file…” under the corresponding WorkBuddy provider on the new machine. This is a one-time migration, not a Plus sync feature. Without a supported file, or if its refresh credential is no longer valid, sign in again. Magpie's [whole-machine sync and backups](https://github.com/yetone/magpie/blob/7281f97bed6d10f7160ed084fc4c98d316370cc5/docs/subsystems/sync-backup.md#L468-L477) do not carry rotating OAuth sign-ins and cannot migrate these accounts.
 
