@@ -1,13 +1,13 @@
 // The sidebar cannot call the service. Host options survive an iframe reload;
 // only read them on recovery. Never replay a request to discover its result.
-globalThis.WBRequests = function ({ options, receipt, changed, history }) {
+globalThis.WBRequests = function ({ options, receipt, changed, history, wake }) {
   const jobs = new Set(["all", "activity", "tasks", "sweep", "task", "travel", "buddy", "bonus", "compensation", "night", "web", "inspect", "retry"]);
-  let active, sending = false, receiptTimer, started = false;
+  let active, sending = false, receiptTimer, started = false, inspected = false;
   const locked = () => !!active;
   // History state survives a same-frame refresh, even when sandbox storage is unavailable.
   // A newly mounted iframe instead reads the durable host options. Neither path writes options.
   function remember(request) {
-    try { history?.replaceState({ ...history.state, wbPending: request && { id: request.id, action: request.action } }, ""); }
+    try { history?.replaceState({ ...history.state, wbPending: request && { id: request.id, action: request.action, ...(request.until ? { until: request.until } : {}) } }, ""); }
     catch (e) { if (e.name !== "SecurityError") throw e; }
   }
   function show(request, phase, detail = "") {
@@ -22,6 +22,7 @@ globalThis.WBRequests = function ({ options, receipt, changed, history }) {
   }
   function receive(ack) {
     if (!active || active.reading || ack?.id !== active.id || typeof ack.ok !== "boolean") return;
+    active.observed = true;
     if (ack.ok) finish("accepted");
     else if (ack.beforeDispatch === true) finish("rejected", ack.error);
     else {
@@ -33,6 +34,10 @@ globalThis.WBRequests = function ({ options, receipt, changed, history }) {
     if (!request?.id || !jobs.has(request.action)) return false;
     const ack = receipt();
     return !(ack?.id === request.id && (ack.ok === true || (ack.ok === false && ack.beforeDispatch === true)));
+  }
+  function awaitReceipt(request) {
+    show(request, "awaiting");
+    receiptTimer = setTimeout(() => { if (active === request) show(request, "unknown"); }, request.until - Date.now());
   }
   function recover(request) {
     active = { id: request.id, action: request.action };
@@ -48,20 +53,32 @@ globalThis.WBRequests = function ({ options, receipt, changed, history }) {
     } finally { clearTimeout(timer); }
   }
   return {
-    locked, receive, isJob: action => jobs.has(action),
+    locked, receive, canUpgrade: () => inspected && !sending && !active, isJob: action => jobs.has(action),
     async restore() {
       let marker;
       try { marker = history?.state?.wbPending; }
       catch (e) { if (e.name !== "SecurityError") throw e; }
       if (marker?.id && jobs.has(marker.action)) {
-        recover(marker);
-        receive(receipt());
-        return;
+        active = { id: marker.id, action: marker.action };
+        if (receipt()?.id === marker.id && typeof receipt().ok === "boolean") receive(receipt());
+        else if (marker.until > Date.now() && marker.until <= Date.now() + 30_000) {
+          active.until = marker.until;
+          awaitReceipt(active);
+        } else recover(marker);
       }
       let saved;
       try { saved = (await within(options.get(), 10_000))?.request; }
       catch { return; } // Every write also checks the host's saved request before replacing it.
-      if (!started && unresolved(saved)) recover(saved);
+      if (started || (active && active.id !== saved?.id)) return;
+      inspected = true;
+      if (active || !saved?.id || !jobs.has(saved.action)) return;
+      if (unresolved(saved)) recover(saved);
+      else if (!marker && Date.now() - saved.at >= 0 && Date.now() - saved.at < 30_000) {
+        // The host may already have published the ACK before the new frame
+        // starts, including in a browser that did not retain the history marker.
+        active = { id: saved.id, action: saved.action };
+        receive(receipt());
+      }
     },
     async send(changes) {
       if (active || sending) throw new Error("请先确认上一次请求的状态");
@@ -79,6 +96,7 @@ globalThis.WBRequests = function ({ options, receipt, changed, history }) {
           if (job) finish("not-submitted");
           throw new Error("没有读到 Magpie 设置，本次未写入请求");
         }
+        inspected = true;
         if (unresolved(saved?.request)) {
           recover(saved.request);
           throw new Error("请先确认上一次请求的状态");
@@ -96,10 +114,23 @@ globalThis.WBRequests = function ({ options, receipt, changed, history }) {
         }
         if (job && active === current) {
           // A matching error receipt may already have arrived during the host write.
-          if (receipt()?.id === current.id) receive(receipt());
+          if (current.observed) return;
+          if (receipt()?.id === current.id && typeof receipt().ok === "boolean") receive(receipt());
+          else if (Date.now() >= deadline) show(current, "unknown");
           else {
-            show(current, "awaiting");
-            receiptTimer = setTimeout(() => { if (active === current) show(current, "unknown"); }, 30_000);
+            current.until = Date.now() + 30_000;
+            remember(current);
+            awaitReceipt(current);
+            // Only this live set-success continuation may warm the host. A
+            // restored page waits for the same receipt; it never calls wake.
+            if (active === current && !current.observed) {
+              try { wake(); }
+              catch (e) {
+                if (e.name !== "SecurityError") throw e;
+                clearTimeout(receiptTimer);
+                show(current, "unknown");
+              }
+            }
           }
         }
       } finally { sending = false; }

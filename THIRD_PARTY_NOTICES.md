@@ -18,6 +18,11 @@ This project includes adaptations of these MIT-licensed projects:
 - [L0NE-6/WorkBuddy-Daily](https://github.com/L0NE-6/WorkBuddy-Daily/commit/68cbb256d95163ab939040f97114a8e764f2ff24), revision `68cbb256d95163ab939040f97114a8e764f2ff24`: skill-share channel receipt validation and the desktop event keyed by channel ID (`workbuddy_daily.py`, adapted in `skills.mjs`). MIT licensed.
 - [misakano7545/workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel/commit/d3edea903e0eaf0625c7689642cefc6ae7a50eb1), revision `d3edea903e0eaf0625c7689642cefc6ae7a50eb1`: the distinction between account-level `11140` restrictions and model/provider refusals (`internal/upstream/restrict.go`, reflected in `client.mjs`). MIT licensed.
 
+Additional compatibility references checked on 2026-11-27 (the earlier pins above still describe the original adaptations):
+- [niyouqianma/workbuddy2api-hub v2.2.7](https://github.com/niyouqianma/workbuddy2api-hub/tree/99fa0f5707554d2d7520307d3e03cbf9779cd878), MIT: the creation-phase model quota refusal codes in `wb_accounts.py`, adapted in `webagent.mjs` and `engine.mjs`. Plus does not adopt the gateway, account backup, session pruning, or multi-round retries.
+- [jichie/magpie-workbuddy-tasks](https://github.com/jichie/magpie-workbuddy-tasks/commit/3dd3e20), MIT: activity-portal terminal responses (HTTP 410 / code 12331), adapted in `campaign.mjs`.
+- [zseeu1/wbkit](https://github.com/zseeu1/wbkit/commit/5aace0837e9a47c3d4c1633c17858619b58fa2ef), MIT: cycle and precise capacity fields in `lib/quota.mjs`, adapted in `board.mjs`. Plus preserves an explicit zero and keeps historical grant amounts separate.
+
 Magpie's local `plugin-auth.json` layout was checked against [yetone/magpie](https://github.com/yetone/magpie), `internal/plugin/host.js` and `store.go`. This companion does not include Magpie's gateway or replace its WorkBuddy provider.
 
 MIT License

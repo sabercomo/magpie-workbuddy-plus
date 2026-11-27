@@ -37,9 +37,17 @@ const campaigns = [
 ];
 
 const headers = client => () => channel("mp", client.account).headers;
-const call = (client, path, body) => client.request(path, {
-  base, headers: headers(client), ...(body === undefined ? {} : { body })
-});
+class CampaignClosed extends Error {}
+async function call(client, path, body) {
+  try {
+    return await client.request(path, { base, headers: headers(client), ...(body === undefined ? {} : { body }) });
+  } catch (e) {
+    // Only the activity portal's response describes this campaign, not a
+    // conversation/session error from a different service.
+    if (!e.restricted && !e.limited && !dropped(e) && (e.status === 410 || e.code === 12331)) throw new CampaignClosed();
+    throw e;
+  }
+}
 
 async function readTasks(client, campaign) {
   const query = `activity_code=${encodeURIComponent(campaign.code)}`;
@@ -225,7 +233,7 @@ export async function campaign(client, { execute = true, includeApp = true, poll
   const take = async (spec, task, credit) => {
     try { await claim(client, spec, task.code, credit); claimed++; earned += credit; }
     catch (e) {
-      if (e.restricted || dropped(e)) throw e;
+      if (e instanceof CampaignClosed || e.restricted || dropped(e)) throw e;
       if (e.code !== 12304) errors.push(`${spec.label}/${task.label}：${e.message}`);
     }
   };
@@ -245,7 +253,7 @@ export async function campaign(client, { execute = true, includeApp = true, poll
         if (done(row)) {
           if (row.needView) {
             try { await viewed(client, spec, task.code); }
-            catch (e) { if (e.restricted || dropped(e)) throw e; errors.push(`${spec.label}/${task.label}：查看失败 ${e.message}`); continue; }
+            catch (e) { if (e instanceof CampaignClosed || e.restricted || dropped(e)) throw e; errors.push(`${spec.label}/${task.label}：查看失败 ${e.message}`); continue; }
           }
           ready++;
           await take(spec, task, credit);
@@ -256,11 +264,11 @@ export async function campaign(client, { execute = true, includeApp = true, poll
         if (!["chat", "expert", "skill", "desktop", "app"].includes(task.kind)) { manual++; continue; }
         if (row.needView) {
           try { await viewed(client, spec, task.code); }
-          catch (e) { if (e.restricted || dropped(e)) throw e; errors.push(`${spec.label}/${task.label}：查看失败 ${e.message}`); continue; }
+          catch (e) { if (e instanceof CampaignClosed || e.restricted || dropped(e)) throw e; errors.push(`${spec.label}/${task.label}：查看失败 ${e.message}`); continue; }
         }
         let after;
         try { after = await fire(client, spec, { ...task, target }, row, { poll: gap, sleep }); }
-        catch (e) { if (e.restricted || dropped(e)) throw e; errors.push(`${spec.label}/${task.label}：${e.message}`); continue; }
+        catch (e) { if (e instanceof CampaignClosed || e.restricted || dropped(e)) throw e; errors.push(`${spec.label}/${task.label}：${e.message}`); continue; }
         if (done(after)) {
           ready++;
           await take(spec, task, credit);
@@ -269,6 +277,7 @@ export async function campaign(client, { execute = true, includeApp = true, poll
         }
       }
     } catch (e) {
+      if (e instanceof CampaignClosed) { skipped++; continue; }
       if (e.restricted || dropped(e)) throw e;
       errors.push(`${spec.label}：${e.message}`);
     }
@@ -300,6 +309,7 @@ export async function campaignStatus(client, { appEnabled = true } = {}) {
       });
     } catch (e) {
       if (e.restricted || dropped(e)) throw e;
+      if (e instanceof CampaignClosed) continue;
       found.push({ code: spec.code, label: spec.label, error: e.message });
     }
   }

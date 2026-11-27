@@ -20,6 +20,7 @@
 // of reply, all charged.
 
 import { randomUUID } from "node:crypto";
+import { isRestricted } from "./client.mjs";
 import { setTimeout as delay } from "node:timers/promises";
 
 const web = "https://www.workbuddy.ai", conversations = web + "/console/as/conversations/";
@@ -58,6 +59,9 @@ export async function webActivity(client, { model = fallback, prompt = "只回�
       const error = new Error(needsKey ? "网页会话：需要可用的 CODEBUDDY_API_KEY。当前 OAuth 登录没有提供该 Key，免费账号也无法创建个人 API Key；请使用已有 Key 的付费账号" : full ? "网页会话：活跃会话已满 10 条，请到 workbuddy.ai 网页端结束几条旧对话" : `网页会话：HTTP ${response.status}，${payload.msg || `code=${payload.code}`}`);
       error.code = payload.code;
       error.status = response.status;
+      error.restricted = isRestricted(response.status, payload);
+      error.modelRefused = !error.restricted && url === conversations && (response.ok || [402, 429].includes(response.status))
+        && [6004, 6005, 14018].includes(payload.code);
       throw error;
     }
     if (body?.model) client.clearLimit(body.model);
@@ -99,13 +103,15 @@ export async function webActivity(client, { model = fallback, prompt = "只回�
     })();
     const rpc = async (n, method, params) => {
       const response = await client.fetcher(session.link, { method: "POST", headers: { ...auth, "Content-Type": "application/json", Accept: "application/json, text/event-stream", "Acp-Connection-Id": connection }, body: JSON.stringify({ jsonrpc: "2.0", id: n, method, params }), signal: AbortSignal.timeout(30_000), proxy: client.proxy || false });
-      await response.text();
+      const reply = await response.text();
       if (![200, 202].includes(response.status)) throw new Error(`网页会话：${method} HTTP ${response.status}`);
+      if (reply && response.headers.get("content-type")?.includes("application/json") && JSON.parse(reply)?.error)
+        throw new Error(`网页会话：沙箱拒绝了 ${method}`);
     };
     await rpc(1, "initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } });
     await rpc(2, "session/load", { sessionId: sid, cwd: session.cwd || "/workspace", mcpServers: [] });
     // Without this the turn runs on the account's default (Auto, a paid model).
-    await rpc(3, "session/set_model", { sessionId: sid, modelId: model }).catch(() => {});
+    await rpc(3, "session/set_model", { sessionId: sid, modelId: model });
     await rpc(4, "session/prompt", { sessionId: sid, prompt: [{ type: "text", text: prompt }] });
     let status = "";
     for (const until = Date.now() + wait; Date.now() < until;) {

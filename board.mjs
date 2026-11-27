@@ -18,6 +18,11 @@ const beijing = text => {
   return Number.isFinite(t) ? t : 0;
 };
 
+// Meter fields can be decimal strings. Missing is different from a real zero.
+const meterValue = (...values) => {
+  for (const v of values) if ((typeof v === "number" || (typeof v === "string" && v.trim())) && Number.isFinite(Number(v))) return Number(v);
+};
+
 // One package name holds many grants, each lapsing on its own date (every
 // growth reward is a 20-day grant of 「国内运营裂变包」), so each keeps its
 // lots: what lapses when. The package's own expiry is its earliest lot's.
@@ -32,20 +37,30 @@ export function summarize(rows, now = Date.now()) {
     const made = Number(a.CreateTime) || beijing(a.CycleStartTime);
     // A slice package (CapacityType 4) keeps the whole slice in CapacityRemain;
     // its cycle fields are what WorkBuddy's own usage page counts.
-    const remain = Number(a.CycleCapacityRemainPrecise ?? a.CycleCapacityRemain ?? a.CapacityRemain) || 0;
+    const cycleSize = meterValue(a.CycleCapacitySizePrecise, a.CycleCapacitySize);
+    const cycleUsed = meterValue(a.CycleCapacityUsedPrecise, a.CycleCapacityUsed);
+    const grantSize = meterValue(a.CapacitySizePrecise, a.CapacitySize);
+    const size = cycleSize ?? grantSize ?? 0;
+    let remain = meterValue(a.CycleCapacityRemainPrecise, a.CycleCapacityRemain);
+    if (remain === undefined && cycleSize !== undefined && cycleUsed !== undefined) remain = Math.max(0, cycleSize - cycleUsed);
+    remain ??= meterValue(a.CapacityRemainPrecise, a.CapacityRemain);
+    if (remain === undefined) {
+      const used = meterValue(a.CapacityUsedPrecise, a.CapacityUsed);
+      remain = grantSize !== undefined && used !== undefined ? Math.max(0, grantSize - used) : 0;
+    }
     // A grant may be written minutes after it was given (a draw's prize): its
     // cycle's start is the moment itself.
     const start = beijing(a.CycleStartTime);
     if (made > now - 30 * 86400_000) {
       // WorkBuddy's package attribute, as read by workbuddy2api-hub (MIT).
       const reason = Array.isArray(a.AccountAttributes) && a.AccountAttributes.find(attr => attr?.Key === "grantReason" && typeof attr.Value === "string")?.Value.trim();
-      grants.push({ at: made, ...(start && start !== made ? { start } : {}), credit: round(Number(a.CapacitySize) || 0), name: a.PackageName || a.ProductName || "积分包", left: round(remain), ...(end ? { ends: end } : {}), ...(reason ? { grantReason: reason } : {}) });
+      grants.push({ at: made, ...(start && start !== made ? { start } : {}), credit: round(grantSize ?? 0), name: a.PackageName || a.ProductName || "积分包", left: round(remain), ...(end ? { ends: end } : {}), ...(reason ? { grantReason: reason } : {}) });
     }
     if (end && end <= now) continue;
     const name = a.PackageName || a.ProductName || "积分包";
     const g = groups.get(name) || { name, balance: 0, size: 0, expires: 0, lots: new Map() };
     g.balance += remain;
-    g.size += Number(a.CapacitySize) || 0;
+    g.size += size;
     // A spent row's end date says nothing about when the remaining credit lapses.
     if (remain > 0) {
       const lapse = Math.min(...[end, Number(a.DeductionEndTime) || 0, beijing(a.ExpiredTime)].filter(t => t > 0 && t <= now + farFuture));

@@ -521,8 +521,9 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   form.elements = Object.fromEntries(["daily", "tasks", "sweep", "night", "intl-daily", "intl-web", "intl-model", "intl-web-on", "campaign-app", "skill-share", "buddy-auto", "spread", "timezone", "proxy", "intlProxy"].map(k => [k, new Element("input")]));
   form.reportValidity = () => true;
   const bodyEl = new Element("body");
-  let releaseSave;
+  let releaseSave, navigations = 0;
   const context = vm.createContext({
+    location: { reload() { navigations++; } },
     WBPLUS: {
       version, panel: "http://127.0.0.1:4389", build: "abc123", generated: new Date().toISOString(), at: Date.now(), enabled: true, intlEnabled: true,
       schedules: structuredClone(defaults.schedules), intlSchedules: structuredClone(defaults.intlSchedules),
@@ -582,18 +583,31 @@ test("magpie page wires board tabs, task actions, schedule pill and settings", a
   };
   await findNode(nodes.get("board"), n => n.textContent === "补领奖励" && n.className === "wb-task-sweep").onclick();
   assert.equal(requests.at(-1).action, "sweep");
+  assert.equal(navigations, 1, "confirmed write opens the HTML entry");
   const count = requests.length;
   await assert.rejects(vm.runInContext('ask("all")', context), /确认/);
   assert.equal(requests.length, count);
   nodes.get("request-check").onclick();
   context.document.head.lastChild.onerror();
   assert.match(nodes.get("request-hint").textContent, /无法读取最新快照/);
+  for (const check of [() => nodes.get("request-check").onclick(), () => vm.runInContext("reload()", context)]) {
+    check(); context.WBPLUS = { ...view, build: "new" }; context.document.head.lastChild.onload();
+    assert.equal(navigations, 1, "snapshot inspection cannot wake a host with a pending request");
+  }
+  context.WBPLUS = view;
   nodes.get("request-records").onclick();
   assert.equal(bodyEl.dataset.wbTab, "schedule");
   assert.equal(findNode(nodes.get("board"), n => n.dataset?.workTab === "runs").getAttribute("aria-pressed"), "true");
   assert.equal(requests.length, count, "both inspection controls are read-only");
   context.WBBoard.goTab("tasks");
   acknowledge();
+  nodes.get("request-check").onclick();
+  context.WBPLUS = { ...view, build: "new" }; context.document.head.lastChild.onload();
+  assert.equal(navigations, 1, "manual inspection never navigates, even after the receipt");
+  vm.runInContext("reload()", context);
+  context.WBPLUS = { ...view, build: "new" }; context.document.head.lastChild.onload();
+  assert.equal(navigations, 2, "an idle page can still load an upgraded build on its regular poll");
+  context.WBPLUS = view;
   await findNode(nodes.get("board"), n => n.textContent === "领奖并出发" && n.className === "wb-task-run claim").onclick();
   assert.equal(requests.at(-1).action, "travel");
   assert.equal(requests.at(-1).accounts.join(","), "cn:a");

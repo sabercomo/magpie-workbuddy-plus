@@ -7,6 +7,7 @@ let pending = null; // Non-task settings and maintenance requests.
 let requestStatus, snapshotFailed = false, controlsLocked = false;
 const requests = WBRequests({
   history: globalThis.history,
+  wake: () => location.reload(),
   options: { get: () => magpie.options.get(), set: options => magpie.options.set(options) },
   receipt: () => globalThis.WBPLUS?.request,
   changed: status => {
@@ -479,7 +480,8 @@ saveButton.onclick = async () => {
   finally { setTimeout(() => { saving = false; saveButton.disabled = !!blocked || !!syncPending; }, 3000); }
 };
 
-function reload() {
+function reload(allowUpgrade = true) {
+  const upgrade = allowUpgrade && requests.canUpgrade();
   const before = globalThis.WBPLUS;
   const script = document.createElement("script");
   script.src = `data.js?t=${Date.now()}`;
@@ -493,7 +495,7 @@ function reload() {
     snapshotFailed = false;
     renderRequest();
     script.remove();
-    if (globalThis.WBPLUS?.build && globalThis.WBPLUS.build !== build) return location.reload();
+    if (upgrade && requests.canUpgrade() && globalThis.WBPLUS?.build && globalThis.WBPLUS.build !== build) return location.reload();
     paint();
   };
   document.head.append(script);
@@ -511,7 +513,7 @@ for (const button of document.querySelectorAll("[data-action]")) button.onclick 
   finally { button.disabled = requests.locked(); }
 };
 
-$("request-check").onclick = reload;
+$("request-check").onclick = () => reload(false);
 $("request-records").onclick = () => {
   if (!$("settings").hidden) settings(false);
   WBBoard.showRecords();

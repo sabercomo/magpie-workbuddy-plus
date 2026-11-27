@@ -340,7 +340,7 @@ export async function perform(action, client, context) {
       let got;
       try { got = await attempt(chosen.id); }
       catch (e) {
-        if (e.code === 10034 || dropped(e) || chosen.id === fallback) throw e;
+        if (!e.modelRefused || chosen.id === fallback) throw e;
         log(`国际版网页会话用 ${chosen.id} 没跑完（${e.message}），改用 ${fallback}`);
         got = await attempt(fallback);
       }

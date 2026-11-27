@@ -189,7 +189,7 @@ The automatic switches for skill sharing, campaign App chats and blind boxes are
 | Daily check-in | The plugin checks in when a campaign is active; otherwise no check-in is shown. The November 2026 observation was 「签到活动未开启或已过期」; check-in resumes when a campaign opens. |
 | Daily activity reward | A Bonus Pack of 30 or 50 credits requires one completed web chat. Desktop activity reports do not count. |
 | Web conversation | Defaults to 10:31, once a day. Creates a chat via workbuddy.ai, asks for a one-word reply, waits for completion and ends the chat. WorkBuddy normally lists two usage requests. |
-| Models and credits | Picks an available free model first. Hy3 was measured as free during its offer. With no usable free model it falls back to DeepSeek-V4.1-Flash (about 0.6 credits). You can choose a model in Settings. |
+| Models and credits | Picks an available free model first. Hy3 was measured as free during its offer. With no usable free model it falls back to DeepSeek-V4.1-Flash (about 0.6 credits). You can choose a model in Settings. Only an explicit model quota refusal during conversation creation triggers a fallback. An account error, a full session list, or a failure after creation does not start a second conversation. |
 | Turn off web chats | Disable the daily web conversation in Settings or clear its slot. No activity reward is earned through the automated chat, but the streak continues. |
 | Reward arrival | Observed the following morning at 02:00–07:00 Beijing time. The board shows today's amount or that it hasn't arrived; credit history labels it a daily activity reward. |
 | Limits | Growth levels count real client use only; the plugin does not simulate them or list them on the board or in alerts. No Buddy travel is requested, tracked or displayed; rings show activity and growth only. |
@@ -347,8 +347,8 @@ Use the returned run ID to check the result in the panel or through `status`.
 | Area | Details |
 | --- | --- |
 | Snapshot and refresh | The sandbox cannot access the network. It reloads the service-written `page/data.js` every 15 seconds. The snapshot has no credentials; a warning appears when it is over 25 minutes old. |
-| Requests | If no receipt arrives within 30 seconds of submission, the sidebar shows that the task’s status is unconfirmed. It may already be running. Checking status rereads the snapshot; viewing run history does not submit work. Do not repeat the run from the local panel. An acceptance receipt does not mean the task has finished. |
-| Reopening the sidebar | The page reads the existing request without submitting it again. If the host has not yet saved it, its absence on reopen does not prove that nothing ran. Repeating the most recent request republishes its receipt without running it again; newly received requests older than 10 minutes are rejected. |
+| Requests | After Magpie confirms a new task was saved in time, the sidebar reopens once to let the host read the original request, unless a matching receipt has already arrived. It does not rewrite the options or reopen on a timeout, late response, or restored request. If no receipt arrives within 30 seconds of submission, the sidebar shows that the task’s status is unconfirmed. It may already be running. Checking status rereads the snapshot; viewing run history does not submit work. Do not repeat the run from the local panel. An acceptance receipt does not mean the task has finished. |
+| Reopening the sidebar | The restored page reads but does not rewrite the options. Manually reopening the full sidebar can wake the host and deliver a previously saved request; it is not the same as checking status. An empty history does not prove that nothing ran. Repeating the most recent request republishes its receipt without running it again; newly received requests older than 10 minutes are rejected. |
 | Plugin updates | The open page loads the new version after an update. |
 
 </details>
@@ -506,6 +506,10 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 | Pinned install | If `magpie plugin list` shows a suffix such as `#v0.4.0`, remove it with `magpie plugin rm` and add the unpinned address. Set plugin options such as the port again. |
 | From 0.5.5 onward | Magpie asks the old service to hand off when loading an update. It waits until the current job finishes, retrying each minute. |
 | 0.5.4 or earlier | Stop the old service once, or log out, restart the computer or restart the container. |
+
+**v0.8.5 changes**
+
+- Fix the initial sidebar task handoff without replaying timed-out or restored requests. International web tasks only switch models on an explicit quota refusal during creation. Closed campaigns stop claiming, and credit packages use precise current-cycle values.
 
 **v0.8.4 changes**
 

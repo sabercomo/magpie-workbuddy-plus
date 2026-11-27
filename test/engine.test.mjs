@@ -946,3 +946,20 @@ test('opening the first Buddy happens once and logs the returned names before tr
   assert.equal(p.seen[1].path, '/activity/growth/buddy/info');
   assert.ok(p.seen.findIndex(r => r.path.endsWith('/open')) < p.seen.findIndex(r => r.path.endsWith('/depart')));
 });
+
+test("international web tasks do not switch models on account refusals or after a turn was submitted", async t => {
+  for (const reason of [14220, 10105, "restricted", "turn", "set_model", "rpc-refused"]) {
+    const agent = webApp(() => "failed");
+    const p = fixture(t, (path, request) => {
+      if (typeof reason === "number" && path === "/console/as/conversations/") return Response.json({ code: reason, msg: "refused" });
+      if (reason === "restricted" && path === "/console/as/conversations/") return Response.json({ code: 6004, msg: "account is restricted" });
+      if (reason === "set_model" && request.body?.method === "session/set_model") return new Response("", { status: 400 });
+      if (reason === "rpc-refused" && request.body?.method === "session/set_model") return Response.json({ jsonrpc: "2.0", id: 3, error: { code: -1, message: "model unavailable" } });
+      return agent(path, request);
+    }, "intl");
+    p.context.models = { models: [{ id: "hy3", rate: 0 }] };
+    await assert.rejects(p.run("web"));
+    assert.equal(p.seen.filter(x => x.path === "/console/as/conversations/" && x.body).length, 1, String(reason));
+    assert.equal(p.seen.filter(x => x.body?.method === "session/prompt").length, reason === "turn" ? 1 : 0);
+  }
+});

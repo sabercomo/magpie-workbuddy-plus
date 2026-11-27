@@ -489,3 +489,16 @@ test("snapshot IO failures are isolated, but registration requires the requested
   runner.boardView = () => ({ invalid: 1n });
   assert.throws(() => runner.publish(), TypeError, "serialization failures are not file failures");
 });
+
+test("package capacity uses the current cycle, preserves explicit zero and does not rewrite historical grants", () => {
+  const now = Date.now(), get = fields => summarize([{ PackageName: "fixture", CreateTime: now, CapacitySize: 100,
+    CapacityRemain: 100, CycleCapacitySizePrecise: " ", CycleCapacitySize: 40, ...fields }], now);
+  let result = get({ CycleCapacityRemainPrecise: "invalid", CycleCapacityRemain: 0 });
+  assert.equal(result.balance, 0); assert.equal(result.size, 40); assert.equal(result.grants[0].credit, 100);
+  result = get({ CycleCapacityUsedPrecise: "16.75" });
+  assert.equal(result.balance, 23.25); assert.equal(result.packages[0].size, 40);
+  result = get({ CycleCapacitySize: null, CapacitySizePrecise: "100.5", CapacityRemainPrecise: "12.25" });
+  assert.equal(result.balance, 12.25); assert.equal(result.size, 100.5); assert.equal(result.grants[0].credit, 100.5);
+  result = get({ CycleCapacitySize: null, CapacityRemain: null, CapacityUsedPrecise: "25.25" });
+  assert.equal(result.balance, 74.75);
+});

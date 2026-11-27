@@ -160,7 +160,7 @@ export class WorkBuddyClient {
     const text = await response.text();
     let payload;
     try { payload = JSON.parse(text); }
-    catch { throw new Error(`${path}: HTTP ${response.status}，上游返回 ${response.headers.get("content-type") || "未知类型"}，不是 JSON`); }
+    catch { throw Object.assign(new Error(`${path}: HTTP ${response.status}，上游返回 ${response.headers.get("content-type") || "未知类型"}，不是 JSON`), { status: response.status }); }
     const refused = !response.ok || (payload.code !== undefined && payload.code !== 0);
     if (retried) this.onRetry?.({ request, path, at: new Date().toISOString(), status: response.status, attempt: finalAttempt, waitMs: 0, error: refused });
     if (refused) throw new UpstreamError(path, response.status, payload);

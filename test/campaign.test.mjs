@@ -234,3 +234,26 @@ test("the app campaign never sends its sandbox token to a non-official host", as
   assert.match(result.errors.join("\n"), /不受信任的 boxUrl/);
   assert.ok(!c.calls.some(call => call.path === "/acp/bootstrap"));
 });
+
+test("a closed portal campaign stops only that campaign, including when a claim closes it", async () => {
+  const make = (duringClaim, failure) => client(path => {
+    if (path.includes("campaign_reporter")) return { config: { in_period: false } };
+    if (path.includes("/config?")) { if (duringClaim) return { config: { in_period: true } }; throw failure; }
+    if (path.includes("/tasks?")) return { tasks: ["ai_chat", "expert"].map(task_code => ({ task_code, target_count: 1, need_view: false })),
+      progress: ["ai_chat", "expert"].map(task_code => ({ task_code, completed_at: "done" })) };
+    if (path.includes("/claim?")) throw failure;
+    throw new Error("unexpected route " + path);
+  });
+  for (const failure of [{ status: 410 }, { status: 200, code: 12331 }]) {
+    const c = make(true, Object.assign(new Error("fixture ended"), failure));
+    const result = await campaign(c);
+    assert.equal(result.claimed, 0); assert.deepEqual(result.errors, []); assert.equal(result.skipped, 2);
+    assert.equal(c.calls.filter(call => call.path.includes("/claim?")).length, 1);
+    assert.ok(c.calls.some(call => call.path.includes("campaign_reporter")));
+    const read = make(false, failure);
+    assert.deepEqual(await campaignStatus(read), []); assert.equal(read.calls.length, 2);
+    assert.ok(read.calls.every(call => !call.body)); assert.equal(read.reports.length, 0);
+  }
+  const bad = make(false, Object.assign(new Error("unavailable"), { status: 503 }));
+  assert.match((await campaignStatus(bad))[0].error, /unavailable/);
+});
