@@ -44,6 +44,12 @@ async function rpc(path, body) {
     method: body === undefined ? "GET" : "POST",
     headers: { "Content-Type": "application/json", "X-WorkBuddy-Plus": "1" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5000)
+  }).catch(error => {
+    const code = error.cause?.code || error.code;
+    if (process.platform === "win32" && (error.name === "TimeoutError" || ["ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT"].includes(code))) {
+      throw new Error(`访问本机后台 ${base()} 超时。若端口仍在监听且本机 TCP 测试失败，请检查 Windows 防火墙或终端安全软件对 magpie-bun.exe 的规则。`, { cause: error });
+    }
+    throw error;
   });
   let response;
   try { response = await request(); }

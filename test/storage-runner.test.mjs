@@ -811,6 +811,23 @@ test("only a WorkBuddy Plus answering on the port counts as one running", async 
   assert.equal(await answering(1, async () => { throw new Error("ECONNREFUSED"); }), false);
 });
 
+test("Windows reports a local timeout without replaying a saved task", { skip: process.platform !== "win32" }, async t => {
+  const paths = [];
+  const { promise: reported, resolve } = Promise.withResolvers();
+  t.mock.method(console, "error", (...parts) => resolve(parts.join(" ")));
+  t.mock.method(globalThis, "fetch", async url => {
+    const { pathname } = new URL(url);
+    paths.push(pathname);
+    if (pathname === "/api/status") return Response.json({ config: {}, version });
+    throw new TypeError("fetch failed", { cause: Object.assign(new Error("timed out"), { code: "ETIMEDOUT" }) });
+  });
+  const { tool } = await WorkBuddyPlusPlugin({}, { port: 4389, request: { action: "all" } });
+  assert.match(await reported, /127\.0\.0\.1:4389.*超时.*防火墙/);
+  assert.deepEqual(paths, ["/api/status", "/api/page-target"]);
+  t.mock.method(globalThis, "fetch", async () => { throw new DOMException("The operation timed out", "TimeoutError"); });
+  await assert.rejects(tool.status.execute(), /127\.0\.0\.1:4389.*超时.*防火墙/);
+});
+
 // Windows reserves port ranges (netsh excludedportrange) with nothing
 // listening; a port held by anything but a WorkBuddy Plus must not leave the
 // service waiting for a takeover that never comes.

@@ -101,6 +101,15 @@ Windows 上用系统自带的 Windows PowerShell 和 WMI 独立启动后台。Ma
 
 Windows 会为 Hyper-V、WSL 等保留一些端口范围，默认端口 3439 可能落在里面，也可能被其他程序（包括 Windows 自带的 HTTP 服务）占用。这时服务不会启动，并在 `%USERPROFILE%\.config\workbuddy-plus\service.log` 里写明原因。用 `netsh interface ipv4 show excludedportrange protocol=tcp` 查看保留范围，然后换一个不在范围内的端口（见「设置与数据」中的端口）。
 
+如果本机面板连接超时，用 PowerShell 检查监听和 TCP 连通性。改过端口时，把两条命令里的 `3439` 换成实际端口。
+
+```powershell
+Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 3439 -State Listen
+Test-NetConnection 127.0.0.1 -Port 3439
+```
+
+如果仍在监听，但 `TcpTestSucceeded` 为 `False`，可用 `Get-Process -Id <OwningProcess> | Select-Object Id, Path` 核对进程路径，再检查 Windows 防火墙或终端安全软件对该进程的规则。需要添加允许规则时，由管理员将范围限定到实际的 `magpie-bun.exe`、本机回环地址和 Plus 端口，然后重试本机面板和侧栏。无需开启定时或执行任务。 [Windows TCP 排查](https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/tcp-ip-connectivity-issues-troubleshooting)
+
 想不开 Magpie 也运行时，安装 Bun 并登录国内账号后，在源码目录运行：
 
 ```sh
@@ -520,6 +529,7 @@ bun install.mjs
 **v0.8.8 变更**
 
 - 修复 Windows 上 Magpie 重载插件时一并结束 Plus 后台、导致本机面板掉线的问题（[#22](https://github.com/sabercomo/magpie-workbuddy-plus/issues/22)）。
+- Windows 访问本机后台超时时，Magpie 日志会显示具体地址和排查提示。
 - 「共享账号」支持全选和取消全选，仍需点击「保存设置」才生效。
 - 修复换主机时账号已由 Magpie 保存为可续期登录、但因保留旧同步标记而无法勾选共享的问题（[#20](https://github.com/sabercomo/magpie-workbuddy-plus/issues/20)）。
 - 补充 Magpie 批量导入登录文件的迁移说明。Plus 的同步仍只共享 OAuth 访问凭据。

@@ -103,6 +103,15 @@ On Windows, the built-in Windows PowerShell and WMI launch the background servic
 
 Windows reserves some port ranges (for Hyper-V, WSL and others), and the default port 3439 may fall inside one or be taken by another program, including Windows' own HTTP service. The service then doesn't start and writes the reason to `%USERPROFILE%\.config\workbuddy-plus\service.log`. List the reserved ranges with `netsh interface ipv4 show excludedportrange protocol=tcp` and pick a port outside them (see Port under Settings and data).
 
+If the local panel times out, check the listener and TCP connectivity in PowerShell. If you changed the port, replace `3439` in both commands.
+
+```powershell
+Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 3439 -State Listen
+Test-NetConnection 127.0.0.1 -Port 3439
+```
+
+If a listener is present and `TcpTestSucceeded` is `False`, get the listener's path with `Get-Process -Id <OwningProcess> | Select-Object Id, Path` and review the firewall or endpoint security rules for that process. If an allow rule is needed, have an administrator scope it to the actual `magpie-bun.exe`, the loopback address, and the Plus port. Then retry the local panel and sidebar. This check can be done with schedules off and without running tasks. [Windows TCP troubleshooting](https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/tcp-ip-connectivity-issues-troubleshooting)
+
 To run without Magpie, install Bun, sign in to your China accounts and run this in the source folder:
 
 ```sh
@@ -522,6 +531,7 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 **v0.8.8 changes**
 
 - Fix the local panel going offline when a Windows Magpie plugin reload stops the Plus background service ([#22](https://github.com/sabercomo/magpie-workbuddy-plus/issues/22)).
+- Log the local address and troubleshooting guidance when a Windows connection to the background service times out.
 - Select or deselect all shared accounts at once. Changes take effect only after saving settings.
 - Fix accounts that Magpie saved as renewable local sign-ins being excluded from sharing when they still carry a sync marker ([#20](https://github.com/sabercomo/magpie-workbuddy-plus/issues/20)).
 - Document migration using Magpie's batch import of supported sign-in files. Plus sync continues to share only OAuth access credentials.
