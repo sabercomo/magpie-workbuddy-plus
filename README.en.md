@@ -99,6 +99,8 @@ Only one service holds the port at a time: when the LaunchAgent and Magpie both 
 
 On Windows and Linux, install with `magpie plugin add` too and let Magpie start the service; `bun install.mjs` above is macOS-only and exits with an error elsewhere. Verified on Windows 10 through Magpie; Linux is not yet verified.
 
+On Windows, the built-in Windows PowerShell and WMI launch the background service independently. Reloading Magpie plugins leaves the same-version service listening on its local port.
+
 Windows reserves some port ranges (for Hyper-V, WSL and others), and the default port 3439 may fall inside one or be taken by another program, including Windows' own HTTP service. The service then doesn't start and writes the reason to `%USERPROFILE%\.config\workbuddy-plus\service.log`. List the reserved ranges with `netsh interface ipv4 show excludedportrange protocol=tcp` and pick a port outside them (see Port under Settings and data).
 
 To run without Magpie, install Bun, sign in to your China accounts and run this in the source folder:
@@ -413,7 +415,7 @@ magpie plugin options <plugin name> '{"port":4389}'
 ```
 
 - Standalone runs use `WORKBUDDY_PLUS_PORT`. For the macOS background service, reinstall with the new value and set the Magpie plugin to the same port.
-- A reserved port or one held by another program is logged and the service exits. It waits for handoff only if WorkBuddy Plus already holds that port.
+- A reserved port or one held by another program is logged and the service exits. If WorkBuddy Plus already owns the port, duplicate Windows instances started by Magpie exit. Other standalone instances wait to take over.
 
 <details>
 <summary>Configuration keys and data directories</summary>
@@ -519,8 +521,10 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 
 **v0.8.8 changes**
 
+- Fix the local panel going offline when a Windows Magpie plugin reload stops the Plus background service ([#22](https://github.com/sabercomo/magpie-workbuddy-plus/issues/22)).
 - Select or deselect all shared accounts at once. Changes take effect only after saving settings.
-- Document switching masters: with supported sign-in files, Magpie can import accounts in a batch without opening the browser for each one. The Plus sync protocol is unchanged and does not transmit refresh credentials.
+- Fix accounts that Magpie saved as renewable local sign-ins being excluded from sharing when they still carry a sync marker ([#20](https://github.com/sabercomo/magpie-workbuddy-plus/issues/20)).
+- Document migration using Magpie's batch import of supported sign-in files. Plus sync continues to share only OAuth access credentials.
 
 **v0.8.7 changes**
 

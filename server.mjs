@@ -95,6 +95,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     // denied or as taken, with nothing listening: waiting would never end,
     // and each plugin load would start one more waiting process.
     if (e.code === "EADDRINUSE" && await answering(port)) {
+      // Independent Windows launches can race. Only the listener needs to live.
+      if (process.env.WORKBUDDY_PLUS_WINDOWS_LAUNCH === "1") process.exit(0);
       if (!waiting) console.log(`端口 ${port} 已有 WorkBuddy Plus 在运行，本进程待命，等它退出后接手`);
       waiting = true;
       setTimeout(() => server.listen(port, "127.0.0.1"), 5000);

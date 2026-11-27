@@ -25,10 +25,11 @@ export function accountIdentity(key, auth) {
 export function shareableKind(key, auth, machine) {
   if (!auth || auth.source === "desktop") return "";
   const kind = accountKind(key, auth);
-  // Like the upstream role switch, a locally imported, non-rotating API
-  // key is usable by the next publisher. Imported OAuth cannot renew.
-  if (auth[marker] && (kind !== "api" || !uuid(machine) || auth[marker] !== machine)) return "";
-  return kind === "api" || (typeof auth.access === "string" && auth.access) ? kind : "";
+  // A locally imported API key can be reused. A marked OAuth entry only
+  // becomes shareable once Magpie has saved a local renewable sign-in.
+  if (kind === "api") return !auth[marker] || (uuid(machine) && auth[marker] === machine) ? kind : "";
+  if (auth[marker] && (typeof auth.refresh !== "string" || !auth.refresh.trim())) return "";
+  return typeof auth.access === "string" && auth.access ? kind : "";
 }
 export const roles = ["off", "master", "follower"];
 export const configPath = dir => join(dir, "workbuddy-plus-sync.json");

@@ -1,8 +1,9 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendFileSync, closeSync, openSync, mkdirSync, readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
+import { promisify } from "node:util";
 import { dataDir, newer, publicConfig, version } from "./storage.mjs";
 import { proxyEnvironment } from "./network.mjs";
 import { answering, portTaken } from "./server.mjs";
@@ -26,6 +27,18 @@ const base = () => `http://127.0.0.1:${port}`;
 const refused = e => ["ECONNREFUSED", "ConnectionRefused"].includes(e.cause?.code || e.code);
 const lastLine = file => { try { return readFileSync(file, "utf8").trim().split("\n").at(-1) || ""; } catch { return ""; } };
 
+// Magpie terminates its entire Windows plugin Job Object on reload, including
+// detached children. Have Windows start the standalone service independently.
+const windowsLaunch = String.raw`
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$environment = [string[]] ([Environment]::GetEnvironmentVariables().GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" })
+$startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16] 0; EnvironmentVariables = $environment }
+$command = '"' + $env:ComSpec + '" /d /v:on /s /c ""!WBPLUS_EXECUTABLE!" "!WBPLUS_ENTRY!" >> "!WBPLUS_LOG!" 2>&1"'
+$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $command; ProcessStartupInformation = $startup }
+if ($result.ReturnValue -ne 0) { throw "Win32_Process.Create: $($result.ReturnValue)" }
+`;
+
 async function rpc(path, body) {
   const request = () => fetch(base() + path, {
     method: body === undefined ? "GET" : "POST",
@@ -37,21 +50,30 @@ async function rpc(path, body) {
   catch (e) {
     if (!refused(e)) throw e;
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-    const file = join(dataDir, "service.log"), log = openSync(file, "a", 0o600);
+    const file = join(dataDir, "service.log");
+    const entry = join(dirname(fileURLToPath(import.meta.url)), "server.mjs");
     const env = { ...process.env, WORKBUDDY_PLUS_PORT: String(port), ...(hostConfig ? { WORKBUDDY_PLUS_HOST_CONFIG: hostConfig } : {}) };
     for (const key of proxyEnvironment) env[key] = "";
-    const child = spawn(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "server.mjs")], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env });
-    closeSync(log);
-    child.unref();
-    // A service that can't have the port says why in its log and exits.
     let exited = false;
-    child.once("exit", () => { exited = true; });
+    if (process.platform === "win32") {
+      const powershell = join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+      await promisify(execFile)(powershell, ["-NoProfile", "-NonInteractive", "-Command", windowsLaunch], {
+        windowsHide: true, timeout: 8000,
+        env: { ...env, WBPLUS_EXECUTABLE: process.execPath, WBPLUS_ENTRY: entry, WBPLUS_LOG: file, WORKBUDDY_PLUS_WINDOWS_LAUNCH: "1" }
+      });
+    } else {
+      const log = openSync(file, "a", 0o600);
+      const child = spawn(process.execPath, [entry], { detached: true, stdio: ["ignore", log, log], env });
+      closeSync(log);
+      child.unref();
+      child.once("exit", () => { exited = true; });
+    }
     for (let attempt = 0; attempt < 40 && !exited; attempt++) {
       await delay(100);
       try { response = await request(); break; }
       catch (e) { if (!refused(e)) throw e; }
     }
-    if (!response) throw new Error(exited && lastLine(file) || `后台服务未启动，请查看 ${file}`);
+    if (!response) throw new Error((exited || process.platform === "win32") && lastLine(file) || `后台服务未启动，请查看 ${file}`);
   }
   const value = await response.json().catch(() => undefined);
   if (response.ok && value !== undefined) return value;

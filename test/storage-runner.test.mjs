@@ -817,11 +817,11 @@ test("only a WorkBuddy Plus answering on the port counts as one running", async 
 test("a port held by another program makes the service exit and say why; a WorkBuddy Plus there makes it wait", async t => {
   const dir = mkdtempSync(join(tmpdir(), "wb-plus-port-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const start = async answer => {
+  const start = async (answer, windowsLaunch = false) => {
     const other = createServer((request, response) => response.end(JSON.stringify(answer)));
     await new Promise(resolve => other.listen(0, "127.0.0.1", resolve));
     const child = spawn(process.execPath, [fileURLToPath(new URL("../server.mjs", import.meta.url))], {
-      env: { ...process.env, WORKBUDDY_PLUS_DIR: dir, WORKBUDDY_PLUS_MAGPIE_DIR: join(dir, "magpie"), WORKBUDDY_PLUS_PORT: String(other.address().port) }, stdio: ["ignore", "pipe", "pipe"]
+      env: { ...process.env, WORKBUDDY_PLUS_DIR: dir, WORKBUDDY_PLUS_MAGPIE_DIR: join(dir, "magpie"), WORKBUDDY_PLUS_PORT: String(other.address().port), WORKBUDDY_PLUS_WINDOWS_LAUNCH: windowsLaunch ? "1" : "" }, stdio: ["ignore", "pipe", "pipe"]
     });
     let out = "";
     child.stdout.on("data", d => { out += d; });
@@ -837,6 +837,8 @@ test("a port held by another program makes the service exit and say why; a WorkB
   const taken = await start({ config: {} });
   assert.equal(taken.code, "running");
   assert.match(taken.out, /已有 WorkBuddy Plus 在运行，本进程待命/);
+  const duplicate = await start({ config: {} }, true);
+  assert.equal(duplicate.code, 0, "an independent Windows plugin launch must not leave a waiting process");
 });
 
 // Windows' http.sys answers on some ports with nothing of ours there; the

@@ -262,13 +262,18 @@ test("a follower with new Magpie-managed OAuth sign-ins can take over without sh
   assert.equal(syncView(b, clock).reply.error, "unavailable");
   assert.equal(repo.file().sha, prior);
 
-  // Only model the sign-ins Magpie would save after an official import succeeds.
-  // The real vendor import and refresh-token rotation are not part of this test.
+  // Model Magpie saving local sign-ins while preserving a sync marker on one.
+  // The vendor import and token rotation are outside this test.
   const native = Object.fromEntries(Object.entries(original).map(([key, item]) => [
     key, { ...item, access: `new-access-${item.uid}`, refresh: `new-refresh-${item.uid}` }
   ]));
+  native.workbuddy[marker] = readJSON(authFile(b)).workbuddy[marker];
   assert.equal(await hostTick(a, change(a, ++clock, "off"), services), "off");
-  writeJSON(authFile(b), { ...own, ...native });
+  const renewed = { ...own, ...native };
+  writeJSON(authFile(b), renewed);
+  assert.equal(await hostTick(b, null, { ...services, force: true }), "received");
+  assert.deepEqual(readJSON(authFile(b)), renewed, "the old snapshot must keep Magpie's refreshed local sign-in");
+  assert.deepEqual(syncChoices(renewed, syncConfig(b).machine).map(choice => choice.id).sort(), ["cn:local", ...picks].sort());
   assert.equal(await hostTick(b, change(b, ++clock, "master", picks), services), "other-master");
   assert.equal(syncView(b, clock).paused, true);
   assert.equal(repo.file().sha, prior);
@@ -278,9 +283,9 @@ test("a follower with new Magpie-managed OAuth sign-ins can take over without sh
   const next = await openData(repo.file().data, passphrase);
   assert.equal(next.version, 2);
   assert.equal(next.lease.owner, syncConfig(b).machine);
-  assert.deepEqual(next.accounts, Object.fromEntries(Object.entries(native).map(([key, { refresh, expires, ...portable }]) => [key, portable])));
+  assert.deepEqual(next.accounts, Object.fromEntries(Object.entries(native).map(([key, { refresh, expires, [marker]: imported, ...portable }]) => [key, portable])));
   assert.deepEqual(readJSON(authFile(a)), original);
-  assert.deepEqual(readJSON(authFile(b)), { ...own, ...native });
+  assert.deepEqual(readJSON(authFile(b)), renewed);
 });
 
 test("a manual synchronization polls immediately without enabling an off machine", async t => {
