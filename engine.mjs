@@ -400,7 +400,14 @@ export async function perform(action, client, context) {
     }
     if (!status?.state) { log("还没有可旅行的猫猫，跳过"); return { skipped: true }; }
     if (status.state === "arrived") {
-      const reward = await client.request(travelBase + "/claim", { body: {} });
+      const claimPath = travelBase + "/claim";
+      let reward;
+      try { reward = await client.request(claimPath, { body: {} }); }
+      catch (e) {
+        if (!(e instanceof UpstreamError) || e.code !== 403 || e.message !== `${claimPath}: HTTP 403，no unclaimed travel`) throw e;
+        log("没有可领取的旅行奖励，本轮跳过");
+        return { skipped: true };
+      }
       log(`猫猫归来：已领取 ${reward?.reward_credit ?? 0} 积分`);
       status = await client.request(travelBase + "/status");
     }

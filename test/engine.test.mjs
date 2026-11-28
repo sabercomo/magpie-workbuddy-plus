@@ -301,6 +301,32 @@ test("a rejected travel claim is not logged as earned credit", async t => {
   assert.ok(!p.logs.some(s => s.includes("已领取")));
 });
 
+test("travel claim with no unclaimed reward skips without another write", async t => {
+  const status = "/activity/growth/buddy/travel/status", claim = "/activity/growth/buddy/travel/claim";
+  const p = fixture(t, path => {
+    if (path === status) return ok({ state: "arrived" });
+    if (path === claim) return Response.json({ code: 403, msg: "no unclaimed travel" }, { status: 403 });
+    throw new Error("unexpected endpoint " + path);
+  });
+  p.context.config.buddyAuto = true;
+  assert.equal((await p.run("travel")).skipped, true);
+  assert.deepEqual(p.seen.map(({ path, body }) => [path, body]), [[status, undefined], [claim, {}]]);
+  assert.match(p.logs.join("\n"), /没有可领取的旅行奖励/);
+  assert.ok(!p.logs.some(s => s.includes("已领取")));
+});
+
+test("other travel claim refusals still fail and account restrictions stay restricted", async t => {
+  for (const [payload, restricted] of [
+    [{ code: 403, msg: "permission denied" }, false],
+    [{ code: 11140, msg: "no unclaimed travel" }, false],
+    [{ code: 11140, msg: "request illegal" }, true]
+  ]) {
+    const p = fixture(t, path => path.endsWith("/status") ? ok({ state: "arrived" }) : Response.json(payload, { status: 403 }));
+    await assert.rejects(p.run("travel"), { status: 403, code: payload.code, restricted });
+    assert.ok(!p.logs.some(s => s.includes("没有可领取的旅行奖励")));
+  }
+});
+
 test("zero-day streak after an accepted report remains unconfirmed", async t => {
   const p = fixture(t, path => ok(path.endsWith("/streak") ? { streak: { days: 0 } } : {}));
   await assert.rejects(p.run("activity"), /尚未确认/);

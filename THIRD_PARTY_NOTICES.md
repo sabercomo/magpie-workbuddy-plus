@@ -23,6 +23,9 @@ Additional compatibility references checked on 2026-11-27 (the earlier pins abov
 - [jichie/magpie-workbuddy-tasks](https://github.com/jichie/magpie-workbuddy-tasks/commit/3dd3e2072f8b64441948f209a4ea96ac85f037c2), revision `3dd3e2072f8b64441948f209a4ea96ac85f037c2`, MIT: activity-portal terminal responses (HTTP 410 / code 12331) and the case where a successful read still lists tasks from a closed campaign. Plus adapts the terminal response in `campaign.mjs` and a short-lived, per-account campaign marker for the board in `runner.mjs`; it does not copy upstream's refresh budget or persistent marker.
 - [zseeu1/wbkit](https://github.com/zseeu1/wbkit/commit/5aace0837e9a47c3d4c1633c17858619b58fa2ef), MIT: cycle and precise capacity fields in `lib/quota.mjs`, adapted in `board.mjs`. Plus preserves an explicit zero and keeps historical grant amounts separate.
 
+Additional compatibility reference checked on 2026-11-28:
+- [jichie/magpie-workbuddy-tasks](https://github.com/jichie/magpie-workbuddy-tasks/commit/7aad9c4b421f3cb0af75c280070361672a6a17d3), revision `7aad9c4b421f3cb0af75c280070361672a6a17d3`, MIT: the travel claim response (HTTP 403, code 403, `no unclaimed travel`). Plus handles this response only at the travel claim call in `engine.mjs` without changing generic refusal or account restriction handling.
+
 Magpie's local `plugin-auth.json` layout was checked against [yetone/magpie](https://github.com/yetone/magpie), `internal/plugin/host.js` and `store.go`. This companion does not include Magpie's gateway or replace its WorkBuddy provider.
 
 MIT License

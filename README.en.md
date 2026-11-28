@@ -536,6 +536,10 @@ Turning off the plugin in Magpie only disables its tools. **To stop automatic ta
 | From 0.5.5 onward | Magpie asks the old service to hand off when loading an update. It waits until the current job finishes, retrying each minute. |
 | 0.5.4 or earlier | Stop the old service once, or log out, restart the computer or restart the container. |
 
+**v0.8.9 changes**
+
+- Skip the current Buddy travel run when the claim endpoint explicitly reports no unclaimed reward. This is no longer logged as a failure and does not retry the claim, start a trip, or open a blind box. Other refusals and account restrictions are still handled as before.
+
 **v0.8.8 changes**
 
 - Fix the local panel going offline when a Windows Magpie plugin reload stops the Plus background service ([#22](https://github.com/sabercomo/magpie-workbuddy-plus/issues/22)).
